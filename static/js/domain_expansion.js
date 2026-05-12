@@ -278,34 +278,44 @@ class DomainExpansionGame {
             return;
         }
 
-        // 1. Calculate General Hand Center (Proven Pattern)
+        // 1. Proven Hand Center Calculation (For all domains)
         let center = null;
         if (hands && hands.length > 0) {
-            let sx = 0, sy = 0, count = 0;
-            hands.forEach(h => { h.forEach(lm => { sx += lm.x * w; sy += lm.y * h; count++; }); });
-            if (count > 0) center = { x: sx / count, y: sy / count };
+            let sx = 0, sy = 0, totalLm = 0;
+            hands.forEach(hand => {
+                if (Array.isArray(hand)) {
+                    hand.forEach(lm => {
+                        sx += (lm.x * w);
+                        sy += (lm.y * h);
+                        totalLm++;
+                    });
+                }
+            });
+            if (totalLm > 0) center = { x: sx / totalLm, y: sy / totalLm };
         }
 
-        // 2. Calculate Index Tip Center (Refined Pattern)
+        // 2. Safe Index Tip Extraction (Specifically for Techniques)
         let indexCenter = null;
         if (hands && hands.length > 0) {
             let ix = 0, iy = 0, icount = 0;
-            hands.forEach(h => {
-                if (h[8]) { // I_TIP is 8
-                    ix += h[8].x * w;
-                    iy += h[8].y * h;
+            hands.forEach(hand => {
+                // Index 8 is official MediaPipe INDEX_FINGER_TIP
+                if (hand && hand[8]) {
+                    ix += (hand[8].x * w);
+                    iy += (hand[8].y * h);
                     icount++;
                 }
             });
             if (icount > 0) indexCenter = { x: ix / icount, y: iy / icount };
         }
 
-        // 3. For Hollow Purple, we need individual hands
+        // 3. Robust 2-Hand extraction for Hollow Purple (Avoid spread-operator crashes)
         let h1 = null, h2 = null;
         if (hands && hands.length >= 2) {
-            const sorted = [...hands].sort((a, b) => a[0].x - b[0].x); // Sort by wrist X
-            h1 = { x: sorted[0][8].x * w, y: sorted[0][8].y * h };
-            h2 = { x: sorted[1][8].x * w, y: sorted[1][8].y * h };
+            // Sort by wrist (index 0) X position to separate hands
+            const sortedHands = Array.from(hands).sort((a, b) => a[0].x - b[0].x);
+            if (sortedHands[0] && sortedHands[0][8]) h1 = { x: sortedHands[0][8].x * w, y: sortedHands[0][8].y * h };
+            if (sortedHands[1] && sortedHands[1][8]) h2 = { x: sortedHands[1][8].x * w, y: sortedHands[1][8].y * h };
         }
 
         switch (stableDomain) {
