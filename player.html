@@ -11,14 +11,20 @@
     </style>
 </head>
 <body>
-    <div id="placeholder" style="color: #666;">Waiting for Technique...</div>
+    <div id="placeholder" style="color: #666; transition: opacity 0.5s;">Waiting for Technique...</div>
     
+    <div id="status-debug" style="position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #0f0; font-family: monospace; font-size: 10px; padding: 10px; border-radius: 5px; z-index: 200; pointer-events: none; border: 1px solid #333;">
+        <div>Connection: <span id="debug-conn">NO PARENT</span></div>
+        <div>Interaction: <span id="debug-inter">LOCKED</span></div>
+        <div>Last Event: <span id="debug-last">NONE</span></div>
+    </div>
+
     <!-- Interaction Overlay for Autoplay -->
     <div id="interaction-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; display: flex; align-items: center; justify-content: center; cursor: pointer;">
         <div style="text-align: center;">
             <div style="font-size: 50px; margin-bottom: 10px;">📺</div>
             <div style="font-size: 18px; color: #4A90E2; font-weight: bold;">Click to Enable Audio/Video</div>
-            <div style="font-size: 12px; color: #888; margin-top: 5px;">(Required by browser security)</div>
+            <div style="font-size: 12px; color: #888; margin-top: 5px;">(Required for Dual Monitor Mode)</div>
         </div>
     </div>
 
@@ -28,37 +34,52 @@
         const player = document.getElementById('player');
         const placeholder = document.getElementById('placeholder');
         const overlay = document.getElementById('interaction-overlay');
-        let interactionEnabled = false;
+        const debugConn = document.getElementById('debug-conn');
+        const debugInter = document.getElementById('debug-inter');
+        const debugLast = document.getElementById('debug-last');
 
-        // Function to notify parent we are ready
+        if (window.opener) {
+            debugConn.textContent = "LINKED TO GAME";
+            debugConn.style.color = "#4A90E2";
+        }
+
         function notifyReady() {
             if (window.opener) {
-                console.log('Sending PLAYER_READY to parent');
+                console.log('[Player] Sending PLAYER_READY to parent');
                 window.opener.postMessage({ type: 'PLAYER_READY' }, '*');
+                debugLast.textContent = "SENT READY";
+            } else {
+                console.error('[Player] No opener found!');
             }
         }
 
-        // Handle interaction requirement
         overlay.addEventListener('click', () => {
-            interactionEnabled = true;
             overlay.style.display = 'none';
-            player.muted = false; // Try to unmute if possible
-            console.log('Interaction enabled, player ready.');
+            player.muted = false;
+            debugInter.textContent = "READY";
+            debugInter.style.color = "#4CAF50";
+            console.log('[Player] Interaction enabled');
             notifyReady();
         });
 
         window.addEventListener('message', (event) => {
             const { type, videoSrc } = event.data;
-            
+            console.log('[Player] Received message:', type, videoSrc);
+            debugLast.textContent = type;
+
             if (type === 'PLAY_VIDEO' && videoSrc) {
-                console.log('Received play request:', videoSrc);
-                placeholder.style.display = 'none';
+                placeholder.style.opacity = "0";
                 player.style.display = 'block';
                 player.src = videoSrc;
                 
-                player.play().catch(e => {
-                    console.warn('Autoplay failed, showing overlay:', e);
+                player.play().then(() => {
+                    console.log('[Player] Playback started:', videoSrc);
+                    debugLast.textContent = "PLAYING: " + videoSrc.split('/').pop();
+                }).catch(e => {
+                    console.error('[Player] Play failed:', e);
+                    debugLast.textContent = "ERROR: " + e.message;
                     overlay.style.display = 'flex';
+                    debugInter.textContent = "RE-LOCKED";
                 });
             }
             
@@ -67,8 +88,8 @@
             }
         });
 
-        // Initial ready check
-        notifyReady();
+        // Ping parent every 2 seconds to maintain connection
+        setInterval(notifyReady, 2000);
     </script>
 </body>
 </html>
