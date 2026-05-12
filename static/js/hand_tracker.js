@@ -15,6 +15,7 @@ class HandTracker {
         this.domainGame = new DomainExpansionGame();
         
         this.endpointInput = document.getElementById('api-endpoint');
+        this.sessionKeyInput = document.getElementById('session-key-input');
         this.languageSelect = document.getElementById('language-select');
         this.saveBtn = document.getElementById('save-settings');
         this.robotIdSelect = document.getElementById('robot-id');
@@ -38,6 +39,7 @@ class HandTracker {
 
         // 2. Load Persistence
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
+        this.sessionKey = localStorage.getItem('robot_session_key') || '';
         this.userLang = localStorage.getItem('user_language') || 'auto';
         this.savedRobotId = localStorage.getItem('robot_id') || 'all'; 
         this.videoMode = localStorage.getItem('video_mode') || 'integrated'; 
@@ -45,6 +47,7 @@ class HandTracker {
 
         // 3. Set Initial Values
         if (this.endpointInput) this.endpointInput.value = this.apiEndpoint;
+        if (this.sessionKeyInput) this.sessionKeyInput.value = this.sessionKey;
         if (this.languageSelect) this.languageSelect.value = this.userLang;
         if (this.robotIdSelect) this.robotIdSelect.value = this.savedRobotId;
         if (this.videoModeSelect) this.videoModeSelect.value = this.videoMode;
@@ -79,12 +82,14 @@ class HandTracker {
         if (this.saveBtn) {
             this.saveBtn.addEventListener('click', () => {
                 this.apiEndpoint = this.endpointInput.value.trim();
+                this.sessionKey = this.sessionKeyInput.value.trim();
                 this.userLang = this.languageSelect.value;
                 this.savedRobotId = this.robotIdSelect.value;
                 this.videoMode = this.videoModeSelect.value;
                 this.autoOpen = this.autoOpenPopupCheck.checked;
                 
                 localStorage.setItem('robot_api_endpoint', this.apiEndpoint);
+                localStorage.setItem('robot_session_key', this.sessionKey);
                 localStorage.setItem('user_language', this.userLang);
                 localStorage.setItem('robot_id', this.savedRobotId);
                 localStorage.setItem('video_mode', this.videoMode);
@@ -189,11 +194,11 @@ class HandTracker {
 
     updateAPIStatus() {
         if (!this.apiStatus || !this.apiDot) return;
-        if (this.apiEndpoint) {
+        if (this.apiEndpoint && this.sessionKey) {
             this.apiStatus.textContent = 'Configured';
             this.apiDot.classList.add('active');
         } else {
-            this.apiStatus.textContent = 'Not Configured';
+            this.apiStatus.textContent = 'Incomplete';
             this.apiDot.classList.remove('active');
         }
     }
@@ -224,6 +229,7 @@ class HandTracker {
 
             // EN Defaults
             this.setElText('label-api-endpoint', '🔗 Robot API Endpoint');
+            this.setElText('label-session-key', '🔑 Session Key');
             this.setElText('label-language', '🌐 Language');
             this.setElText('save-settings', '💾 Save Settings');
             this.setElText('label-target-robot', '🤖 Target Robot');
@@ -240,6 +246,7 @@ class HandTracker {
                 defaultMode = '印を組んで領域を展開せよ！';
                 currentLang = 'ja';
                 this.setElText('label-api-endpoint', '🔗 ロボットAPIエンドポイント');
+                this.setElText('label-session-key', '🔑 セッションキー');
                 this.setElText('label-language', '🌐 言語');
                 this.setElText('save-settings', '設定を保存');
                 this.setElText('label-target-robot', '対象ロボット');
@@ -255,6 +262,7 @@ class HandTracker {
                 defaultMode = '結下手印以展開你的領域！';
                 currentLang = 'zh';
                 this.setElText('label-api-endpoint', '🔗 機器人API端點');
+                this.setElText('label-session-key', '🔑 會話密鑰');
                 this.setElText('label-language', '🌐 語言');
                 this.setElText('save-settings', '保存設置');
                 this.setElText('label-target-robot', '目標機器人');
@@ -271,7 +279,7 @@ class HandTracker {
             this.setElText('main-title', finalTitle);
             this.setElText('mode-display', defaultMode);
             document.title = finalTitle;
-            this.updateInstructions(); // Refresh instructions with new language
+            this.updateInstructions(); 
         } catch (e) {
             console.error('[Game] Localization failed:', e);
         }
@@ -356,7 +364,6 @@ class HandTracker {
     openPopupPlayer() {
         if (!this.playerWindow || this.playerWindow.closed) {
             this.isPlayerReady = false;
-            // Removing width/height forces modern browsers to open in a new TAB instead of a popup window
             this.playerWindow = window.open('player.html', 'ARGamePlayer');
         } else {
             this.playerWindow.focus();
@@ -423,7 +430,7 @@ class HandTracker {
             }
             
             if (now - this.lastActionTime >= this.cooldownMs) {
-                if (this.apiEndpoint) {
+                if (this.apiEndpoint && this.sessionKey) {
                     this.lastActionTime = now;
                     const actionMap = {
                         "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
@@ -440,7 +447,7 @@ class HandTracker {
             }
         } else {
             if (this.domainDisplay) this.domainDisplay.textContent = '';
-            if (this.atmosphereOverlay) this.atmosphereOverlay.style.background = 'transparent';
+            if (this.atmosphereOverlay) { this.atmosphereOverlay.style.background = 'transparent'; }
             if (!this.resetTimer && this.lastVFXDomain) {
                 this.resetTimer = setTimeout(() => {
                     this.lastVFXDomain = null;
@@ -460,7 +467,11 @@ class HandTracker {
             const idPattern = /\/(robot_\d+|all)$/;
             if (base.match(idPattern)) base = base.replace(idPattern, '/' + robotId);
             else base = base + '/' + robotId;
-            await fetch(base + query, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) });
+            
+            // Append session key
+            const finalUrl = `${base}${query}${query ? '&' : '?'}session_key=${encodeURIComponent(this.sessionKey)}`;
+            
+            await fetch(finalUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) });
             console.log(`🤖 Action ${action} for ${robotId} sent.`);
         } catch (err) { console.error('❌ API failed:', err); }
     }
