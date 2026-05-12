@@ -381,9 +381,13 @@ class DomainExpansionGame {
                 drawH = h;
                 drawW = h * imgAspect;
             }
-            ctx.globalAlpha = 0.4 + 0.1 * Math.sin(this.yutaPhase); // Breathing opacity
+            ctx.globalAlpha = 0.6 + 0.1 * Math.sin(this.yutaPhase); // Increased opacity
             ctx.drawImage(this.rikaImg, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            if (!this._rikaLogged) { console.log('👻 Rika Manifested!'); this._rikaLogged = true; }
             ctx.restore();
+        } else {
+            // Log once if not complete
+            if (!this._rikaLoadWarned) { console.warn('⚠️ Rika image not yet loaded'); this._rikaLoadWarned = true; }
         }
 
         ctx.fillStyle = "rgba(180, 100, 255, 0.12)"; ctx.fillRect(0, 0, w, h);
