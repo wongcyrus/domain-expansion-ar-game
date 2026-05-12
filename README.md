@@ -16,6 +16,8 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 
 ## 🖐️ Hand Gesture Guide
 
+[![Domain Expansion Demo](https://img.youtube.com/vi/Tck6WSV_YXQ/0.jpg)](https://www.youtube.com/watch?v=Tck6WSV_YXQ)
+
 ### Domain Expansions
 
 | User | Domain Name | Gesture | Robot Behavior |
