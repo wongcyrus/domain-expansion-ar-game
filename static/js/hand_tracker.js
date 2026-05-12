@@ -41,7 +41,7 @@ class HandTracker {
         // 2. Load Persistence
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
         this.sessionKey = localStorage.getItem('robot_session_key') || '';
-        this.userLang = localStorage.getItem('user_language') || 'auto';
+        this.userLang = localStorage.getItem('user_language') || 'zh'; // Default to "zh"
         this.savedRobotId = localStorage.getItem('robot_id') || 'all'; 
         this.videoMode = localStorage.getItem('video_mode') || 'integrated'; 
         this.autoOpen = localStorage.getItem('auto_open_popup') === 'true';
@@ -225,23 +225,9 @@ class HandTracker {
             const isJP = lang.startsWith('ja');
             const isZH = lang.startsWith('zh');
             
-            let finalTitle = '🖐️ Domain Expansion AR';
-            let defaultMode = 'Strike a hand sign to expand your domain!';
-            let currentLang = 'en';
-
-            // EN Defaults
-            this.setElText('label-api-endpoint', '🔗 Robot API Endpoint');
-            this.setElText('label-session-key', '🔑 Session Key');
-            this.setElText('label-language', '🌐 Language');
-            this.setElText('save-settings', '💾 Save Settings');
-            this.setElText('label-target-robot', '🤖 Target Robot');
-            this.setElText('label-cooldown', '🤖 Cooldown (s)');
-            this.setElText('label-video-mode', '🎬 Video Playback');
-            this.setOptText('#video-playback-mode option[value="none"]', '🚫 No Video');
-            this.setOptText('#video-playback-mode option[value="integrated"]', '🖥️ Integrated (Sound)');
-            this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 Integrated (Silent)');
-            this.setOptText('#video-playback-mode option[value="popup"]', '🪟 Popup Tab');
-            this.setOptText('#robot-id option[value="all"]', '🤖 All Robots');
+            let finalTitle = '🖐️ 領域展開 AR'; // Default to ZH
+            let defaultMode = '結下手印以展開你的領域！';
+            let currentLang = 'zh';
 
             if (isJP) {
                 finalTitle = '🖐️ 領域展開 AR';
@@ -275,6 +261,22 @@ class HandTracker {
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 內置 (靜音)');
                 this.setOptText('#video-playback-mode option[value="popup"]', '🪟 彈出視窗');
                 this.setOptText('#robot-id option[value="all"]', '🤖 所有機器人');
+            } else {
+                finalTitle = '🖐️ Domain Expansion AR';
+                defaultMode = 'Strike a hand sign to expand your domain!';
+                currentLang = 'en';
+                this.setElText('label-api-endpoint', '🔗 Robot API Endpoint');
+                this.setElText('label-session-key', '🔑 Session Key');
+                this.setElText('label-language', '🌐 Language');
+                this.setElText('save-settings', '💾 Save Settings');
+                this.setElText('label-target-robot', '🤖 Target Robot');
+                this.setElText('label-cooldown', '🤖 Cooldown (s)');
+                this.setElText('label-video-mode', '🎬 Video Playback');
+                this.setOptText('#video-playback-mode option[value="none"]', '🚫 No Video');
+                this.setOptText('#video-playback-mode option[value="integrated"]', '🖥️ Integrated (Sound)');
+                this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 Integrated (Silent)');
+                this.setOptText('#video-playback-mode option[value="popup"]', '🪟 Popup Tab');
+                this.setOptText('#robot-id option[value="all"]', '🤖 All Robots');
             }
 
             if (this.domainGame) this.domainGame.setLanguage(currentLang);
@@ -286,6 +288,7 @@ class HandTracker {
     }
     
     init() {
+        console.log('🚀 Initializing UI components...');
         const startOverlay = document.getElementById('start-overlay');
         if (startOverlay) {
             startOverlay.addEventListener('click', () => {
@@ -293,7 +296,12 @@ class HandTracker {
                 if (this.camera) this.camera.start();
                 if (this.integratedPlayer) {
                     this.integratedPlayer.muted = false;
-                    this.integratedPlayer.play().then(() => this.integratedPlayer.pause()).catch(e => console.warn('Warm-up failed', e));
+                    this.integratedPlayer.play()
+                        .then(() => {
+                            this.integratedPlayer.pause();
+                            console.log('🎬 Video enabled with sound.');
+                        })
+                        .catch(e => console.warn('Warm-up failed', e));
                 }
             });
         }
