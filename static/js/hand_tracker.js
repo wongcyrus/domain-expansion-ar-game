@@ -196,8 +196,13 @@ class HandTracker {
                 startOverlay.style.display = 'none';
                 this.camera.start();
                 if (this.integratedPlayer) {
-                    this.integratedPlayer.muted = true;
-                    this.integratedPlayer.play().then(() => this.integratedPlayer.pause()).catch(e => console.warn('Warm-up failed', e));
+                    this.integratedPlayer.muted = false; // Enable sound
+                    this.integratedPlayer.play()
+                        .then(() => {
+                            this.integratedPlayer.pause();
+                            console.log('🎬 Video enabled with sound.');
+                        })
+                        .catch(e => console.warn('Warm-up failed', e));
                 }
             });
         }
