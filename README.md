@@ -43,9 +43,9 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 | **Mahito** | **Self-Embodiment** | **(2H)** Egg shape | **Mutation**: Direct strike (Right Shot). | **真人** | **自閉圓頓裹** | **(雙手)** 拇指小指相觸 | **突變**: 直接打擊 (右衝)。 |
 | **Yuta Okkotsu** | **Authentic Love** | **(2H)** Wide apart | **Embrace**: A respectful bow (Bow). | **乙骨憂太** | **真贋相愛** | **(雙手)** 雙手拉開 | **擁抱**: 莊重的鞠躬。 |
 | **Hakari Kinji** | **Idle Death Gamble** | **(2H)** Vertical stack | **Jackpot**: Upbeat waving (Wave). | **秤金次** | **坐殺博徒** | **(雙手)** 垂直疊放 | **大獎**: 歡快揮手。 |
-| **Megumi Fushiguro** | **Chimera Garden** | **(2H)** Two fists | **Submerge**: Dives into shadows (Squat). | **伏黑惠** | **嵌合暗翳庭園** | **(雙手)** 雙拳併攏 | **下沉**: 潛入影中 (下蹲)。 |
-| **Naoya Zenin** | **Time Cell Palace** | **(2H)** L-shape hands | **Projection**: Horizontal burst (Left Move). | **禪院直哉** | **時胞月宮殿** | **(雙手)** 雙手呈 L 型 | **投射**: 高速水平移動。 |
-| **Yuji Itadori** | **Unnamed Domain** | **(2H)** Pointing fingers | **Physical Mastery**: Sit-ups. | **虎杖悠仁** | **名稱不明** | **(雙手)** 食指相對 | **肉體巔峰**: 仰臥起坐。 |
+| **Megumi Fushiguro** | **Chimera Garden** | **(2H)** Two fists | **Submerge**: Shadow strength (Weightlifting). | **伏黑惠** | **嵌合暗翳庭園** | **(雙手)** 雙拳併攏 | **下沉**: 影之力量 (舉重)。 |
+| **Naoya Zenin** | **Time Cell Palace** | **(2H)** L-shape hands | **Projection**: Frame-by-frame strike (Left Shot). | **禪院直哉** | **時胞月宮殿** | **(雙手)** 雙手呈 L 型 | **投射**: 影格打擊 (左衝)。 |
+| **Yuji Itadori** | **Unnamed Domain** | **(2H)** Pointing fingers | **Physical Mastery**: Sit-ups (Sit ups). | **虎杖悠仁** | **名稱不明** | **(雙手)** 食指相對 | **肉體巔峰**: 仰臥起坐 (仰臥起坐)。 |
 
 ### Techniques | 術式
 
