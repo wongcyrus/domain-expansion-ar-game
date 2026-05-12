@@ -183,10 +183,10 @@
         }
 
         @media (max-width: 768px) {
-            .header { top: 10px; width: 85%; }
-            .header h1 { font-size: 1.1rem; }
-            .header p { font-size: 0.6rem; }
-            #domain-display { font-size: 1.4rem !important; }
+            .header { top: 10px; width: 85%; padding: 8px 15px; }
+            .header h1 { font-size: 1rem; }
+            .header p { font-size: 0.55rem; }
+            #domain-display { font-size: 1.3rem !important; }
 
             .settings-panel { 
                 width: 100%; 
@@ -198,14 +198,22 @@
                 background: rgba(0, 0, 0, 0.9);
                 border: none;
                 border-top: 1px solid rgba(255,255,255,0.1);
+                z-index: 40; /* Above status panel */
             }
             .settings-panel.hidden {
                 transform: translateY(100%);
                 opacity: 1; /* Keep opacity 1 for sliding effect */
             }
-            #settings-toggle { top: auto; bottom: 20px; right: 20px; }
+            #settings-toggle { top: auto; bottom: 20px; right: 20px; z-index: 50; }
             .instructions { display: none; }
-            .status-panel { bottom: auto; top: 10px; left: 10px; padding: 8px; font-size: 10px; }
+            .status-panel { 
+                bottom: 25px; 
+                top: auto; 
+                left: 15px; 
+                padding: 8px; 
+                font-size: 10px; 
+                z-index: 30; /* Below settings panel */
+            }
         }
     </style>
 </head>
