@@ -460,20 +460,41 @@ class HandTracker {
 
     async triggerRobotAction(robotId, action) {
         try {
-            let url = this.apiEndpoint;
+            let url = this.apiEndpoint.trim();
+            if (!url) return;
+
+            // Split URL into base and query string
             const parts = url.split('?');
-            let base = parts[0].replace(/\/+$/, "");
+            let base = parts[0].replace(/\/+$/, ""); // Remove trailing slashes
             const query = parts[1] ? '?' + parts[1] : '';
+
+            // 1. Ensure /run_action is part of the path
+            if (!base.includes('/run_action')) {
+                base = base + '/run_action';
+            }
+
+            // 2. Handle Robot ID (robot_X or all)
             const idPattern = /\/(robot_\d+|all)$/;
-            if (base.match(idPattern)) base = base.replace(idPattern, '/' + robotId);
-            else base = base + '/' + robotId;
+            if (base.match(idPattern)) {
+                // If it already ends with an ID, replace it
+                base = base.replace(idPattern, '/' + robotId);
+            } else {
+                // Otherwise append the selected ID
+                base = base + '/' + robotId;
+            }
             
-            // Append session key
+            // 3. Construct final URL with session key
             const finalUrl = `${base}${query}${query ? '&' : '?'}session_key=${encodeURIComponent(this.sessionKey)}`;
             
-            await fetch(finalUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) });
-            console.log(`🤖 Action ${action} for ${robotId} sent.`);
-        } catch (err) { console.error('❌ API failed:', err); }
+            await fetch(finalUrl, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ action: action }) 
+            });
+            console.log(`🤖 Action ${action} for ${robotId} sent to ${base}`);
+        } catch (err) { 
+            console.error('❌ API failed:', err); 
+        }
     }
 }
 
