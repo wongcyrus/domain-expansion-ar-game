@@ -28,6 +28,7 @@ class HandTracker {
         this.playerWindow = null;
         this.isPlayerReady = false;
         this.pendingVideoAction = null;
+        this.playPromise = null; // Track play promise to avoid race conditions
 
         // Listen for messages from the popup player
         window.addEventListener('message', (event) => {
@@ -170,6 +171,11 @@ class HandTracker {
             document.getElementById('save-settings').textContent = '設定を保存';
             document.getElementById('label-target-robot').textContent = '対象ロボット';
             document.getElementById('label-cooldown').textContent = 'クールダウン (s)';
+            document.getElementById('label-video-mode').textContent = '🎬 ビデオ再生';
+            document.querySelector('#video-playback-mode option[value="none"]').textContent = '🚫 ビデオなし';
+            document.querySelector('#video-playback-mode option[value="integrated"]').textContent = '🖥️ 統合 (音あり)';
+            document.querySelector('#video-playback-mode option[value="integrated_silent"]').textContent = '🔇 統合 (静音)';
+            document.querySelector('#video-playback-mode option[value="popup"]').textContent = '🪟 ポップアップ';
             document.querySelector('#robot-id option[value="all"]').textContent = '🤖 全てのロボット';
         } else if (isZH) {
             finalTitle = '🖐️ 領域展開 AR';
@@ -178,7 +184,12 @@ class HandTracker {
             document.getElementById('label-api-endpoint').textContent = '🔗 機器人API端點';
             document.getElementById('save-settings').textContent = '保存設置';
             document.getElementById('label-target-robot').textContent = '目標機器人';
-            document.getElementById('label-cooldown').textContent = '冷卻時間 (s)';
+            document.getElementById('label-cooldown').textContent = '🤖 冷卻時間 (s)';
+            document.getElementById('label-video-mode').textContent = '🎬 影片播放';
+            document.querySelector('#video-playback-mode option[value="none"]').textContent = '🚫 不播放影片';
+            document.querySelector('#video-playback-mode option[value="integrated"]').textContent = '🖥️ 內置 (音效)';
+            document.querySelector('#video-playback-mode option[value="integrated_silent"]').textContent = '🔇 內置 (靜音)';
+            document.querySelector('#video-playback-mode option[value="popup"]').textContent = '🪟 彈出視窗';
             document.querySelector('#robot-id option[value="all"]').textContent = '🤖 所有機器人';
         }
 
@@ -287,9 +298,10 @@ class HandTracker {
         if (!file) return;
         const videoSrc = `static/video/${file}`;
 
-        if (this.videoMode === 'integrated') {
+        if (this.videoMode === 'integrated' || this.videoMode === 'integrated_silent') {
             this.integratedContainer.classList.remove('hidden');
             this.integratedPlayer.src = videoSrc;
+            this.integratedPlayer.muted = (this.videoMode === 'integrated_silent');
             this.integratedPlayer.play().catch(e => console.warn('Play failed', e));
         } else if (this.videoMode === 'popup') {
             if (this.playerWindow && !this.playerWindow.closed && this.isPlayerReady) {
@@ -334,7 +346,9 @@ class HandTracker {
             }
         } else {
             this.domainDisplay.textContent = '';
-            if (this.atmosphereOverlay) this.atmosphereOverlay.style.background = 'transparent';
+            if (this.atmosphereOverlay) {
+                this.atmosphereOverlay.style.background = 'transparent';
+            }
             if (!this.resetTimer && this.lastVFXDomain) {
                 this.resetTimer = setTimeout(() => {
                     this.lastVFXDomain = null;
