@@ -51,7 +51,7 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 
 | Technique | Japanese | Gesture | Robot Behavior | 術式名稱 | 日文 | 手印 | 機器人行為 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Lapse Blue** | 術式順轉「苍」 | **(1H)** Index Point | **Attraction**: Left hand strike. | **「蒼」** | 術式順轉「苍」 | **(單手)** 食指指點 | **吸引**: 左手快速打擊。 |
+| **Lapse Blue** | 術式順轉「苍」 | **(1H)** Index Point | **Attraction**: Left hand upward strike. | **「蒼」** | 術式順轉「苍」 | **(單手)** 食指指點 | **吸引**: 左手向上打擊。 |
 | **Reversal Red** | 術式反轉「赫」 | **(1H)** Open Palm | **Repulsion**: Right hand upward strike. | **「赫」** | 術式反轉「赫」 | **(單手)** 手掌張開 | **排斥**: 右手向上打擊。 |
 | **Hollow Purple** | 虚式「茈」 | **(2H)** Blue + Red | **Total Purge**: 2-hand expansion blast. | **「茈」** | 虚式「茈」 | **(雙手)** 組合手勢 | **肅清**: 雙手擴張衝擊。 |
 
