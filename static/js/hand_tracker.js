@@ -432,7 +432,15 @@ class HandTracker {
             if (this.lastVFXDomain !== stableDomain) {
                 this.lastVFXDomain = stableDomain;
                 if (this.mainContainer) { this.mainContainer.classList.remove('shake'); void this.mainContainer.offsetWidth; this.mainContainer.classList.add('shake'); setTimeout(() => this.mainContainer.classList.remove('shake'), 500); }
-                if (this.atmosphereOverlay && domainColor) this.atmosphereOverlay.style.background = this.hexToRgba(domainColor, 0.15);
+                
+                // Skip atmosphere for minor techniques to focus on orbs
+                const isMinorTech = (stableDomain === "Lapse Blue" || stableDomain === "Reversal Red" || stableDomain === "Hollow Purple");
+                if (this.atmosphereOverlay && domainColor && !isMinorTech) {
+                    this.atmosphereOverlay.style.background = this.hexToRgba(domainColor, 0.15);
+                } else if (this.atmosphereOverlay) {
+                    this.atmosphereOverlay.style.background = 'transparent';
+                }
+                
                 this.playVideo(stableDomain);
             }
             

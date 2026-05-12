@@ -45,7 +45,7 @@ class DomainExpansionGame {
                 "Hollow Purple": "虚式: 「茈」"
             },
             'zh': {
-                "Unlimited Void": "領域展開: 無量空処",
+                "Unlimited Void": "領域展開: 無量空處",
                 "Malevolent Shrine": "領域展開: 伏魔御廚子",
                 "Self-Embodiment of Perfection": "領域展開: 自閉圓頓裹",
                 "Authentic Mutual Love": "領域展開: 真贋相愛",
@@ -180,56 +180,38 @@ class DomainExpansionGame {
     detectDomain(hands) {
         if (!hands || hands.length === 0) return null;
 
-        // ─────────────────────────────────────────────────────
         // 1. INDIVIDUAL HAND TECHNIQUES
-        // ─────────────────────────────────────────────────────
         const techResults = hands.map(h => {
             const lm = h;
             const f = this.F(lm);
-            
-            // Blue: Index extended, others curled
             if (f.i && !f.m && !f.r && !f.p) return "Lapse Blue";
-            
-            // Red: All fingers extended
             if (f.i && f.m && f.r && f.p) return "Reversal Red";
-            
             return null;
         });
 
         const hasBlue = techResults.includes("Lapse Blue");
         const hasRed = techResults.includes("Reversal Red");
 
-        // Hollow Purple: Combo of Blue and Red
         if (hands.length >= 2 && hasBlue && hasRed) return "Hollow Purple";
 
-        // ─────────────────────────────────────────────────────
         // 2. SINGLE HAND DOMAINS
-        // ─────────────────────────────────────────────────────
         if (hands.length === 1) {
             const lm = hands[0];
             const f = this.F(lm);
-
-            // Tech overrides
             if (hasBlue) return "Lapse Blue";
             if (hasRed) return "Reversal Red";
-
-            // Infinite Void: Index/Middle crossed
             const middleNearIndex = this.near(lm[M_TIP], lm[I_TIP], 0.10) || this.near(lm[M_TIP], lm[I_PIP], 0.10);
             if (f.i && !f.r && !f.p && middleNearIndex) return "Unlimited Void";
         }
 
-        // ─────────────────────────────────────────────────────
         // 3. TWO HAND DOMAINS
-        // ─────────────────────────────────────────────────────
         if (hands.length >= 2) {
             const [a, b] = [hands[0], hands[1]];
             const horizDist = Math.abs(a[W_].x - b[W_].x);
             const verticalDist = Math.abs(a[W_].y - b[W_].y);
 
-            // 1. TIME CELL MOON PALACE (Priority Check)
             if (this.timeCellHand(a) && this.timeCellHand(b)) return "Time Cell Moon Palace";
 
-            // 2. AUTHENTIC MUTUAL LOVE (Wide horizontal distance)
             if (horizDist > 0.35) {
                 for (const [x, y] of [[a, b], [b, a]]) {
                     const fx = this.F(x), fy = this.F(y);
@@ -239,65 +221,38 @@ class DomainExpansionGame {
                 }
             }
 
-            // 3. CLOSE-HANDS ZONE (Side-by-side)
             if (horizDist <= 0.50 && verticalDist < 0.20) {
-                // YUJI UNNAMED
                 if (this.yujiHand(a) && this.yujiHand(b) && this.d2(a[I_TIP], b[I_TIP]) < 0.30) return "Yuji Itadori";
-
-                // CHIMERA SHADOW GARDEN
                 if (this.allDown(a) && this.allDown(b)) return "Chimera Shadow Garden";
-
-                // MALEVOLENT SHRINE (Checked after Chimera to avoid overlap)
                 const sa = this.shrineScore(a), sb = this.shrineScore(b);
                 if (sa >= 0 && sb >= 0 && ((sa>=3 && sb>=1) || (sb>=3 && sa>=1))) return "Malevolent Shrine";
-                
-                // SELF-EMBODIMENT OF PERFECTION (Mahito - original proximity logic)
                 if (this.near(a[P_TIP], b[P_TIP], 0.08) && this.near(a[TH_TIP], b[TH_TIP], 0.12)) return "Self-Embodiment of Perfection";
             }
 
-            // 4. IDLE DEATH GAMBLE (Vertically stacked)
             if (verticalDist > 0.15 && this.d2(a[W_], b[W_]) > 0.20) {
                 for (const [upper, lower] of [[a, b], [b, a]]) {
                     if (upper[W_].y >= lower[W_].y) continue;
                     const fu = this.F(upper), fl = this.F(lower);
-                    // Proximity of thumb and index tips
                     const okCircle = this.near(upper[TH_TIP], upper[I_TIP], 0.22);
-                    // Lenient: at least 1 other finger extended (middle, ring, or pinky)
                     const okFingers = (fu.m?1:0)+(fu.r?1:0)+(fu.p?1:0) >= 1;
                     const lowerOpen = (fl.i?1:0)+(fl.m?1:0)+(fl.r?1:0)+(fl.p?1:0) >= 3;
                     if (okCircle && okFingers && lowerOpen) return "Idle Death Gamble";
                 }
             }
         }
-
         return null;
     }
 
     update(hands) {
         const detected = this.detectDomain(hands);
         this.predictionHistory.push(detected || "");
-        if (this.predictionHistory.length > this.historyMaxLen) {
-            this.predictionHistory.shift();
-        }
-
+        if (this.predictionHistory.length > this.historyMaxLen) this.predictionHistory.shift();
         const counts = {};
         this.predictionHistory.forEach(p => { if(p) counts[p] = (counts[p] || 0) + 1; });
-        
-        let topLabel = null;
-        let topCount = 0;
-        for (const label in counts) {
-            if (counts[label] > topCount) {
-                topCount = counts[label];
-                topLabel = label;
-            }
-        }
-
-        if (topCount >= 6 && topCount >= (this.predictionHistory.length * 0.5)) {
-            this.stableDomain = topLabel;
-        } else {
-            this.stableDomain = null;
-        }
-
+        let topLabel = null, topCount = 0;
+        for (const label in counts) { if (counts[label] > topCount) { topCount = counts[label]; topLabel = label; } }
+        if (topCount >= 6) this.stableDomain = topLabel;
+        else this.stableDomain = null;
         return this.stableDomain;
     }
 
@@ -305,13 +260,9 @@ class DomainExpansionGame {
 
     initStars(w, h, count = 150) {
         this.stars = [];
-        for (let i = 0; i < count; i++) {
-            this.stars.push({ x: Math.random() * w, y: Math.random() * h, speed: 0.5 + Math.random() * 2.5 });
-        }
+        for (let i = 0; i < count; i++) this.stars.push({ x: Math.random() * w, y: Math.random() * h, speed: 0.5 + Math.random() * 2.5 });
         this.symbols = [];
-        for (let i = 0; i < 30; i++) {
-            this.symbols.push({ x: Math.random() * w, y: Math.random() * h, speed: 2 + Math.random() * 4, text: Math.floor(Math.random() * 10).toString() });
-        }
+        for (let i = 0; i < 30; i++) this.symbols.push({ x: Math.random() * w, y: Math.random() * h, speed: 2 + Math.random() * 4, text: Math.floor(Math.random() * 10).toString() });
     }
 
     drawVFX(frameCanvas, stableDomain, hands) {
@@ -319,33 +270,19 @@ class DomainExpansionGame {
         const ctx = this.vfxCtx;
         const w = this.vfxCanvas.width;
         const h = this.vfxCanvas.height;
-
-        // Reset state before clearing
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 1.0;
         ctx.clearRect(0, 0, w, h);
-
         if (!stableDomain) {
-            this.slashes = [];
-            this.flashCounter = 0;
-            this.ghostFrames = [];
-            this.blueOrbRad = 0;
-            this.redOrbRad = 0;
-            this.purpleBeamProgress = 0;
+            this.slashes = []; this.flashCounter = 0; this.blueOrbRad = 0; this.redOrbRad = 0; this.purpleBeamProgress = 0;
             return;
         }
 
-        // Calculate hand center if hands are present
+        // Calculate hand center
         let center = null;
         if (hands && hands.length > 0) {
             let sx = 0, sy = 0, count = 0;
-            hands.forEach(h => {
-                h.forEach(lm => {
-                    sx += lm.x * w;
-                    sy += lm.y * h;
-                    count++;
-                });
-            });
+            hands.forEach(h => { h.forEach(lm => { sx += lm.x * w; sy += lm.y * h; count++; }); });
             center = { x: sx / count, y: sy / count };
         }
 
@@ -357,39 +294,23 @@ class DomainExpansionGame {
         }
 
         switch (stableDomain) {
-            case "Unlimited Void":
-                this.applyUnlimitedVoid(ctx, w, h);
+            case "Unlimited Void": this.applyUnlimitedVoid(ctx, w, h); break;
+            case "Malevolent Shrine": this.applyMalevolentShrine(ctx, w, h); break;
+            case "Self-Embodiment of Perfection": this.applySelfEmbodiment(ctx, w, h); break;
+            case "Authentic Mutual Love": this.applyAuthenticLove(ctx, w, h); break;
+            case "Idle Death Gamble": this.applyIdleDeathGamble(ctx, w, h); break;
+            case "Yuji Itadori": this.applyYujiDomain(ctx, w, h); break;
+            case "Chimera Shadow Garden": this.applyChimera(ctx, w, h); break;
+            case "Time Cell Moon Palace": this.applyNaoya(ctx, w, h); break;
+            case "Lapse Blue": 
+                if (indexTips.length > 0) this.applyLapseBlue(ctx, indexTips[0]); 
+                else if (center) this.applyLapseBlue(ctx, center);
                 break;
-            case "Malevolent Shrine":
-                this.applyMalevolentShrine(ctx, w, h);
+            case "Reversal Red": 
+                if (indexTips.length > 0) this.applyReversalRed(ctx, indexTips[0]);
+                else if (center) this.applyReversalRed(ctx, center);
                 break;
-            case "Self-Embodiment of Perfection":
-                this.applySelfEmbodiment(ctx, w, h);
-                break;
-            case "Authentic Mutual Love":
-                this.applyAuthenticLove(ctx, w, h);
-                break;
-            case "Idle Death Gamble":
-                this.applyIdleDeathGamble(ctx, w, h);
-                break;
-            case "Yuji Itadori":
-                this.applyYujiDomain(ctx, w, h);
-                break;
-            case "Chimera Shadow Garden":
-                this.applyChimera(ctx, w, h);
-                break;
-            case "Time Cell Moon Palace":
-                this.applyNaoya(ctx, w, h);
-                break;
-            case "Lapse Blue":
-                if (indexTips.length > 0) this.applyLapseBlue(ctx, indexTips[0], w, h);
-                else if (center) this.applyLapseBlue(ctx, center, w, h);
-                break;
-            case "Reversal Red":
-                if (indexTips.length > 0) this.applyReversalRed(ctx, indexTips[0], w, h);
-                else if (center) this.applyReversalRed(ctx, center, w, h);
-                break;
-            case "Hollow Purple":
+            case "Hollow Purple": 
                 if (indexTips.length >= 2) this.applyHollowPurple(ctx, indexTips[0], indexTips[1], w, h);
                 else if (center) this.applyHollowPurple(ctx, center, center, w, h);
                 break;
@@ -397,52 +318,23 @@ class DomainExpansionGame {
     }
 
     applyUnlimitedVoid(ctx, w, h) {
-        ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; ctx.fillRect(0, 0, w, h);
         ctx.fillStyle = "white";
-        this.stars.forEach(s => {
-            s.y = (s.y + s.speed) % h;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, 1, 0, Math.PI * 2);
-            ctx.fill();
-        });
+        this.stars.forEach(s => { s.y = (s.y + s.speed) % h; ctx.beginPath(); ctx.arc(s.x, s.y, 1, 0, Math.PI * 2); ctx.fill(); });
         ctx.font = "15px monospace";
-        this.symbols.forEach(s => {
-            s.y = (s.y + s.speed) % h;
-            ctx.fillText(s.text, s.x, s.y);
-        });
+        this.symbols.forEach(s => { s.y = (s.y + s.speed) % h; ctx.fillText(s.text, s.x, s.y); });
     }
 
     applyMalevolentShrine(ctx, w, h) {
-        ctx.fillStyle = "rgba(255, 0, 0, 0.2)";
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(255, 0, 0, 0.2)"; ctx.fillRect(0, 0, w, h);
         this.flashCounter++;
-        if (this.flashCounter % 10 === 0) {
-            ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-            ctx.fillRect(0, 0, w, h);
-        }
+        if (this.flashCounter % 10 === 0) { ctx.fillStyle = "rgba(255, 255, 255, 0.8)"; ctx.fillRect(0, 0, w, h); }
         if (Math.random() < 0.6) {
-            const x1 = Math.random() * w;
-            const y1 = Math.random() * h;
-            const length = 80 + Math.random() * 120;
-            const angle = (Math.random() - 0.5) * 1.6;
-            this.slashes.push({
-                x1: x1, y1: y1,
-                x2: x1 + length * Math.cos(angle),
-                y2: y1 + length * Math.sin(angle),
-                life: 3 + Math.floor(Math.random() * 4)
-            });
+            const x1 = Math.random() * w, y1 = Math.random() * h, length = 80 + Math.random() * 120, angle = (Math.random() - 0.5) * 1.6;
+            this.slashes.push({ x1: x1, y1: y1, x2: x1 + length * Math.cos(angle), y2: y1 + length * Math.sin(angle), life: 3 + Math.floor(Math.random() * 4) });
         }
         ctx.strokeStyle = "white";
-        this.slashes = this.slashes.filter(s => {
-            ctx.lineWidth = s.life;
-            ctx.beginPath();
-            ctx.moveTo(s.x1, s.y1);
-            ctx.lineTo(s.x2, s.y2);
-            ctx.stroke();
-            s.life--;
-            return s.life > 0;
-        });
+        this.slashes = this.slashes.filter(s => { ctx.lineWidth = s.life; ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke(); s.life--; return s.life > 0; });
     }
 
     applySelfEmbodiment(ctx, w, h) {
@@ -453,91 +345,48 @@ class DomainExpansionGame {
 
     applyAuthenticLove(ctx, w, h) {
         this.yutaPhase += 0.02;
-        ctx.fillStyle = "rgba(180, 100, 255, 0.12)";
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(180, 100, 255, 0.12)"; ctx.fillRect(0, 0, w, h);
         const brightness = 0.05 * Math.sin(this.yutaPhase);
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, brightness)})`;
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, brightness)})`; ctx.fillRect(0, 0, w, h);
     }
 
     applyIdleDeathGamble(ctx, w, h) {
-        this.hakariPhase++;
-        ctx.fillStyle = "rgba(255, 215, 0, 0.2)";
-        ctx.fillRect(0, 0, w, h);
-        if (this.hakariPhase % 3 === 0) {
-            this.slotNumbers = [
-                Math.floor(Math.random()*10).toString(),
-                Math.floor(Math.random()*10).toString(),
-                Math.floor(Math.random()*10).toString()
-            ];
-        }
-        ctx.fillStyle = "white";
-        ctx.font = "bold 40px Arial";
-        ctx.textAlign = "center";
+        this.hakariPhase++; ctx.fillStyle = "rgba(255, 215, 0, 0.2)"; ctx.fillRect(0, 0, w, h);
+        if (this.hakariPhase % 3 === 0) this.slotNumbers = [Math.floor(Math.random()*10).toString(), Math.floor(Math.random()*10).toString(), Math.floor(Math.random()*10).toString()];
+        ctx.fillStyle = "white"; ctx.font = "bold 40px Arial"; ctx.textAlign = "center";
         ctx.fillText(`[${this.slotNumbers[0]}] [${this.slotNumbers[1]}] [${this.slotNumbers[2]}]`, w/2, h - 50);
-        if (this.confetti.length === 0) {
-            for(let i=0; i<50; i++) {
-                this.confetti.push({
-                    x: Math.random()*w, y: Math.random()*h, 
-                    speed: 2+Math.random()*3, 
-                    color: ["#FFFF00", "#FFD700", "#FFFFFF"][Math.floor(Math.random()*3)]
-                });
-            }
-        }
-        this.confetti.forEach(p => {
-            p.y = (p.y + p.speed) % h;
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
-            ctx.fill();
-        });
+        if (this.confetti.length === 0) { for(let i=0; i<50; i++) this.confetti.push({ x: Math.random()*w, y: Math.random()*h, speed: 2+Math.random()*3, color: ["#FFFF00", "#FFD700", "#FFFFFF"][Math.floor(Math.random()*3)] }); }
+        this.confetti.forEach(p => { p.y = (p.y + p.speed) % h; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); });
     }
 
     applyYujiDomain(ctx, w, h) {
         this.yujiPhase += 0.1;
-        ctx.fillStyle = `rgba(0, 255, 0, ${0.1 * Math.abs(Math.sin(this.yujiPhase * 4))})`;
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = `rgba(0, 255, 0, ${0.1 * Math.abs(Math.sin(this.yujiPhase * 4))})`; ctx.fillRect(0, 0, w, h);
         this.shockwaveRad = (this.shockwaveRad + 10) % Math.max(w, h);
-        ctx.strokeStyle = "rgba(100, 255, 100, 0.5)";
-        ctx.lineWidth = 5 * (1 - this.shockwaveRad / Math.max(w, h));
-        ctx.beginPath();
-        ctx.arc(w/2, h/2, this.shockwaveRad, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.strokeStyle = "rgba(100, 255, 100, 0.5)"; ctx.lineWidth = 5 * (1 - this.shockwaveRad / Math.max(w, h));
+        ctx.beginPath(); ctx.arc(w/2, h/2, this.shockwaveRad, 0, Math.PI * 2); ctx.stroke();
     }
 
     applyChimera(ctx, w, h) {
-        ctx.fillStyle = "rgba(20, 20, 40, 0.4)";
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(20, 20, 40, 0.4)"; ctx.fillRect(0, 0, w, h);
         ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
         for (let i = 0; i < 5; i++) {
-            const time = (Date.now() / 1000 + i) % 2;
-            const radius = time * 100;
-            ctx.beginPath();
-            ctx.arc(w/2 + Math.sin(i) * 200, h, radius, 0, Math.PI * 2);
-            ctx.fill();
+            const time = (Date.now() / 1000 + i) % 2, radius = time * 100;
+            ctx.beginPath(); ctx.arc(w/2 + Math.sin(i) * 200, h, radius, 0, Math.PI * 2); ctx.fill();
         }
     }
 
     applyNaoya(ctx, w, h) {
-        ctx.fillStyle = "rgba(255, 100, 150, 0.2)";
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(255, 100, 150, 0.2)"; ctx.fillRect(0, 0, w, h);
         const pulse = Math.abs(Math.sin(Date.now() / 200)) * 0.2;
-        ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
-        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`; ctx.fillRect(0, 0, w, h);
     }
 
     applyLapseBlue(ctx, pos) {
         this.blueOrbRad = (this.blueOrbRad + 1.5) % 30;
-        const r = this.blueOrbRad + 40; // Larger
-        
-        // Solid bright circles for guaranteed visibility
-        ctx.fillStyle = "rgba(0, 120, 255, 0.3)";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 30, 0, Math.PI * 2); ctx.fill();
-        
-        ctx.fillStyle = "rgba(0, 150, 255, 0.9)"; // High opacity
+        const r = this.blueOrbRad + 40;
+        ctx.fillStyle = "rgba(0, 150, 255, 0.9)"; 
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill();
-        
-        // Bright White Core
         ctx.fillStyle = "white";
         ctx.beginPath(); ctx.arc(pos.x, pos.y, 15, 0, Math.PI * 2); ctx.fill();
     }
@@ -545,51 +394,29 @@ class DomainExpansionGame {
     applyReversalRed(ctx, pos) {
         this.redOrbRad = (this.redOrbRad + 2) % 40;
         const r = this.redOrbRad + 40;
-
-        ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 35, 0, Math.PI * 2); ctx.fill();
-        
-        ctx.fillStyle = "rgba(255, 80, 80, 0.9)"; // High opacity
+        ctx.fillStyle = "rgba(255, 80, 80, 0.9)"; 
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill();
-        
-        // Bright White Core
         ctx.fillStyle = "white";
         ctx.beginPath(); ctx.arc(pos.x, pos.y, 15, 0, Math.PI * 2); ctx.fill();
     }
 
     applyHollowPurple(ctx, p1, p2, w, h) {
-        this.purpleBeamProgress += 0.04;
-        if (this.purpleBeamProgress > 1) this.purpleBeamProgress = 0;
-        
-        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-        const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-
-        // Increased distance threshold for merging
+        this.purpleBeamProgress += 0.04; if (this.purpleBeamProgress > 1) this.purpleBeamProgress = 0;
+        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y), center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
         if (dist < 250) {
-            // Combined Purple Ball (High Visibility)
-            // Removed full-screen fillRect to focus on orb visibility
-            
-            const r = 120 * (1 + this.purpleBeamProgress * 0.1);
-            ctx.fillStyle = "rgba(148, 0, 211, 0.3)";
-            ctx.beginPath(); ctx.arc(center.x, center.y, r + 50, 0, Math.PI * 2); ctx.fill();
-            
-            ctx.fillStyle = "rgba(180, 0, 255, 0.9)";
+            // Merged state - Huge solid orb, NO full screen fill
+            const r = 150 * (1 + this.purpleBeamProgress * 0.1);
+            ctx.fillStyle = "rgba(148, 0, 211, 1.0)"; // Fully opaque
             ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill();
-            
             ctx.fillStyle = "white";
-            ctx.beginPath(); ctx.arc(center.x, center.y, 30, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(center.x, center.y, 40, 0, Math.PI * 2); ctx.fill();
         } else {
-            // Blue Orb (Large)
-            ctx.fillStyle = "rgba(0, 100, 255, 0.9)";
-            ctx.beginPath(); ctx.arc(p1.x, p1.y, 50, 0, Math.PI * 2); ctx.fill();
-            // Red Orb (Large)
-            ctx.fillStyle = "rgba(255, 50, 50, 0.9)";
-            ctx.beginPath(); ctx.arc(p2.x, p2.y, 50, 0, Math.PI * 2); ctx.fill();
-
-            // Bold Dash line connection
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 4;
-            ctx.setLineDash([15, 10]);
+            // Preparation state - Individual opaque orbs
+            ctx.fillStyle = "rgba(0, 100, 255, 1.0)"; // Solid Blue
+            ctx.beginPath(); ctx.arc(p1.x, p1.y, 60, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "rgba(255, 50, 50, 1.0)"; // Solid Red
+            ctx.beginPath(); ctx.arc(p2.x, p2.y, 60, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = "white"; ctx.lineWidth = 6; ctx.setLineDash([20, 10]);
             ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
             ctx.setLineDash([]);
         }
