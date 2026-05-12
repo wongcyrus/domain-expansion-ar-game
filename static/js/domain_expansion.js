@@ -401,49 +401,82 @@ class DomainExpansionGame {
     }
 
     applyLapseBlue(ctx, pos) {
-        this.blueOrbRad = (this.blueOrbRad + 1) % 20;
-        const r = 60 + this.blueOrbRad;
-        ctx.fillStyle = "#0077FF"; // Solid Blue
+        this.blueOrbRad = (this.blueOrbRad + 1.5) % 25;
+        const r = 55 + this.blueOrbRad;
+
+        // Energy Aura (Safe Concentric Layers)
+        ctx.fillStyle = "rgba(0, 100, 255, 0.15)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 40, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = "rgba(0, 150, 255, 0.4)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 20, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = "#0077FF"; // Main Body
         ctx.strokeStyle = "white";
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+        // Unstable Core
+        const corePulse = 5 * Math.sin(Date.now() / 50);
         ctx.fillStyle = "white";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 15 + corePulse, 0, Math.PI * 2); ctx.fill();
     }
 
     applyReversalRed(ctx, pos) {
-        this.redOrbRad = (this.redOrbRad + 1) % 20;
-        const r = 60 + this.redOrbRad;
-        ctx.fillStyle = "#FF3333"; // Solid Red
+        this.redOrbRad = (this.redOrbRad + 1.5) % 25;
+        const r = 55 + this.redOrbRad;
+
+        // Energy Aura
+        ctx.fillStyle = "rgba(255, 50, 50, 0.15)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 40, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = "rgba(255, 80, 80, 0.4)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 20, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = "#FF3333"; // Main Body
         ctx.strokeStyle = "white";
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+        // Unstable Core
+        const corePulse = 5 * Math.sin(Date.now() / 50);
         ctx.fillStyle = "white";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 15 + corePulse, 0, Math.PI * 2); ctx.fill();
     }
 
     applyHollowPurple(ctx, p1, p2, w, h) {
         this.purpleBeamProgress += 0.04; if (this.purpleBeamProgress > 1) this.purpleBeamProgress = 0;
         const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y), center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
         if (dist < 200) {
-            const r = 180 * (1 + this.purpleBeamProgress * 0.1);
+            const r = 160 * (1 + this.purpleBeamProgress * 0.1);
+
+            // Outer Purple Aura
+            ctx.fillStyle = "rgba(148, 0, 211, 0.15)";
+            ctx.beginPath(); ctx.arc(center.x, center.y, r + 60, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "rgba(180, 0, 255, 0.3)";
+            ctx.beginPath(); ctx.arc(center.x, center.y, r + 30, 0, Math.PI * 2); ctx.fill();
+
+            // Core Energy
             ctx.fillStyle = "#9400D3"; 
             ctx.strokeStyle = "white";
-            ctx.lineWidth = 10;
+            ctx.lineWidth = 6;
             ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
             ctx.fillStyle = "white";
-            ctx.beginPath(); ctx.arc(center.x, center.y, 60, 0, Math.PI * 2); ctx.fill();
+            const corePulse = 10 * Math.sin(Date.now() / 40);
+            ctx.beginPath(); ctx.arc(center.x, center.y, 50 + corePulse, 0, Math.PI * 2); ctx.fill();
         } else {
-            ctx.fillStyle = "#0077FF"; // Blue
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 5;
-            ctx.beginPath(); ctx.arc(p1.x, p1.y, 60, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-            ctx.fillStyle = "#FF3333"; // Red
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 5;
-            ctx.beginPath(); ctx.arc(p2.x, p2.y, 60, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-            ctx.strokeStyle = "white"; ctx.lineWidth = 4; ctx.setLineDash([15, 10]);
-            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); ctx.setLineDash([]);
+            // High Visibility Tracking Orbs
+            this.applyLapseBlue(ctx, p1);
+            this.applyReversalRed(ctx, p2);
+
+            // Energy Arc
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+            ctx.lineWidth = 4;
+            ctx.setLineDash([15, 10]);
+            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+            ctx.setLineDash([]);
         }
     }
 }
