@@ -302,13 +302,22 @@ class DomainExpansionGame {
             if (totalLm > 0) center = { x: sx / totalLm, y: sy / totalLm };
         }
 
-        // 2. Unified Coordinate Extraction (Proven pattern from sorted hands)
+        // Unified Coordinate Extraction (Mirrored to match scaleX(-1))
         let primaryIdx = null;
         let secondIdx = null;
+        let center = null;
+
         if (handList.length > 0) {
+            // NOTE: We subtract from 'w' because the CSS scaleX(-1) mirrors the context
             const sorted = [...handList].sort((a, b) => a[0].x - b[0].x);
-            if (sorted[0] && sorted[0][8]) primaryIdx = { x: sorted[0][8].x * w, y: sorted[0][8].y * h };
-            if (sorted[1] && sorted[1][8]) secondIdx = { x: sorted[1][8].x * w, y: sorted[1][8].y * h };
+            if (sorted[0] && sorted[0][8]) primaryIdx = { x: (1 - sorted[0][8].x) * w, y: sorted[0][8].y * h };
+            if (sorted[1] && sorted[1][8]) secondIdx = { x: (1 - sorted[1][8].x) * w, y: sorted[1][8].y * h };
+            
+            let sx = 0, sy = 0, count = 0;
+            handList.forEach(hand => {
+                for(let i=0; i<21; i++) { if(hand[i]) { sx += (1 - hand[i].x) * w; sy += hand[i].y * h; count++; } }
+            });
+            if (count > 0) center = { x: sx / count, y: sy / count };
         }
 
         switch (stableDomain) {
@@ -371,6 +380,10 @@ class DomainExpansionGame {
         // Draw Rika background if loaded
         if (this.rikaImg.complete) {
             ctx.save();
+            // Since the CANVAS element is mirrored via CSS transform: scaleX(-1),
+            // our drawing context is mirrored. We must UN-MIRROR the image so she looks correct.
+            ctx.scale(-1, 1);
+            
             const imgAspect = this.rikaImg.width / this.rikaImg.height;
             const canvasAspect = w / h;
             let drawW, drawH;
@@ -381,8 +394,11 @@ class DomainExpansionGame {
                 drawH = h;
                 drawW = h * imgAspect;
             }
-            ctx.globalAlpha = 0.6 + 0.1 * Math.sin(this.yutaPhase); // Increased opacity
-            ctx.drawImage(this.rikaImg, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            
+            ctx.globalAlpha = 0.6 + 0.1 * Math.sin(this.yutaPhase);
+            // Coordinates are -w to 0 because of scale(-1, 1)
+            ctx.drawImage(this.rikaImg, -w + (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            
             if (!this._rikaLogged) { console.log('👻 Rika Manifested!'); this._rikaLogged = true; }
             ctx.restore();
         } else {
