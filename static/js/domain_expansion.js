@@ -442,13 +442,10 @@ class DomainExpansionGame {
     }
 
     applyAuthenticLove(ctx, w, h) {
-        this.yutaPhase += 0.03;
-        const grad = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/2);
-        grad.addColorStop(0, "rgba(180, 100, 255, 0)");
-        grad.addColorStop(1, "rgba(180, 100, 255, 0.4)");
-        ctx.fillStyle = grad;
+        this.yutaPhase += 0.02;
+        ctx.fillStyle = "rgba(180, 100, 255, 0.12)";
         ctx.fillRect(0, 0, w, h);
-        const brightness = 0.1 * Math.sin(this.yutaPhase);
+        const brightness = 0.05 * Math.sin(this.yutaPhase);
         ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, brightness)})`;
         ctx.fillRect(0, 0, w, h);
     }
