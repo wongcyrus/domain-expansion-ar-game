@@ -528,39 +528,33 @@ class DomainExpansionGame {
 
     applyLapseBlue(ctx, pos) {
         this.blueOrbRad = (this.blueOrbRad + 1.5) % 30;
-        const r = this.blueOrbRad + 20;
+        const r = this.blueOrbRad + 40; // Larger
         
-        // Multi-layered concentric circles for neon glow (SAFE on mobile)
-        ctx.fillStyle = "rgba(0, 100, 255, 0.15)";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 20, 0, Math.PI * 2); ctx.fill();
+        // Solid bright circles for guaranteed visibility
+        ctx.fillStyle = "rgba(0, 120, 255, 0.3)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 30, 0, Math.PI * 2); ctx.fill();
         
-        ctx.fillStyle = "rgba(0, 100, 255, 0.4)";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 10, 0, Math.PI * 2); ctx.fill();
-        
-        ctx.fillStyle = "rgba(0, 100, 255, 0.8)";
+        ctx.fillStyle = "rgba(0, 150, 255, 0.9)"; // High opacity
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill();
         
-        // White Core
+        // Bright White Core
         ctx.fillStyle = "white";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 15, 0, Math.PI * 2); ctx.fill();
     }
 
     applyReversalRed(ctx, pos) {
         this.redOrbRad = (this.redOrbRad + 2) % 40;
-        const r = this.redOrbRad + 20;
+        const r = this.redOrbRad + 40;
 
-        ctx.fillStyle = "rgba(255, 50, 50, 0.15)";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 25, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "rgba(255, 50, 50, 0.3)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 35, 0, Math.PI * 2); ctx.fill();
         
-        ctx.fillStyle = "rgba(255, 50, 50, 0.4)";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 12, 0, Math.PI * 2); ctx.fill();
-        
-        ctx.fillStyle = "rgba(255, 50, 50, 0.8)";
+        ctx.fillStyle = "rgba(255, 80, 80, 0.9)"; // High opacity
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill();
         
-        // White Core
+        // Bright White Core
         ctx.fillStyle = "white";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 15, 0, Math.PI * 2); ctx.fill();
     }
 
     applyHollowPurple(ctx, p1, p2, w, h) {
@@ -570,32 +564,32 @@ class DomainExpansionGame {
         const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
         const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
 
-        if (dist < 180) {
-            // Combined Purple Ball (SAFE Glow)
-            ctx.fillStyle = "rgba(148, 0, 211, 0.2)";
-            ctx.fillRect(0, 0, w, h);
+        // Increased distance threshold for merging
+        if (dist < 250) {
+            // Combined Purple Ball (High Visibility)
+            // Removed full-screen fillRect to focus on orb visibility
             
-            const r = 80 * (1 + this.purpleBeamProgress * 0.1);
-            ctx.fillStyle = "rgba(148, 0, 211, 0.15)";
-            ctx.beginPath(); ctx.arc(center.x, center.y, r + 40, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "rgba(148, 0, 211, 0.4)";
-            ctx.beginPath(); ctx.arc(center.x, center.y, r + 20, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "rgba(148, 0, 211, 0.9)";
+            const r = 120 * (1 + this.purpleBeamProgress * 0.1);
+            ctx.fillStyle = "rgba(148, 0, 211, 0.3)";
+            ctx.beginPath(); ctx.arc(center.x, center.y, r + 50, 0, Math.PI * 2); ctx.fill();
+            
+            ctx.fillStyle = "rgba(180, 0, 255, 0.9)";
             ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill();
             
             ctx.fillStyle = "white";
-            ctx.beginPath(); ctx.arc(center.x, center.y, 20, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(center.x, center.y, 30, 0, Math.PI * 2); ctx.fill();
         } else {
-            // Blue
-            ctx.fillStyle = "rgba(0, 100, 255, 0.8)";
-            ctx.beginPath(); ctx.arc(p1.x, p1.y, 35, 0, Math.PI * 2); ctx.fill();
-            // Red
-            ctx.fillStyle = "rgba(255, 50, 50, 0.8)";
-            ctx.beginPath(); ctx.arc(p2.x, p2.y, 35, 0, Math.PI * 2); ctx.fill();
+            // Blue Orb (Large)
+            ctx.fillStyle = "rgba(0, 100, 255, 0.9)";
+            ctx.beginPath(); ctx.arc(p1.x, p1.y, 50, 0, Math.PI * 2); ctx.fill();
+            // Red Orb (Large)
+            ctx.fillStyle = "rgba(255, 50, 50, 0.9)";
+            ctx.beginPath(); ctx.arc(p2.x, p2.y, 50, 0, Math.PI * 2); ctx.fill();
 
-            // Dash line connection
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
-            ctx.setLineDash([8, 8]);
+            // Bold Dash line connection
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 4;
+            ctx.setLineDash([15, 10]);
             ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
             ctx.setLineDash([]);
         }
