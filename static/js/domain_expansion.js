@@ -278,19 +278,34 @@ class DomainExpansionGame {
             return;
         }
 
-        // Calculate hand center
+        // 1. Calculate General Hand Center (Proven Pattern)
         let center = null;
         if (hands && hands.length > 0) {
             let sx = 0, sy = 0, count = 0;
             hands.forEach(h => { h.forEach(lm => { sx += lm.x * w; sy += lm.y * h; count++; }); });
-            center = { x: sx / count, y: sy / count };
+            if (count > 0) center = { x: sx / count, y: sy / count };
         }
 
-        // Safely extract index finger tips for techniques
-        let indexTips = [];
+        // 2. Calculate Index Tip Center (Refined Pattern)
+        let indexCenter = null;
         if (hands && hands.length > 0) {
-            indexTips = hands.map(h => ({ x: h[I_TIP].x * w, y: h[I_TIP].y * h }));
-            indexTips.sort((a, b) => a.x - b.x); // Sort left-to-right on screen
+            let ix = 0, iy = 0, icount = 0;
+            hands.forEach(h => {
+                if (h[8]) { // I_TIP is 8
+                    ix += h[8].x * w;
+                    iy += h[8].y * h;
+                    icount++;
+                }
+            });
+            if (icount > 0) indexCenter = { x: ix / icount, y: iy / icount };
+        }
+
+        // 3. For Hollow Purple, we need individual hands
+        let h1 = null, h2 = null;
+        if (hands && hands.length >= 2) {
+            const sorted = [...hands].sort((a, b) => a[0].x - b[0].x); // Sort by wrist X
+            h1 = { x: sorted[0][8].x * w, y: sorted[0][8].y * h };
+            h2 = { x: sorted[1][8].x * w, y: sorted[1][8].y * h };
         }
 
         switch (stableDomain) {
@@ -303,15 +318,19 @@ class DomainExpansionGame {
             case "Chimera Shadow Garden": this.applyChimera(ctx, w, h); break;
             case "Time Cell Moon Palace": this.applyNaoya(ctx, w, h); break;
             case "Lapse Blue": 
-                if (indexTips.length > 0) this.applyLapseBlue(ctx, indexTips[0]); 
+                if (indexCenter) this.applyLapseBlue(ctx, indexCenter); 
+                else if (center) this.applyLapseBlue(ctx, center);
                 else this.applyLapseBlue(ctx, { x: w * 0.25, y: h * 0.4 }); 
                 break;
             case "Reversal Red": 
-                if (indexTips.length > 0) this.applyReversalRed(ctx, indexTips[0]);
+                if (indexCenter) this.applyReversalRed(ctx, indexCenter);
+                else if (center) this.applyReversalRed(ctx, center);
                 else this.applyReversalRed(ctx, { x: w * 0.75, y: h * 0.4 });
                 break;
             case "Hollow Purple": 
-                if (indexTips.length >= 2) this.applyHollowPurple(ctx, indexTips[0], indexTips[1], w, h);
+                if (h1 && h2) this.applyHollowPurple(ctx, h1, h2, w, h);
+                else if (indexCenter) this.applyHollowPurple(ctx, indexCenter, indexCenter, w, h);
+                else if (center) this.applyHollowPurple(ctx, center, center, w, h);
                 else this.applyHollowPurple(ctx, { x: w * 0.5, y: h * 0.4 }, { x: w * 0.5, y: h * 0.4 }, w, h);
                 break;
         }
