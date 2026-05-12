@@ -88,6 +88,15 @@ class HandTracker {
         this.videoModeSelect.addEventListener('change', () => {
             this.videoMode = this.videoModeSelect.value;
             console.log('[Game] Video mode changed to:', this.videoMode);
+            
+            // Stop and hide integrated player if we switch AWAY from it
+            if (this.videoMode !== 'integrated' && this.videoMode !== 'integrated_silent') {
+                if (this.integratedContainer) {
+                    this.integratedContainer.classList.add('hidden');
+                    this.integratedPlayer.pause();
+                }
+            }
+
             if (this.domainGame.stableDomain) {
                 const actionMap = {
                     "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
@@ -358,13 +367,22 @@ class HandTracker {
             this.integratedContainer.classList.remove('hidden');
             this.integratedPlayer.muted = (this.videoMode === 'integrated_silent');
             this.integratedPlayer.play().catch(e => { if (e.name !== 'AbortError') console.warn('[Game] Play failed:', e); });
-        } else if (this.videoMode === 'popup') {
-            if (this.playerWindow && !this.playerWindow.closed && this.isPlayerReady) {
-                console.log('[Game] Sending to popup:', file);
-                this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc: absSrc }, '*');
-            } else if (this.autoOpen) {
-                this.pendingVideoAction = action;
-                this.openPopupPlayer();
+        } else {
+            // Ensure integrated player is hidden if we are in another mode
+            if (this.integratedContainer) {
+                this.integratedContainer.classList.add('hidden');
+                this.integratedPlayer.pause();
+            }
+            
+            if (this.videoMode === 'popup') {
+                if (this.playerWindow && !this.playerWindow.closed && this.isPlayerReady) {
+                    console.log('[Game] Sending to popup:', file);
+                    this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc: absSrc }, '*');
+                } else if (this.autoOpen) {
+                    console.log('[Game] Auto-opening popup for:', action);
+                    this.pendingVideoAction = action;
+                    this.openPopupPlayer();
+                }
             }
         }
     }
