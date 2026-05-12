@@ -21,6 +21,7 @@ class HandTracker {
         this.robotIdSelect = document.getElementById('robot-id');
         this.apiStatus = document.getElementById('api-status');
         this.apiDot = document.getElementById('api-dot');
+        this.lastResp = document.getElementById('last-resp');
         this.videoModeSelect = document.getElementById('video-playback-mode');
         this.autoOpenPopupCheck = document.getElementById('auto-open-popup');
         this.openPlayerBtn = document.getElementById('open-player-btn');
@@ -59,7 +60,7 @@ class HandTracker {
             this.cooldownMs = 10000;
         }
 
-        // 4. Attach Event Listeners IMMEDIATELY (Before localization)
+        // 4. Attach Event Listeners IMMEDIATELY
         this.attachListeners();
 
         // 5. Initialize State
@@ -103,23 +104,26 @@ class HandTracker {
         if (this.languageSelect) {
             this.languageSelect.addEventListener('change', () => {
                 this.userLang = this.languageSelect.value;
-                console.log('[Game] Language changed to:', this.userLang);
                 this.localizeUI();
+            });
+        }
+
+        if (this.robotIdSelect) {
+            this.robotIdSelect.addEventListener('change', () => {
+                this.savedRobotId = this.robotIdSelect.value;
+                console.log('[Game] Target robot changed to:', this.savedRobotId);
             });
         }
 
         if (this.videoModeSelect) {
             this.videoModeSelect.addEventListener('change', () => {
                 this.videoMode = this.videoModeSelect.value;
-                console.log('[Game] Video mode changed to:', this.videoMode);
-                
                 if (this.videoMode !== 'integrated' && this.videoMode !== 'integrated_silent') {
                     if (this.integratedContainer) {
                         this.integratedContainer.classList.add('hidden');
                         this.integratedPlayer.pause();
                     }
                 }
-
                 if (this.domainGame.stableDomain) {
                     this.playVideo(this.domainGame.stableDomain);
                 }
@@ -216,9 +220,7 @@ class HandTracker {
     localizeUI() {
         try {
             let lang = this.userLang;
-            if (lang === 'auto') {
-                lang = navigator.language || navigator.userLanguage;
-            }
+            if (lang === 'auto') lang = navigator.language || navigator.userLanguage;
             
             const isJP = lang.startsWith('ja');
             const isZH = lang.startsWith('zh');
@@ -280,13 +282,10 @@ class HandTracker {
             this.setElText('mode-display', defaultMode);
             document.title = finalTitle;
             this.updateInstructions(); 
-        } catch (e) {
-            console.error('[Game] Localization failed:', e);
-        }
+        } catch (e) { console.error('[Game] Localization failed:', e); }
     }
     
     init() {
-        console.log('🚀 Initializing UI components...');
         const startOverlay = document.getElementById('start-overlay');
         if (startOverlay) {
             startOverlay.addEventListener('click', () => {
@@ -461,39 +460,28 @@ class HandTracker {
     async triggerRobotAction(robotId, action) {
         try {
             let url = this.apiEndpoint.trim();
-            if (!url) return;
-
-            // Split URL into base and query string
             const parts = url.split('?');
-            let base = parts[0].replace(/\/+$/, ""); // Remove trailing slashes
+            let base = parts[0].replace(/\/+$/, "");
             const query = parts[1] ? '?' + parts[1] : '';
-
-            // 1. Ensure /run_action is part of the path
-            if (!base.includes('/run_action')) {
-                base = base + '/run_action';
-            }
-
-            // 2. Handle Robot ID (robot_X or all)
+            if (!base.includes('/run_action')) base = base + '/run_action';
             const idPattern = /\/(robot_\d+|all)$/;
-            if (base.match(idPattern)) {
-                // If it already ends with an ID, replace it
-                base = base.replace(idPattern, '/' + robotId);
-            } else {
-                // Otherwise append the selected ID
-                base = base + '/' + robotId;
-            }
+            if (base.match(idPattern)) base = base.replace(idPattern, '/' + robotId);
+            else base = base + '/' + robotId;
             
-            // 3. Construct final URL with session key
-            const finalUrl = `${base}${query}${query ? '&' : '?'}session_key=${encodeURIComponent(this.sessionKey)}`;
+            // Clean session key
+            const cleanKey = this.sessionKey.trim().replace(/^"|"$/g, '');
+            const finalUrl = `${base}${query}${query ? '&' : '?'}session_key=${encodeURIComponent(cleanKey)}`;
             
-            await fetch(finalUrl, { 
+            console.log(`[API] URL: ${finalUrl}`);
+            const response = await fetch(finalUrl, { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
                 body: JSON.stringify({ action: action }) 
             });
-            console.log(`🤖 Action ${action} for ${robotId} sent to ${base}`);
+            if (this.lastResp) this.lastResp.textContent = `${response.status} ${response.status === 200 ? 'OK' : 'ERR'}`;
         } catch (err) { 
             console.error('❌ API failed:', err); 
+            if (this.lastResp) this.lastResp.textContent = 'NET ERR';
         }
     }
 }
