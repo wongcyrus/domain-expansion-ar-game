@@ -126,6 +126,7 @@ class HandTracker {
             document.getElementById('label-game-title').textContent = '🏷️ ゲームタイトル';
             document.getElementById('label-api-endpoint').textContent = '🔗 ロボットAPIエンドポイント';
             document.getElementById('save-settings').textContent = '💾 設定を保存';
+            document.querySelector('#robot-id option[value="all"]').textContent = '🤖 全てのロボット';
         } else if (isZH) {
             defaultTitle = '🖐️ 領域展開 AR';
             defaultMode = '結下手印以展開你的領域！';
@@ -133,6 +134,7 @@ class HandTracker {
             document.getElementById('label-game-title').textContent = '🏷️ 遊戲標題';
             document.getElementById('label-api-endpoint').textContent = '🔗 機器人API端點';
             document.getElementById('save-settings').textContent = '💾 保存設置';
+            document.querySelector('#robot-id option[value="all"]').textContent = '🤖 所有機器人';
         }
 
         this.domainGame.setLanguage(currentLang);
@@ -309,11 +311,17 @@ class HandTracker {
         try {
             // Adjust endpoint if it doesn't include the robot ID
             let url = this.apiEndpoint;
-            if (url.includes('run_action') && !url.endsWith(robotId)) {
-                // Try to replace or append robot_id if it follows standard pattern
-                if (url.includes('robot_')) {
-                    url = url.replace(/robot_\d+/, robotId);
-                } else {
+            if (url.includes('run_action')) {
+                // If it ends with a specific robot_X, replace it with current selection
+                if (url.match(/robot_\d+$/)) {
+                    url = url.replace(/robot_\d+$/, robotId);
+                } 
+                // If it ends with /all, replace it
+                else if (url.endsWith('/all')) {
+                    url = url.replace(/\/all$/, '/' + robotId);
+                }
+                // If it doesn't end with robotId, append it
+                else if (!url.endsWith(robotId)) {
                     url = url.endsWith('/') ? url + robotId : url + '/' + robotId;
                 }
             }
