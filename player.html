@@ -11,28 +11,64 @@
     </style>
 </head>
 <body>
-    <div id="placeholder">Waiting for Technique...</div>
+    <div id="placeholder" style="color: #666;">Waiting for Technique...</div>
+    
+    <!-- Interaction Overlay for Autoplay -->
+    <div id="interaction-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        <div style="text-align: center;">
+            <div style="font-size: 50px; margin-bottom: 10px;">📺</div>
+            <div style="font-size: 18px; color: #4A90E2; font-weight: bold;">Click to Enable Audio/Video</div>
+            <div style="font-size: 12px; color: #888; margin-top: 5px;">(Required by browser security)</div>
+        </div>
+    </div>
+
     <video id="player" autoplay playsinline style="display:none"></video>
 
     <script>
         const player = document.getElementById('player');
         const placeholder = document.getElementById('placeholder');
+        const overlay = document.getElementById('interaction-overlay');
+        let interactionEnabled = false;
+
+        // Function to notify parent we are ready
+        function notifyReady() {
+            if (window.opener) {
+                console.log('Sending PLAYER_READY to parent');
+                window.opener.postMessage({ type: 'PLAYER_READY' }, '*');
+            }
+        }
+
+        // Handle interaction requirement
+        overlay.addEventListener('click', () => {
+            interactionEnabled = true;
+            overlay.style.display = 'none';
+            player.muted = false; // Try to unmute if possible
+            console.log('Interaction enabled, player ready.');
+            notifyReady();
+        });
 
         window.addEventListener('message', (event) => {
             const { type, videoSrc } = event.data;
+            
             if (type === 'PLAY_VIDEO' && videoSrc) {
-                console.log('Playing:', videoSrc);
+                console.log('Received play request:', videoSrc);
                 placeholder.style.display = 'none';
                 player.style.display = 'block';
                 player.src = videoSrc;
-                player.play().catch(e => console.warn('Autoplay prevented:', e));
+                
+                player.play().catch(e => {
+                    console.warn('Autoplay failed, showing overlay:', e);
+                    overlay.style.display = 'flex';
+                });
+            }
+            
+            if (type === 'PING') {
+                notifyReady();
             }
         });
 
-        // Notify parent that we are ready
-        if (window.opener) {
-            window.opener.postMessage({ type: 'PLAYER_READY' }, '*');
-        }
+        // Initial ready check
+        notifyReady();
     </script>
 </body>
 </html>

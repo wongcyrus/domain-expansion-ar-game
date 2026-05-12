@@ -26,6 +26,20 @@ class HandTracker {
         this.integratedContainer = document.getElementById('integrated-player-container');
         this.integratedPlayer = document.getElementById('integrated-player');
         this.playerWindow = null;
+        this.isPlayerReady = false;
+        this.pendingVideoAction = null;
+
+        // Listen for messages from the popup player
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'PLAYER_READY') {
+                console.log('📺 Popup Player is ready!');
+                this.isPlayerReady = true;
+                if (this.pendingVideoAction) {
+                    this.playVideo(this.pendingVideoAction);
+                    this.pendingVideoAction = null;
+                }
+            }
+        });
 
         // --- Persistence ---
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
@@ -265,9 +279,12 @@ class HandTracker {
 
     openPopupPlayer() {
         if (!this.playerWindow || this.playerWindow.closed) {
+            this.isPlayerReady = false;
             this.playerWindow = window.open('player.html', 'ARGamePlayer', 'width=800,height=450');
         } else {
             this.playerWindow.focus();
+            // Ping it to check if it's still alive/ready
+            this.playerWindow.postMessage({ type: 'PING' }, '*');
         }
     }
 
@@ -289,17 +306,31 @@ class HandTracker {
         const file = videoMap[action];
         if (!file) return;
 
-        const videoSrc = `static/video/${file}`;
+        // Use absolute path for cross-tab reliability
+        const videoSrc = `${window.location.origin}${window.location.pathname.replace('index.html', '')}static/video/${file}`;
 
         if (this.videoMode === 'integrated') {
             this.integratedContainer.classList.remove('hidden');
             this.integratedPlayer.src = videoSrc;
             this.integratedPlayer.play().catch(e => console.warn('Integrated playback failed:', e));
         } else if (this.videoMode === 'popup') {
-            if (this.autoOpen) this.openPopupPlayer();
-            if (this.playerWindow && !this.playerWindow.closed) {
-                this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc }, '*');
+            if (!this.playerWindow || this.playerWindow.closed) {
+                if (this.autoOpen) {
+                    this.pendingVideoAction = action;
+                    this.openPopupPlayer();
+                }
+                return;
             }
+
+            if (!this.isPlayerReady) {
+                console.log('Player window exists but not ready. Queuing action:', action);
+                this.pendingVideoAction = action;
+                this.playerWindow.postMessage({ type: 'PING' }, '*');
+                return;
+            }
+
+            console.log('Sending play message to popup:', videoSrc);
+            this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc }, '*');
         }
     }
 
