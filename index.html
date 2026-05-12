@@ -223,6 +223,9 @@
         <video id="webcam" playsinline webkit-playsinline></video>
         <canvas id="output-canvas"></canvas>
         <canvas id="vfx-canvas"></canvas>
+        <div id="integrated-player-container" class="hidden">
+            <video id="integrated-player" playsinline></video>
+        </div>
     </div>
 
     <div class="overlay header">
@@ -245,7 +248,20 @@
                 <input type="text" id="api-endpoint" placeholder="https://your-api.com/run_action">
                 <button id="save-settings">💾 Save Settings</button>
             </div>
-            <div>
+            <div style="border-top: 1px solid #444; padding-top: 10px;">
+                <label id="label-video-mode">🎬 Video Playback</label>
+                <select id="video-playback-mode">
+                    <option value="none">🚫 No Video</option>
+                    <option value="integrated">🖥️ Integrated</option>
+                    <option value="popup">🪟 Popup Tab</option>
+                </select>
+                <div class="checkbox-group" style="margin-top: 8px;">
+                    <input type="checkbox" id="auto-open-popup">
+                    <label for="auto-open-popup" style="text-transform: none; font-size: 10px;">Auto-open Popup</label>
+                </div>
+                <button id="open-player-btn" style="background: #28a745; font-size: 11px; padding: 5px;">📺 Open Player Tab</button>
+            </div>
+            <div style="border-top: 1px solid #444; padding-top: 10px;">
                 <label id="label-target-robot">🤖 Target Robot</label>
                 <select id="robot-id">
                     <option value="all">🤖 All Robots</option>

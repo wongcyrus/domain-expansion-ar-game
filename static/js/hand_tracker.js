@@ -19,26 +19,44 @@ class HandTracker {
         this.apiStatus = document.getElementById('api-status');
         this.apiDot = document.getElementById('api-dot');
         
+        // --- Video Player Elements ---
+        this.videoModeSelect = document.getElementById('video-playback-mode');
+        this.autoOpenPopupCheck = document.getElementById('auto-open-popup');
+        this.openPlayerBtn = document.getElementById('open-player-btn');
+        this.integratedContainer = document.getElementById('integrated-player-container');
+        this.integratedPlayer = document.getElementById('integrated-player');
+        this.playerWindow = null;
+
         // --- Persistence ---
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
-        this.savedRobotId = localStorage.getItem('robot_id') || 'all'; // Default to "all"
-        
+        this.savedRobotId = localStorage.getItem('robot_id') || 'all'; 
+        this.videoMode = localStorage.getItem('video_mode') || 'none';
+        this.autoOpen = localStorage.getItem('auto_open_popup') === 'true';
+
         this.endpointInput.value = this.apiEndpoint;
         this.robotIdSelect.value = this.savedRobotId;
+        this.videoModeSelect.value = this.videoMode;
+        this.autoOpenPopupCheck.checked = this.autoOpen;
         
-        this.localizeUI(); // Apply translations based on locale
+        this.localizeUI(); 
         this.updateAPIStatus();
 
         this.saveBtn.addEventListener('click', () => {
             this.apiEndpoint = this.endpointInput.value.trim();
             this.savedRobotId = this.robotIdSelect.value;
+            this.videoMode = this.videoModeSelect.value;
+            this.autoOpen = this.autoOpenPopupCheck.checked;
             
             localStorage.setItem('robot_api_endpoint', this.apiEndpoint);
             localStorage.setItem('robot_id', this.savedRobotId);
+            localStorage.setItem('video_mode', this.videoMode);
+            localStorage.setItem('auto_open_popup', this.autoOpen);
             
             this.updateAPIStatus();
             alert('Settings saved locally!');
         });
+
+        this.openPlayerBtn.addEventListener('click', () => this.openPopupPlayer());
 
         // --- MediaPipe Setup ---
         this.hands = new Hands({
@@ -245,6 +263,46 @@ class HandTracker {
         return `rgba(${r}, ${g}, ${b}, ${opacity})`;
     }
 
+    openPopupPlayer() {
+        if (!this.playerWindow || this.playerWindow.closed) {
+            this.playerWindow = window.open('player.html', 'ARGamePlayer', 'width=800,height=450');
+        } else {
+            this.playerWindow.focus();
+        }
+    }
+
+    playVideo(action) {
+        const videoMap = {
+            "domain_unlimited_void": "domain_unlimited_void.mp4",
+            "domain_malevolent_shrine": "domain_malevolent_shrine.mp4",
+            "domain_self_embodiment": "domain_self_embodiment.mp4",
+            "domain_authentic_love": "domain_authentic_love.mp4",
+            "domain_idle_death_gamble": "domain_idle_death_gamble.mp4",
+            "domain_yuji_itadori": "domain_yuji_itadori.mp4",
+            "domain_chimera_shadow_garden": "domain_chimera_shadow_garden.mp4",
+            "domain_time_cell_moon_palace": "domain_time_cell_moon_palace.mp4",
+            "lapse_blue": "technique_lapse_blue.mp4",
+            "reversal_red": "technique_reversal_red.mp4",
+            "hollow_purple": "technique_hollow_purple.mp4"
+        };
+
+        const file = videoMap[action];
+        if (!file) return;
+
+        const videoSrc = `static/video/${file}`;
+
+        if (this.videoMode === 'integrated') {
+            this.integratedContainer.classList.remove('hidden');
+            this.integratedPlayer.src = videoSrc;
+            this.integratedPlayer.play().catch(e => console.warn('Integrated playback failed:', e));
+        } else if (this.videoMode === 'popup') {
+            if (this.autoOpen) this.openPopupPlayer();
+            if (this.playerWindow && !this.playerWindow.closed) {
+                this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc }, '*');
+            }
+        }
+    }
+
     processDomainExpansion(stableDomain, landmarks) {
         if (stableDomain) {
             if (this.resetTimer) {
@@ -288,6 +346,9 @@ class HandTracker {
                 if (this.atmosphereOverlay && domainColor) {
                     this.atmosphereOverlay.style.background = this.hexToRgba(domainColor, 0.15);
                 }
+
+                // New: Trigger Video Playback
+                this.playVideo(action);
             }
 
             // TRIGGER ACTION (COOLDOWN)
@@ -306,6 +367,10 @@ class HandTracker {
             this.domainDisplay.textContent = '';
             if (this.atmosphereOverlay) {
                 this.atmosphereOverlay.style.background = 'transparent';
+            }
+            if (this.integratedContainer) {
+                this.integratedContainer.classList.add('hidden');
+                this.integratedPlayer.pause();
             }
             if (!this.resetTimer) {
                 this.resetTimer = setTimeout(() => {
