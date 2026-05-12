@@ -16,7 +16,7 @@ class DomainExpansionGame {
         this.vfxCanvas = null;
         this.vfxCtx = null;
 
-        this.lang = 'en'; // Default
+        this.lang = 'zh'; // Default to ZH
         this.displayNamesMap = {
             'en': {
                 "Unlimited Void": "Domain Expansion: Unlimited Void",
@@ -58,7 +58,7 @@ class DomainExpansionGame {
                 "Hollow Purple": "虚式: 「茈」"
             }
         };
-        this.displayNames = this.displayNamesMap['en'];
+        this.displayNames = this.displayNamesMap['zh'];
 
         this.domainColors = {
             "Unlimited Void": "#FFFFFF",
@@ -184,8 +184,10 @@ class DomainExpansionGame {
         const techResults = hands.map(h => {
             const lm = h;
             const f = this.F(lm);
-            if (f.i && !f.m && !f.r && !f.p) return "Lapse Blue";
-            if (f.i && f.m && f.r && f.p) return "Reversal Red";
+            // Blue: Index up, Middle down (Lenient)
+            if (f.i && f.mc) return "Lapse Blue";
+            // Red: Index, Middle, Ring all extended
+            if (f.i && f.m && f.r) return "Reversal Red";
             return null;
         });
 
@@ -278,44 +280,31 @@ class DomainExpansionGame {
             return;
         }
 
-        // 1. Proven Hand Center Calculation (For all domains)
+        const handList = hands ? Array.from(hands) : [];
+
+        // 1. Proven Hand Center Calculation
         let center = null;
-        if (hands && hands.length > 0) {
+        if (handList.length > 0) {
             let sx = 0, sy = 0, totalLm = 0;
-            hands.forEach(hand => {
-                if (Array.isArray(hand)) {
-                    hand.forEach(lm => {
-                        sx += (lm.x * w);
-                        sy += (lm.y * h);
+            handList.forEach(hand => {
+                for(let i=0; i<21; i++) {
+                    if (hand[i]) {
+                        sx += (hand[i].x * w);
+                        sy += (hand[i].y * h);
                         totalLm++;
-                    });
+                    }
                 }
             });
             if (totalLm > 0) center = { x: sx / totalLm, y: sy / totalLm };
         }
 
-        // 2. Safe Index Tip Extraction (Specifically for Techniques)
-        let indexCenter = null;
-        if (hands && hands.length > 0) {
-            let ix = 0, iy = 0, icount = 0;
-            hands.forEach(hand => {
-                // Index 8 is official MediaPipe INDEX_FINGER_TIP
-                if (hand && hand[8]) {
-                    ix += (hand[8].x * w);
-                    iy += (hand[8].y * h);
-                    icount++;
-                }
-            });
-            if (icount > 0) indexCenter = { x: ix / icount, y: iy / icount };
-        }
-
-        // 3. Robust 2-Hand extraction for Hollow Purple (Avoid spread-operator crashes)
-        let h1 = null, h2 = null;
-        if (hands && hands.length >= 2) {
-            // Sort by wrist (index 0) X position to separate hands
-            const sortedHands = Array.from(hands).sort((a, b) => a[0].x - b[0].x);
-            if (sortedHands[0] && sortedHands[0][8]) h1 = { x: sortedHands[0][8].x * w, y: sortedHands[0][8].y * h };
-            if (sortedHands[1] && sortedHands[1][8]) h2 = { x: sortedHands[1][8].x * w, y: sortedHands[1][8].y * h };
+        // 2. Unified Coordinate Extraction (Proven pattern from sorted hands)
+        let primaryIdx = null;
+        let secondIdx = null;
+        if (handList.length > 0) {
+            const sorted = [...handList].sort((a, b) => a[0].x - b[0].x);
+            if (sorted[0] && sorted[0][8]) primaryIdx = { x: sorted[0][8].x * w, y: sorted[0][8].y * h };
+            if (sorted[1] && sorted[1][8]) secondIdx = { x: sorted[1][8].x * w, y: sorted[1][8].y * h };
         }
 
         switch (stableDomain) {
@@ -328,18 +317,18 @@ class DomainExpansionGame {
             case "Chimera Shadow Garden": this.applyChimera(ctx, w, h); break;
             case "Time Cell Moon Palace": this.applyNaoya(ctx, w, h); break;
             case "Lapse Blue": 
-                if (indexCenter) this.applyLapseBlue(ctx, indexCenter); 
+                if (primaryIdx) this.applyLapseBlue(ctx, primaryIdx); 
                 else if (center) this.applyLapseBlue(ctx, center);
                 else this.applyLapseBlue(ctx, { x: w * 0.25, y: h * 0.4 }); 
                 break;
             case "Reversal Red": 
-                if (indexCenter) this.applyReversalRed(ctx, indexCenter);
+                if (primaryIdx) this.applyReversalRed(ctx, primaryIdx);
                 else if (center) this.applyReversalRed(ctx, center);
                 else this.applyReversalRed(ctx, { x: w * 0.75, y: h * 0.4 });
                 break;
             case "Hollow Purple": 
-                if (h1 && h2) this.applyHollowPurple(ctx, h1, h2, w, h);
-                else if (indexCenter) this.applyHollowPurple(ctx, indexCenter, indexCenter, w, h);
+                if (primaryIdx && secondIdx) this.applyHollowPurple(ctx, primaryIdx, secondIdx, w, h);
+                else if (primaryIdx) this.applyHollowPurple(ctx, primaryIdx, primaryIdx, w, h);
                 else if (center) this.applyHollowPurple(ctx, center, center, w, h);
                 else this.applyHollowPurple(ctx, { x: w * 0.5, y: h * 0.4 }, { x: w * 0.5, y: h * 0.4 }, w, h);
                 break;
@@ -414,12 +403,10 @@ class DomainExpansionGame {
     applyLapseBlue(ctx, pos) {
         this.blueOrbRad = (this.blueOrbRad + 1) % 20;
         const r = 60 + this.blueOrbRad;
-        
         ctx.fillStyle = "#0077FF"; // Solid Blue
         ctx.strokeStyle = "white";
         ctx.lineWidth = 5;
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        
         ctx.fillStyle = "white";
         ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fill();
     }
@@ -427,50 +414,36 @@ class DomainExpansionGame {
     applyReversalRed(ctx, pos) {
         this.redOrbRad = (this.redOrbRad + 1) % 20;
         const r = 60 + this.redOrbRad;
-
         ctx.fillStyle = "#FF3333"; // Solid Red
         ctx.strokeStyle = "white";
         ctx.lineWidth = 5;
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        
         ctx.fillStyle = "white";
         ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fill();
     }
 
     applyHollowPurple(ctx, p1, p2, w, h) {
         this.purpleBeamProgress += 0.04; if (this.purpleBeamProgress > 1) this.purpleBeamProgress = 0;
-        
-        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-        const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-
+        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y), center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
         if (dist < 200) {
-            // Merged Huge Purple Ball
             const r = 180 * (1 + this.purpleBeamProgress * 0.1);
             ctx.fillStyle = "#9400D3"; 
             ctx.strokeStyle = "white";
             ctx.lineWidth = 10;
             ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-            
             ctx.fillStyle = "white";
             ctx.beginPath(); ctx.arc(center.x, center.y, 60, 0, Math.PI * 2); ctx.fill();
         } else {
-            // Two tracking orbs (Blue for Right Hand/Screen-Left, Red for Left Hand/Screen-Right)
             ctx.fillStyle = "#0077FF"; // Blue
             ctx.strokeStyle = "white";
             ctx.lineWidth = 5;
             ctx.beginPath(); ctx.arc(p1.x, p1.y, 60, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-            
             ctx.fillStyle = "#FF3333"; // Red
             ctx.strokeStyle = "white";
             ctx.lineWidth = 5;
             ctx.beginPath(); ctx.arc(p2.x, p2.y, 60, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-
-            // Connecting line
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 4;
-            ctx.setLineDash([15, 10]);
-            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-            ctx.setLineDash([]);
+            ctx.strokeStyle = "white"; ctx.lineWidth = 4; ctx.setLineDash([15, 10]);
+            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); ctx.setLineDash([]);
         }
     }
 }
