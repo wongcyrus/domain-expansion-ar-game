@@ -131,7 +131,7 @@
         .settings-panel {
             top: 20px;
             right: 20px;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.85);
             padding: 0;
             border-radius: 12px;
             display: flex;
@@ -142,6 +142,7 @@
             transition: transform 0.3s ease, opacity 0.3s ease;
             overflow: hidden;
             box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            z-index: 100;
         }
         .settings-panel.hidden {
             transform: translateX(350px);
@@ -188,7 +189,7 @@
             width: 70%;
             max-width: 480px;
             aspect-ratio: 16/9;
-            z-index: 20; /* ABOVE VFX */
+            z-index: 20; /* Above VFX */
             background: rgba(0,0,0,0.4);
             border-radius: 12px;
             overflow: hidden;
@@ -209,7 +210,7 @@
             height: 100%;
             pointer-events: none;
             transform: scaleX(-1);
-            z-index: 30; /* Skeleton ALWAYS on top */
+            z-index: 40; /* Skeleton on top of EVERYTHING */
         }
 
         #vfx-canvas {
@@ -220,8 +221,23 @@
             height: 100%;
             pointer-events: none;
             transform: scaleX(-1);
-            z-index: 10; /* BETWEEN camera and video */
+            z-index: 10; /* Between Camera and Video */
             opacity: 0.9;
+        }
+
+        /* Start Overlay - Massive Z-Index for clickability */
+        #start-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 200; /* Absolute Top for interaction */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
         }
 
         .shake {
@@ -237,7 +253,7 @@
         }
 
         @media (max-width: 768px) {
-            .header { top: 10px; width: 65%; padding: 8px 15px; z-index: 60; }
+            .header { top: 10px; width: 60%; padding: 8px 15px; z-index: 60; }
             .header h1 { font-size: 0.9rem; }
             .header p { font-size: 0.5rem; }
             #domain-display { font-size: 1.2rem !important; }
@@ -249,14 +265,8 @@
                 bottom: 0; 
                 border-radius: 20px 20px 0 0;
                 padding-bottom: 20px;
-                background: rgba(0, 0, 0, 0.9);
-                border: none;
-                border-top: 1px solid rgba(255,255,255,0.1);
-                z-index: 80; /* Above everything */
-            }
-            .settings-panel.hidden {
-                transform: translateY(100%);
-                opacity: 1; /* Keep opacity 1 for sliding effect */
+                background: rgba(0, 0, 0, 0.95);
+                z-index: 150;
             }
             
             .logo-hkiit { top: 10px; left: 10px; }
@@ -274,7 +284,7 @@
                 left: 15px; 
                 padding: 8px; 
                 font-size: 10px; 
-                z-index: 30; /* Below settings panel */
+                z-index: 30;
             }
         }
 
@@ -294,10 +304,8 @@
 
             .instructions { display: none !important; }
             .status-panel { bottom: 10px; left: 10px; padding: 5px; font-size: 9px; flex-direction: row; gap: 10px; }
-            .status-panel div { border-top: none !important; padding-top: 0 !important; margin-top: 0 !important; }
             
-            .settings-panel { width: 300px; height: 100vh; right: 0; top: 0; border-radius: 0; overflow-y: auto; z-index: 100; }
-            .settings-panel.hidden { transform: translateX(100%); }
+            .settings-panel { width: 300px; height: 100vh; right: 0; top: 0; border-radius: 0; z-index: 150; }
         }
     </style>
 </head>
@@ -309,15 +317,6 @@
         <canvas id="vfx-canvas"></canvas>
         <div id="integrated-player-container" class="hidden">
             <video id="integrated-player" playsinline loop autoplay></video>
-        </div>
-
-        <!-- Start Overlay -->
-        <div id="start-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-            <div style="text-align: center;">
-                <div style="font-size: 60px; margin-bottom: 20px;">🖐️</div>
-                <div style="font-size: 24px; color: #4A90E2; font-weight: bold;">START AR GAME</div>
-                <div style="font-size: 14px; color: #888; margin-top: 10px;">Click to initialize Camera & VFX</div>
-            </div>
         </div>
     </div>
 
@@ -412,12 +411,21 @@
             <span>Resp: <span id="last-resp">NONE</span></span>
         </div>
         <div style="font-size: 9px; opacity: 0.4; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 5px; text-align: right;">
-            Build: 2026.05.12.v49
+            Build: 2026.05.12.v50
         </div>
     </div>
 
     <div class="overlay instructions" id="instructions-panel">
         <!-- Will be populated by JS -->
+    </div>
+
+    <!-- Start Overlay - Moved to bottom of body to ensure top-most clickability -->
+    <div id="start-overlay">
+        <div style="text-align: center;">
+            <div style="font-size: 80px; margin-bottom: 20px;">🖐️</div>
+            <div style="font-size: 32px; color: #4A90E2; font-weight: bold;">START AR GAME</div>
+            <div style="font-size: 16px; color: #888; margin-top: 15px;">Click to initialize Camera & VFX</div>
+        </div>
     </div>
 </body>
 </html>
