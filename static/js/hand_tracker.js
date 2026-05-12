@@ -28,6 +28,7 @@ class HandTracker {
         this.playerWindow = null;
         this.isPlayerReady = false;
         this.pendingVideoAction = null;
+        this.playPromise = null; // Track play promise to avoid race conditions
 
         // Listen for messages from the popup player
         window.addEventListener('message', (event) => {
@@ -203,10 +204,10 @@ class HandTracker {
                 // WARM UP Integrated Player (Required for autoplay)
                 if (this.integratedPlayer) {
                     this.integratedPlayer.muted = true;
-                    this.integratedPlayer.play().then(() => {
-                        this.integratedPlayer.pause();
-                        console.log('🎬 Integrated video player warmed up.');
-                    }).catch(e => console.warn('Video warm-up failed:', e));
+                    // Just play, don't pause immediately to avoid AbortError
+                    this.integratedPlayer.play()
+                        .then(() => console.log('🎬 Integrated video player warmed up.'))
+                        .catch(e => console.warn('Video warm-up failed:', e));
                 }
             });
         } else {
@@ -334,10 +335,28 @@ class HandTracker {
         const videoSrc = `${window.location.origin}${basePath}static/video/${file}`;
 
         if (this.videoMode === 'integrated') {
+            if (this.integratedPlayer.src.includes(file) && !this.integratedPlayer.paused) return;
+
             this.integratedContainer.classList.remove('hidden');
             this.integratedPlayer.src = videoSrc;
-            this.integratedPlayer.load();
-            this.integratedPlayer.play().catch(e => console.warn('Integrated playback failed:', e));
+            
+            // Avoid interrupting an existing play request
+            if (this.playPromise !== null) {
+                this.playPromise.then(() => {
+                    this.playPromise = this.integratedPlayer.play();
+                }).catch(() => {
+                    this.playPromise = this.integratedPlayer.play();
+                });
+            } else {
+                this.playPromise = this.integratedPlayer.play();
+            }
+
+            if (this.playPromise) {
+                this.playPromise.catch(e => {
+                    console.warn('Integrated playback failed:', e);
+                    this.playPromise = null;
+                });
+            }
         } else if (this.videoMode === 'popup') {
             if (!this.playerWindow || this.playerWindow.closed) {
                 if (this.autoOpen) {
@@ -412,7 +431,7 @@ class HandTracker {
                 if (action && this.apiEndpoint) {
                     this.lastActionTime = now;
                     this.lastDomain = stableDomain;
-                    this.triggerRobotAction(this.robotIdSelect.value, action);
+                    this.triggerRobotAction(this.savedRobotId, action);
                 }
             } else {
                 const wait = Math.ceil((this.cooldownMs - (now - this.lastActionTime)) / 1000);
@@ -424,16 +443,28 @@ class HandTracker {
             if (this.atmosphereOverlay) {
                 this.atmosphereOverlay.style.background = 'transparent';
             }
-            if (this.integratedContainer) {
-                this.integratedContainer.classList.add('hidden');
-                this.integratedPlayer.pause();
-            }
-            if (!this.resetTimer) {
+            
+            // Only hide integrated player if we have truly lost the domain (after short delay)
+            if (!this.resetTimer && this.lastVFXDomain) {
                 this.resetTimer = setTimeout(() => {
+                    if (this.integratedContainer) {
+                        this.integratedContainer.classList.add('hidden');
+                        if (this.playPromise) {
+                            this.playPromise.then(() => {
+                                this.integratedPlayer.pause();
+                                this.playPromise = null;
+                            }).catch(() => {
+                                this.integratedPlayer.pause();
+                                this.playPromise = null;
+                            });
+                        } else {
+                            this.integratedPlayer.pause();
+                        }
+                    }
                     this.lastDomain = null;
                     this.lastVFXDomain = null;
                     this.resetTimer = null;
-                }, 2000); 
+                }, 1000); // 1s grace period for flickering
             }
         }
     }
