@@ -13,7 +13,6 @@ class HandTracker {
         this.domainGame = new DomainExpansionGame();
         
         // --- Settings Elements ---
-        this.titleInput = document.getElementById('game-title-input');
         this.endpointInput = document.getElementById('api-endpoint');
         this.saveBtn = document.getElementById('save-settings');
         this.robotIdSelect = document.getElementById('robot-id');
@@ -21,27 +20,22 @@ class HandTracker {
         this.apiDot = document.getElementById('api-dot');
         
         // --- Persistence ---
-        this.gameTitle = localStorage.getItem('game_title') || '';
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
         this.savedRobotId = localStorage.getItem('robot_id') || 'robot_1';
         
-        this.titleInput.value = this.gameTitle;
         this.endpointInput.value = this.apiEndpoint;
         this.robotIdSelect.value = this.savedRobotId;
         
-        this.localizeUI(); // Apply translations and user title
+        this.localizeUI(); // Apply translations based on locale
         this.updateAPIStatus();
 
         this.saveBtn.addEventListener('click', () => {
-            this.gameTitle = this.titleInput.value.trim();
             this.apiEndpoint = this.endpointInput.value.trim();
             this.savedRobotId = this.robotIdSelect.value;
             
-            localStorage.setItem('game_title', this.gameTitle);
             localStorage.setItem('robot_api_endpoint', this.apiEndpoint);
             localStorage.setItem('robot_id', this.savedRobotId);
             
-            this.localizeUI();
             this.updateAPIStatus();
             alert('Settings saved locally!');
         });
@@ -132,23 +126,21 @@ class HandTracker {
         const isJP = lang.startsWith('ja');
         const isZH = lang.startsWith('zh');
         
-        let defaultTitle = '🖐️ Domain Expansion AR';
+        let finalTitle = '🖐️ Domain Expansion AR';
         let defaultMode = 'Strike a hand sign to expand your domain!';
         let currentLang = 'en';
 
         if (isJP) {
-            defaultTitle = '🖐️ 領域展開 AR';
+            finalTitle = '🖐️ 領域展開 AR';
             defaultMode = '印を組んで領域を展開せよ！';
             currentLang = 'ja';
-            document.getElementById('label-game-title').textContent = '🏷️ ゲームタイトル';
             document.getElementById('label-api-endpoint').textContent = '🔗 ロボットAPIエンドポイント';
             document.getElementById('save-settings').textContent = '💾 設定を保存';
             document.querySelector('#robot-id option[value="all"]').textContent = '🤖 全てのロボット';
         } else if (isZH) {
-            defaultTitle = '🖐️ 領域展開 AR';
+            finalTitle = '🖐️ 領域展開 AR';
             defaultMode = '結下手印以展開你的領域！';
             currentLang = 'zh';
-            document.getElementById('label-game-title').textContent = '🏷️ 遊戲標題';
             document.getElementById('label-api-endpoint').textContent = '🔗 機器人API端點';
             document.getElementById('save-settings').textContent = '💾 保存設置';
             document.querySelector('#robot-id option[value="all"]').textContent = '🤖 所有機器人';
@@ -156,8 +148,7 @@ class HandTracker {
 
         this.domainGame.setLanguage(currentLang);
 
-        // Apply user title override or default
-        const finalTitle = this.gameTitle || defaultTitle;
+        // Apply automatic title
         document.getElementById('main-title').textContent = finalTitle;
         document.getElementById('mode-display').textContent = defaultMode;
         document.title = finalTitle;
