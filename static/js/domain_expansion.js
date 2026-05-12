@@ -303,13 +303,13 @@ class DomainExpansionGame {
             case "Chimera Shadow Garden": this.applyChimera(ctx, w, h); break;
             case "Time Cell Moon Palace": this.applyNaoya(ctx, w, h); break;
             case "Lapse Blue": 
-                this.applyLapseBlue(ctx, { x: w * 0.25, y: h * 0.5 }); 
+                this.applyLapseBlue(ctx, { x: w * 0.25, y: h * 0.4 }); 
                 break;
             case "Reversal Red": 
-                this.applyReversalRed(ctx, { x: w * 0.75, y: h * 0.5 });
+                this.applyReversalRed(ctx, { x: w * 0.75, y: h * 0.4 });
                 break;
             case "Hollow Purple": 
-                this.applyHollowPurple(ctx, { x: w * 0.5, y: h * 0.5 }, w, h);
+                this.applyHollowPurple(ctx, { x: w * 0.5, y: h * 0.4 }, w, h);
                 break;
         }
     }
@@ -380,37 +380,42 @@ class DomainExpansionGame {
     }
 
     applyLapseBlue(ctx, pos) {
-        this.blueOrbRad = (this.blueOrbRad + 1.5) % 30;
-        const r = this.blueOrbRad + 40;
-        ctx.fillStyle = "rgba(0, 150, 255, 0.9)"; 
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill();
+        this.blueOrbRad = (this.blueOrbRad + 1) % 20;
+        const r = 60 + this.blueOrbRad;
+        
+        ctx.fillStyle = "#0077FF"; // Solid Blue
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        
         ctx.fillStyle = "white";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fill();
     }
 
     applyReversalRed(ctx, pos) {
-        this.redOrbRad = (this.redOrbRad + 2) % 40;
-        const r = this.redOrbRad + 40;
-        ctx.fillStyle = "rgba(255, 80, 80, 0.9)"; 
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill();
+        this.redOrbRad = (this.redOrbRad + 1) % 20;
+        const r = 60 + this.redOrbRad;
+
+        ctx.fillStyle = "#FF3333"; // Solid Red
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        
         ctx.fillStyle = "white";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fill();
     }
 
     applyHollowPurple(ctx, pos, w, h) {
         this.purpleBeamProgress += 0.04; if (this.purpleBeamProgress > 1) this.purpleBeamProgress = 0;
         
-        // Solid Purple Atmospheric Glow
-        ctx.fillStyle = "rgba(148, 0, 211, 0.25)";
-        ctx.fillRect(0, 0, w, h);
-        
-        // Huge Merged Purple Ball (Fixed position)
         const r = 180 * (1 + this.purpleBeamProgress * 0.1);
-        ctx.fillStyle = "rgba(148, 0, 211, 1.0)"; 
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#9400D3"; // Solid Purple
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 10;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         
         ctx.fillStyle = "white";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 45, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 60, 0, Math.PI * 2); ctx.fill();
     }
 }
 
