@@ -32,6 +32,8 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 
 [![Domain Expansion Demo](https://img.youtube.com/vi/Tck6WSV_YXQ/0.jpg)](https://www.youtube.com/watch?v=Tck6WSV_YXQ)
 
+### 🎮 [Play the Game Now | 立即開始遊戲](https://wongcyrus.github.io/domain-expansion-ar-game/)
+
 ### Domain Expansions | 領域展開
 
 | User | Domain Name | Gesture | Robot Behavior | 角色 | 領域名稱 | 手印 | 機器人行為 |
