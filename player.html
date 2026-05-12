@@ -63,23 +63,29 @@
         });
 
         window.addEventListener('message', (event) => {
-            const { type, videoSrc } = event.data;
-            console.log('[Player] Received message:', type, videoSrc);
+            const data = event.data;
+            if (!data || typeof data !== 'object' || !data.type) return;
+
+            const { type, videoSrc } = data;
+            console.log('[Player] Received:', type, videoSrc || '');
             debugLast.textContent = type;
 
             if (type === 'PLAY_VIDEO' && videoSrc) {
                 placeholder.style.opacity = "0";
                 player.style.display = 'block';
-                player.src = videoSrc;
+                
+                // Only reload if source changed
+                if (!player.src.includes(videoSrc)) {
+                    player.src = videoSrc;
+                    player.load();
+                }
                 
                 player.play().then(() => {
-                    console.log('[Player] Playback started:', videoSrc);
+                    console.log('[Player] Playback started');
                     debugLast.textContent = "PLAYING: " + videoSrc.split('/').pop();
                 }).catch(e => {
                     console.error('[Player] Play failed:', e);
                     debugLast.textContent = "ERROR: " + e.message;
-                    overlay.style.display = 'flex';
-                    debugInter.textContent = "RE-LOCKED";
                 });
             }
             

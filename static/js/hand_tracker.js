@@ -296,16 +296,31 @@ class HandTracker {
         };
         const file = videoMap[action];
         if (!file) return;
-        const videoSrc = `static/video/${file}`;
+
+        // Construct absolute URL
+        let basePath = window.location.pathname;
+        if (!basePath.endsWith('/')) basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+        const absSrc = `${window.location.origin}${basePath}static/video/${file}`;
 
         if (this.videoMode === 'integrated' || this.videoMode === 'integrated_silent') {
+            if (!this.integratedPlayer) return;
+
+            // Only update src if it's different to prevent AbortError
+            if (!this.integratedPlayer.src.includes(file)) {
+                console.log('[Game] Changing integrated source to:', file);
+                this.integratedPlayer.src = absSrc;
+                this.integratedPlayer.load();
+            }
+
             this.integratedContainer.classList.remove('hidden');
-            this.integratedPlayer.src = videoSrc;
             this.integratedPlayer.muted = (this.videoMode === 'integrated_silent');
-            this.integratedPlayer.play().catch(e => console.warn('Play failed', e));
+            
+            this.integratedPlayer.play().catch(e => {
+                if (e.name !== 'AbortError') console.warn('[Game] Play failed:', e);
+            });
         } else if (this.videoMode === 'popup') {
             if (this.playerWindow && !this.playerWindow.closed && this.isPlayerReady) {
-                const absSrc = `${window.location.origin}${window.location.pathname.replace('index.html', '')}${videoSrc}`;
+                console.log('[Game] Sending to popup:', file);
                 this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc: absSrc }, '*');
             } else if (this.autoOpen) {
                 this.pendingVideoAction = action;
