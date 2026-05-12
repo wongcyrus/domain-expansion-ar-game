@@ -206,7 +206,7 @@ class HandTracker {
         }
 
         this.updateInstructions();
-    ...
+        
         const trackingStatus = document.getElementById('tracking-status');
         const trackingDot = document.getElementById('tracking-dot');
         trackingStatus.textContent = 'Active';
