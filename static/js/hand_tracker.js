@@ -28,7 +28,6 @@ class HandTracker {
         this.playerWindow = null;
         this.isPlayerReady = false;
         this.pendingVideoAction = null;
-        this.playPromise = null; // Track play promise to avoid race conditions
 
         // Listen for messages from the popup player
         window.addEventListener('message', (event) => {
@@ -45,7 +44,7 @@ class HandTracker {
         // --- Persistence ---
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
         this.savedRobotId = localStorage.getItem('robot_id') || 'all'; 
-        this.videoMode = localStorage.getItem('video_mode') || 'integrated'; // Default to "integrated"
+        this.videoMode = localStorage.getItem('video_mode') || 'integrated'; 
         this.autoOpen = localStorage.getItem('auto_open_popup') === 'true';
 
         this.endpointInput.value = this.apiEndpoint;
@@ -80,7 +79,7 @@ class HandTracker {
         
         this.hands.setOptions({
             maxNumHands: 2,
-            modelComplexity: 0, // 0 for faster performance on mobile
+            modelComplexity: 0, 
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
@@ -168,24 +167,22 @@ class HandTracker {
             defaultMode = '印を組んで領域を展開せよ！';
             currentLang = 'ja';
             document.getElementById('label-api-endpoint').textContent = '🔗 ロボットAPIエンドポイント';
-            document.getElementById('save-settings').textContent = '💾 設定を保存';
-            document.getElementById('label-target-robot').textContent = '🤖 対象ロボット';
-            document.getElementById('label-cooldown').textContent = '🤖 クールダウン (s)';
+            document.getElementById('save-settings').textContent = '設定を保存';
+            document.getElementById('label-target-robot').textContent = '対象ロボット';
+            document.getElementById('label-cooldown').textContent = 'クールダウン (s)';
             document.querySelector('#robot-id option[value="all"]').textContent = '🤖 全てのロボット';
         } else if (isZH) {
             finalTitle = '🖐️ 領域展開 AR';
             defaultMode = '結下手印以展開你的領域！';
             currentLang = 'zh';
             document.getElementById('label-api-endpoint').textContent = '🔗 機器人API端點';
-            document.getElementById('save-settings').textContent = '💾 保存設置';
-            document.getElementById('label-target-robot').textContent = '🤖 目標機器人';
-            document.getElementById('label-cooldown').textContent = '🤖 冷卻時間 (s)';
+            document.getElementById('save-settings').textContent = '保存設置';
+            document.getElementById('label-target-robot').textContent = '目標機器人';
+            document.getElementById('label-cooldown').textContent = '冷卻時間 (s)';
             document.querySelector('#robot-id option[value="all"]').textContent = '🤖 所有機器人';
         }
 
         this.domainGame.setLanguage(currentLang);
-
-        // Apply automatic title
         document.getElementById('main-title').textContent = finalTitle;
         document.getElementById('mode-display').textContent = defaultMode;
         document.title = finalTitle;
@@ -193,33 +190,20 @@ class HandTracker {
     
     init() {
         console.log('🚀 Initializing Domain Expansion AR...');
-
-        // Handle Start Overlay
         const startOverlay = document.getElementById('start-overlay');
         if (startOverlay) {
             startOverlay.addEventListener('click', () => {
                 startOverlay.style.display = 'none';
                 this.camera.start();
-                
-                // WARM UP Integrated Player (Required for autoplay)
                 if (this.integratedPlayer) {
                     this.integratedPlayer.muted = true;
-                    // Just play, don't pause immediately to avoid AbortError
-                    this.integratedPlayer.play()
-                        .then(() => console.log('🎬 Integrated video player warmed up.'))
-                        .catch(e => console.warn('Video warm-up failed:', e));
+                    this.integratedPlayer.play().then(() => this.integratedPlayer.pause()).catch(e => console.warn('Warm-up failed', e));
                 }
             });
-        } else {
-            this.camera.start();
         }
-
         this.updateInstructions();
-        
-        const trackingStatus = document.getElementById('tracking-status');
-        const trackingDot = document.getElementById('tracking-dot');
-        trackingStatus.textContent = 'Active';
-        trackingDot.classList.add('active');
+        document.getElementById('tracking-status').textContent = 'Active';
+        document.getElementById('tracking-dot').classList.add('active');
     }
 
     updateInstructions() {
@@ -250,51 +234,29 @@ class HandTracker {
         try {
             this.ctx.save();
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-            
             let stableDomain = null;
-
             if (results.multiHandLandmarks) {
                 let skeletonColor = '#00FF00';
                 const currentDomain = this.domainGame.stableDomain;
-                if (currentDomain && this.domainGame.domainColors[currentDomain]) {
-                    skeletonColor = this.domainGame.domainColors[currentDomain];
-                }
-
+                if (currentDomain && this.domainGame.domainColors[currentDomain]) skeletonColor = this.domainGame.domainColors[currentDomain];
                 for (const landmarks of results.multiHandLandmarks) {
-                    if (typeof drawConnectors === 'function' && typeof HAND_CONNECTIONS !== 'undefined') {
-                        drawConnectors(this.ctx, landmarks, HAND_CONNECTIONS, {color: skeletonColor, lineWidth: 5});
-                    }
-                    if (typeof drawLandmarks === 'function') {
-                        drawLandmarks(this.ctx, landmarks, {color: '#FF0000', lineWidth: 2});
-                    }
+                    if (typeof drawConnectors === 'function' && typeof HAND_CONNECTIONS !== 'undefined') drawConnectors(this.ctx, landmarks, HAND_CONNECTIONS, {color: skeletonColor, lineWidth: 5});
+                    if (typeof drawLandmarks === 'function') drawLandmarks(this.ctx, landmarks, {color: '#FF0000', lineWidth: 2});
                 }
-                
                 stableDomain = this.domainGame.update(results.multiHandLandmarks);
             } else {
                 stableDomain = this.domainGame.update([]);
             }
-
             this.processDomainExpansion(stableDomain, results.multiHandLandmarks);
             this.domainGame.drawVFX(this.vfxCanvas, stableDomain, results.multiHandLandmarks);
-
             this.ctx.restore();
-        } catch (err) {
-            console.error('❌ Error in hand tracking loop:', err);
-            this.ctx.restore();
-        }
+        } catch (err) { console.error('❌ Error:', err); this.ctx.restore(); }
     }
 
     hexToRgba(hex, opacity) {
         let r = 0, g = 0, b = 0;
-        if (hex.length === 4) {
-            r = parseInt(hex[1] + hex[1], 16);
-            g = parseInt(hex[2] + hex[2], 16);
-            b = parseInt(hex[3] + hex[3], 16);
-        } else if (hex.length === 7) {
-            r = parseInt(hex.substring(1, 3), 16);
-            g = parseInt(hex.substring(3, 5), 16);
-            b = parseInt(hex.substring(5, 7), 16);
-        }
+        if (hex.length === 4) { r = parseInt(hex[1] + hex[1], 16); g = parseInt(hex[2] + hex[2], 16); b = parseInt(hex[3] + hex[3], 16); }
+        else if (hex.length === 7) { r = parseInt(hex.substring(1, 3), 16); g = parseInt(hex.substring(3, 5), 16); b = parseInt(hex.substring(5, 7), 16); }
         return `rgba(${r}, ${g}, ${b}, ${opacity})`;
     }
 
@@ -304,215 +266,93 @@ class HandTracker {
             this.playerWindow = window.open('player.html', 'ARGamePlayer', 'width=800,height=450');
         } else {
             this.playerWindow.focus();
-            // Ping it to check if it's still alive/ready
             this.playerWindow.postMessage({ type: 'PING' }, '*');
         }
     }
 
     playVideo(action) {
         const videoMap = {
-            "domain_unlimited_void": "domain_unlimited_void.mp4",
-            "domain_malevolent_shrine": "domain_malevolent_shrine.mp4",
-            "domain_self_embodiment": "domain_self_embodiment.mp4",
-            "domain_authentic_love": "domain_authentic_love.mp4",
-            "domain_idle_death_gamble": "domain_idle_death_gamble.mp4",
-            "domain_yuji_itadori": "domain_yuji_itadori.mp4",
-            "domain_chimera_shadow_garden": "domain_chimera_shadow_garden.mp4",
-            "domain_time_cell_moon_palace": "domain_time_cell_moon_palace.mp4",
-            "lapse_blue": "technique_lapse_blue.mp4",
-            "reversal_red": "technique_reversal_red.mp4",
-            "hollow_purple": "technique_hollow_purple.mp4"
+            "domain_unlimited_void": "domain_unlimited_void.mp4", "domain_malevolent_shrine": "domain_malevolent_shrine.mp4",
+            "domain_self_embodiment": "domain_self_embodiment.mp4", "domain_authentic_love": "domain_authentic_love.mp4",
+            "domain_idle_death_gamble": "domain_idle_death_gamble.mp4", "domain_yuji_itadori": "domain_yuji_itadori.mp4",
+            "domain_chimera_shadow_garden": "domain_chimera_shadow_garden.mp4", "domain_time_cell_moon_palace": "domain_time_cell_moon_palace.mp4",
+            "lapse_blue": "technique_lapse_blue.mp4", "reversal_red": "technique_reversal_red.mp4", "hollow_purple": "technique_hollow_purple.mp4"
         };
-
         const file = videoMap[action];
         if (!file) return;
-
-        // Use robust absolute path construction
-        let basePath = window.location.pathname;
-        if (!basePath.endsWith('/')) {
-            basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
-        }
-        const videoSrc = `${window.location.origin}${basePath}static/video/${file}`;
+        const videoSrc = `static/video/${file}`;
 
         if (this.videoMode === 'integrated') {
-            if (this.integratedPlayer.src.includes(file) && !this.integratedPlayer.paused) return;
-
             this.integratedContainer.classList.remove('hidden');
             this.integratedPlayer.src = videoSrc;
-            
-            // Avoid interrupting an existing play request
-            if (this.playPromise !== null) {
-                this.playPromise.then(() => {
-                    this.playPromise = this.integratedPlayer.play();
-                }).catch(() => {
-                    this.playPromise = this.integratedPlayer.play();
-                });
-            } else {
-                this.playPromise = this.integratedPlayer.play();
-            }
-
-            if (this.playPromise) {
-                this.playPromise.catch(e => {
-                    console.warn('Integrated playback failed:', e);
-                    this.playPromise = null;
-                });
-            }
+            this.integratedPlayer.play().catch(e => console.warn('Play failed', e));
         } else if (this.videoMode === 'popup') {
-            if (!this.playerWindow || this.playerWindow.closed) {
-                if (this.autoOpen) {
-                    this.pendingVideoAction = action;
-                    this.openPopupPlayer();
-                }
-                return;
-            }
-
-            if (!this.isPlayerReady) {
-                console.log('Player window exists but not ready. Queuing action:', action);
+            if (this.playerWindow && !this.playerWindow.closed && this.isPlayerReady) {
+                const absSrc = `${window.location.origin}${window.location.pathname.replace('index.html', '')}${videoSrc}`;
+                this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc: absSrc }, '*');
+            } else if (this.autoOpen) {
                 this.pendingVideoAction = action;
-                this.playerWindow.postMessage({ type: 'PING' }, '*');
-                return;
+                this.openPopupPlayer();
             }
-
-            console.log('Sending play message to popup:', videoSrc);
-            this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc }, '*');
         }
     }
 
     processDomainExpansion(stableDomain, landmarks) {
         if (stableDomain) {
-            if (this.resetTimer) {
-                clearTimeout(this.resetTimer);
-                this.resetTimer = null;
-            }
-
+            if (this.resetTimer) { clearTimeout(this.resetTimer); this.resetTimer = null; }
             const now = Date.now();
             const displayName = this.domainGame.displayNames[stableDomain] || stableDomain;
             const domainColor = this.domainGame.domainColors[stableDomain];
-            
             const actionMap = {
-                "Unlimited Void": "domain_unlimited_void",
-                "Malevolent Shrine": "domain_malevolent_shrine",
-                "Self-Embodiment of Perfection": "domain_self_embodiment",
-                "Authentic Mutual Love": "domain_authentic_love",
-                "Idle Death Gamble": "domain_idle_death_gamble",
-                "Yuji Itadori": "domain_yuji_itadori",
-                "Chimera Shadow Garden": "domain_chimera_shadow_garden",
-                "Time Cell Moon Palace": "domain_time_cell_moon_palace",
-                "Lapse Blue": "lapse_blue",
-                "Reversal Red": "reversal_red",
-                "Hollow Purple": "hollow_purple"
+                "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
+                "Self-Embodiment of Perfection": "domain_self_embodiment", "Authentic Mutual Love": "domain_authentic_love",
+                "Idle Death Gamble": "domain_idle_death_gamble", "Yuji Itadori": "domain_yuji_itadori",
+                "Chimera Shadow Garden": "domain_chimera_shadow_garden", "Time Cell Moon Palace": "domain_time_cell_moon_palace",
+                "Lapse Blue": "lapse_blue", "Reversal Red": "reversal_red", "Hollow Purple": "hollow_purple"
             };
             const action = actionMap[stableDomain];
-
             this.domainDisplay.textContent = displayName;
             if (domainColor) this.domainDisplay.style.color = domainColor;
             this.domainDisplay.style.opacity = "1.0";
 
             if (this.lastVFXDomain !== stableDomain) {
                 this.lastVFXDomain = stableDomain;
-                
-                if (this.mainContainer) {
-                    this.mainContainer.classList.remove('shake');
-                    void this.mainContainer.offsetWidth;
-                    this.mainContainer.classList.add('shake');
-                    setTimeout(() => this.mainContainer.classList.remove('shake'), 500);
-                }
-
-                if (this.atmosphereOverlay && domainColor) {
-                    this.atmosphereOverlay.style.background = this.hexToRgba(domainColor, 0.15);
-                }
-
-                // Trigger Video Playback
+                if (this.mainContainer) { this.mainContainer.classList.remove('shake'); void this.mainContainer.offsetWidth; this.mainContainer.classList.add('shake'); setTimeout(() => this.mainContainer.classList.remove('shake'), 500); }
+                if (this.atmosphereOverlay && domainColor) this.atmosphereOverlay.style.background = this.hexToRgba(domainColor, 0.15);
                 this.playVideo(action);
             }
-
-            // TRIGGER ACTION (COOLDOWN)
             if (now - this.lastActionTime >= this.cooldownMs) {
-                if (action && this.apiEndpoint) {
-                    this.lastActionTime = now;
-                    this.lastDomain = stableDomain;
-                    this.triggerRobotAction(this.savedRobotId, action);
-                }
+                if (action && this.apiEndpoint) { this.lastActionTime = now; this.triggerRobotAction(this.savedRobotId, action); }
             } else {
                 const wait = Math.ceil((this.cooldownMs - (now - this.lastActionTime)) / 1000);
                 this.domainDisplay.textContent = `${displayName} (Cooldown ${wait}s)`;
-                this.domainDisplay.style.opacity = "0.7";
             }
         } else {
             this.domainDisplay.textContent = '';
-            if (this.atmosphereOverlay) {
-                this.atmosphereOverlay.style.background = 'transparent';
-            }
-            
-            // Only hide integrated player if we have truly lost the domain (after short delay)
+            if (this.atmosphereOverlay) this.atmosphereOverlay.style.background = 'transparent';
             if (!this.resetTimer && this.lastVFXDomain) {
                 this.resetTimer = setTimeout(() => {
-                    if (this.integratedContainer) {
-                        this.integratedContainer.classList.add('hidden');
-                        if (this.playPromise) {
-                            this.playPromise.then(() => {
-                                this.integratedPlayer.pause();
-                                this.playPromise = null;
-                            }).catch(() => {
-                                this.integratedPlayer.pause();
-                                this.playPromise = null;
-                            });
-                        } else {
-                            this.integratedPlayer.pause();
-                        }
-                    }
-                    this.lastDomain = null;
                     this.lastVFXDomain = null;
+                    if (this.integratedContainer) { this.integratedContainer.classList.add('hidden'); this.integratedPlayer.pause(); }
                     this.resetTimer = null;
-                }, 1000); // 1s grace period for flickering
+                }, 1000);
             }
         }
     }
 
     async triggerRobotAction(robotId, action) {
-        console.log(`🤖 Triggering ${action} for ${robotId} via API: ${this.apiEndpoint}`);
-        
         try {
-            // Adjust endpoint to ensure correct robot ID is used
             let url = this.apiEndpoint;
-            if (url.includes('run_action')) {
-                // Split URL into base and query string
-                const parts = url.split('?');
-                let base = parts[0].replace(/\/+$/, "");
-                const query = parts[1] ? '?' + parts[1] : '';
-
-                // Pattern to match /robot_X or /all at the end of the base URL
-                const idPattern = /\/(robot_\d+|all)$/;
-
-                if (base.match(idPattern)) {
-                    // Replace existing ID
-                    base = base.replace(idPattern, '/' + robotId);
-                } else {
-                    // Append ID
-                    base = base + '/' + robotId;
-                }
-                
-                url = base + query;
-            }
-
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            });
-            
-            const data = await response.json();
-            if (data.success) {
-                console.log(`✅ API call successful: ${action}`);
-            } else {
-                console.warn(`⚠️ API returned failure: ${data.message || 'Unknown error'}`);
-            }
-        } catch (err) {
-            console.error('❌ API call failed:', err);
-        }
+            const parts = url.split('?');
+            let base = parts[0].replace(/\/+$/, "");
+            const query = parts[1] ? '?' + parts[1] : '';
+            const idPattern = /\/(robot_\d+|all)$/;
+            if (base.match(idPattern)) base = base.replace(idPattern, '/' + robotId);
+            else base = base + '/' + robotId;
+            const response = await fetch(base + query, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) });
+            console.log(`🤖 Action ${action} for ${robotId} sent.`);
+        } catch (err) { console.error('❌ API failed:', err); }
     }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-    window.handTracker = new HandTracker();
-});
+window.addEventListener('DOMContentLoaded', () => { window.handTracker = new HandTracker(); });
