@@ -97,6 +97,23 @@ class HandTracker {
         this.atmosphereOverlay = document.getElementById('atmosphere-overlay');
         this.resetTimer = null;
 
+        // --- Toggle Logic ---
+        this.settingsPanel = document.getElementById('settings-panel');
+        this.settingsToggle = document.getElementById('settings-toggle');
+        this.closeSettings = document.getElementById('close-settings');
+
+        if (this.settingsToggle) {
+            this.settingsToggle.addEventListener('click', () => {
+                this.settingsPanel.classList.toggle('hidden');
+            });
+        }
+
+        if (this.closeSettings) {
+            this.closeSettings.addEventListener('click', () => {
+                this.settingsPanel.classList.add('hidden');
+            });
+        }
+
         this.init();
     }
 
