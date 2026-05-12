@@ -73,6 +73,22 @@ class HandTracker {
 
         this.openPlayerBtn.addEventListener('click', () => this.openPopupPlayer());
 
+        this.videoModeSelect.addEventListener('change', () => {
+            this.videoMode = this.videoModeSelect.value;
+            console.log('[Game] Video mode changed to:', this.videoMode);
+            // If a domain is currently stable, trigger video for the new mode immediately
+            if (this.domainGame.stableDomain) {
+                const actionMap = {
+                    "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
+                    "Self-Embodiment of Perfection": "domain_self_embodiment", "Authentic Mutual Love": "domain_authentic_love",
+                    "Idle Death Gamble": "domain_idle_death_gamble", "Yuji Itadori": "domain_yuji_itadori",
+                    "Chimera Shadow Garden": "domain_chimera_shadow_garden", "Time Cell Moon Palace": "domain_time_cell_moon_palace",
+                    "Lapse Blue": "lapse_blue", "Reversal Red": "reversal_red", "Hollow Purple": "hollow_purple"
+                };
+                this.playVideo(actionMap[this.domainGame.stableDomain]);
+            }
+        });
+
         // --- MediaPipe Setup ---
         this.hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
