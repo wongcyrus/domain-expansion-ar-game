@@ -309,21 +309,26 @@ class HandTracker {
         console.log(`🤖 Triggering ${action} for ${robotId} via API: ${this.apiEndpoint}`);
         
         try {
-            // Adjust endpoint if it doesn't include the robot ID
+            // Adjust endpoint to ensure correct robot ID is used
             let url = this.apiEndpoint;
             if (url.includes('run_action')) {
-                // If it ends with a specific robot_X, replace it with current selection
-                if (url.match(/robot_\d+$/)) {
-                    url = url.replace(/robot_\d+$/, robotId);
-                } 
-                // If it ends with /all, replace it
-                else if (url.endsWith('/all')) {
-                    url = url.replace(/\/all$/, '/' + robotId);
+                // Split URL into base and query string
+                const parts = url.split('?');
+                let base = parts[0].replace(/\/+$/, "");
+                const query = parts[1] ? '?' + parts[1] : '';
+
+                // Pattern to match /robot_X or /all at the end of the base URL
+                const idPattern = /\/(robot_\d+|all)$/;
+
+                if (base.match(idPattern)) {
+                    // Replace existing ID
+                    base = base.replace(idPattern, '/' + robotId);
+                } else {
+                    // Append ID
+                    base = base + '/' + robotId;
                 }
-                // If it doesn't end with robotId, append it
-                else if (!url.endsWith(robotId)) {
-                    url = url.endsWith('/') ? url + robotId : url + '/' + robotId;
-                }
+                
+                url = base + query;
             }
 
             const response = await fetch(url, {
