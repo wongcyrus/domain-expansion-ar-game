@@ -356,7 +356,8 @@ class HandTracker {
     openPopupPlayer() {
         if (!this.playerWindow || this.playerWindow.closed) {
             this.isPlayerReady = false;
-            this.playerWindow = window.open('player.html', 'ARGamePlayer', 'width=800,height=450');
+            // Removing width/height forces modern browsers to open in a new TAB instead of a popup window
+            this.playerWindow = window.open('player.html', 'ARGamePlayer');
         } else {
             this.playerWindow.focus();
             this.playerWindow.postMessage({ type: 'PING' }, '*');
