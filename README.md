@@ -53,6 +53,22 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 | **Reversal Red** | 術式反轉「赫」 | **(1H)** Open Palm | **Repulsion**: Right hand upward strike. | **「赫」** | 術式反轉「赫」 | **(單手)** 手掌張開 | **排斥**: 右手向上打擊。 |
 | **Hollow Purple** | 虚式「茈」 | **(2H)** Blue + Red | **Total Purge**: 2-hand expansion blast. | **「茈」** | 虚式「茈」 | **(雙手)** 組合手勢 | **肅清**: 雙手擴張衝擊。 |
 
+---
+
+## 🛠️ Technology & Hand Tracking | 技術與手勢追蹤
+
+This standalone AR game uses **MediaPipe Hands** by Google for high-fidelity hand tracking without needing a heavy backend.
+這款獨立的 AR 遊戲使用 Google 的 **MediaPipe Hands** 技術，實現高精度的手部追蹤，無須繁重的後端處理。
+
+1.  **Landmark Detection | 關鍵點檢測**: Tracks **21 3D landmarks** per hand in real-time.
+    即時追蹤每隻手的 **21 個 3D 關鍵點**。
+2.  **Geometric Logic | 幾何邏輯**: Analyzes finger extension and inter-hand proximity to identify signature "Domain Expansion" hand signs.
+    分析手指伸展度和雙手間的距離，以識別標誌性的「領域展開」手印。
+3.  **Cross-Platform | 跨平台**: Optimized for both Desktop and Mobile browsers (Chrome/Safari/iOS/Android).
+    針對桌面與行動網覽器（Chrome/Safari/iOS/Android）進行了優化。
+
+---
+
 ## Credits | 致謝
 
 Based on the logic and models from:
