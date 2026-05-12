@@ -37,7 +37,7 @@ class HandTracker {
         
         this.hands.setOptions({
             maxNumHands: 2,
-            modelComplexity: 1,
+            modelComplexity: 0, // 0 for faster performance on mobile
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
@@ -55,8 +55,9 @@ class HandTracker {
                 }
                 await this.hands.send({image: this.video});
             },
-            width: 1280,
-            height: 720
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
         });
         
         // --- UI Elements ---

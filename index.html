@@ -92,7 +92,7 @@
         .settings-panel {
             top: 20px;
             right: 20px;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.7);
             padding: 15px;
             border-radius: 10px;
             display: flex;
@@ -100,10 +100,11 @@
             gap: 10px;
             width: 240px;
             pointer-events: auto;
+            backdrop-filter: blur(5px);
         }
-        .settings-panel label { font-size: 12px; display: block; margin-bottom: 5px; }
-        .settings-panel input, .settings-panel select { width: 100%; background: rgba(255,255,255,0.1); color: white; border: 1px solid #444; padding: 5px; border-radius: 4px; box-sizing: border-box; }
-        .settings-panel button { width: 100%; background: #4A90E2; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 5px; }
+        .settings-panel label { font-size: 12px; display: block; margin-bottom: 5px; color: #4A90E2; }
+        .settings-panel input, .settings-panel select { width: 100%; background: rgba(255,255,255,0.15); color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; box-sizing: border-box; }
+        .settings-panel button { width: 100%; background: #4A90E2; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 5px; }
 
         /* VFX Styles */
         #atmosphere-overlay {
@@ -127,6 +128,7 @@
             pointer-events: none;
             transform: scaleX(-1);
             z-index: 10;
+            opacity: 0.8; /* Ensure video feed shines through */
         }
 
         .shake {
@@ -142,18 +144,29 @@
         }
 
         @media (max-width: 768px) {
-            .header h1 { font-size: 1.1rem; }
-            .header p { font-size: 0.7rem; }
-            #domain-display { font-size: 1.8rem !important; }
-            .settings-panel { width: 100%; right: 0; top: auto; bottom: 0; border-radius: 20px 20px 0 0; }
+            .header { top: 10px; width: 90%; }
+            .header h1 { font-size: 1.2rem; }
+            .header p { font-size: 0.6rem; }
+            #domain-display { font-size: 1.6rem !important; }
+
+            .settings-panel { 
+                width: 100%; 
+                right: 0; 
+                top: auto; 
+                bottom: 0; 
+                border-radius: 20px 20px 0 0;
+                padding-bottom: 25px;
+                background: rgba(0, 0, 0, 0.85);
+            }
             .instructions { display: none; }
+            .status-panel { bottom: auto; top: 10px; left: 10px; padding: 10px; font-size: 11px; }
         }
     </style>
 </head>
 <body>
     <div class="container" id="main-container">
         <div id="atmosphere-overlay"></div>
-        <video id="webcam"></video>
+        <video id="webcam" playsinline webkit-playsinline></video>
         <canvas id="output-canvas"></canvas>
         <canvas id="vfx-canvas"></canvas>
     </div>
