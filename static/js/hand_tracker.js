@@ -14,6 +14,7 @@ class HandTracker {
         
         // --- Settings Elements ---
         this.endpointInput = document.getElementById('api-endpoint');
+        this.languageSelect = document.getElementById('language-select');
         this.saveBtn = document.getElementById('save-settings');
         this.robotIdSelect = document.getElementById('robot-id');
         this.apiStatus = document.getElementById('api-status');
@@ -32,7 +33,9 @@ class HandTracker {
 
         // Listen for messages from the popup player
         window.addEventListener('message', (event) => {
-            if (event.data.type === 'PLAYER_READY') {
+            const data = event.data;
+            if (!data || typeof data !== 'object' || !data.type) return;
+            if (data.type === 'PLAYER_READY') {
                 console.log('📺 Popup Player is ready!');
                 this.isPlayerReady = true;
                 if (this.pendingVideoAction) {
@@ -44,11 +47,13 @@ class HandTracker {
 
         // --- Persistence ---
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
+        this.userLang = localStorage.getItem('user_language') || 'auto';
         this.savedRobotId = localStorage.getItem('robot_id') || 'all'; 
         this.videoMode = localStorage.getItem('video_mode') || 'integrated'; 
         this.autoOpen = localStorage.getItem('auto_open_popup') === 'true';
 
         this.endpointInput.value = this.apiEndpoint;
+        this.languageSelect.value = this.userLang;
         this.robotIdSelect.value = this.savedRobotId;
         this.videoModeSelect.value = this.videoMode;
         this.autoOpenPopupCheck.checked = this.autoOpen;
@@ -58,11 +63,13 @@ class HandTracker {
 
         this.saveBtn.addEventListener('click', () => {
             this.apiEndpoint = this.endpointInput.value.trim();
+            this.userLang = this.languageSelect.value;
             this.savedRobotId = this.robotIdSelect.value;
             this.videoMode = this.videoModeSelect.value;
             this.autoOpen = this.autoOpenPopupCheck.checked;
             
             localStorage.setItem('robot_api_endpoint', this.apiEndpoint);
+            localStorage.setItem('user_language', this.userLang);
             localStorage.setItem('robot_id', this.savedRobotId);
             localStorage.setItem('video_mode', this.videoMode);
             localStorage.setItem('auto_open_popup', this.autoOpen);
@@ -71,12 +78,16 @@ class HandTracker {
             alert('Settings saved locally!');
         });
 
+        this.languageSelect.addEventListener('change', () => {
+            this.userLang = this.languageSelect.value;
+            this.localizeUI();
+        });
+
         this.openPlayerBtn.addEventListener('click', () => this.openPopupPlayer());
 
         this.videoModeSelect.addEventListener('change', () => {
             this.videoMode = this.videoModeSelect.value;
             console.log('[Game] Video mode changed to:', this.videoMode);
-            // If a domain is currently stable, trigger video for the new mode immediately
             if (this.domainGame.stableDomain) {
                 const actionMap = {
                     "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
@@ -171,7 +182,11 @@ class HandTracker {
     }
 
     localizeUI() {
-        const lang = navigator.language || navigator.userLanguage;
+        let lang = this.userLang;
+        if (lang === 'auto') {
+            lang = navigator.language || navigator.userLanguage;
+        }
+        
         const isJP = lang.startsWith('ja');
         const isZH = lang.startsWith('zh');
         
@@ -179,11 +194,25 @@ class HandTracker {
         let defaultMode = 'Strike a hand sign to expand your domain!';
         let currentLang = 'en';
 
+        // Reset to English defaults
+        document.getElementById('label-api-endpoint').textContent = '🔗 Robot API Endpoint';
+        document.getElementById('label-language').textContent = '🌐 Language';
+        document.getElementById('save-settings').textContent = '💾 Save Settings';
+        document.getElementById('label-target-robot').textContent = '🤖 Target Robot';
+        document.getElementById('label-cooldown').textContent = '🤖 Cooldown (s)';
+        document.getElementById('label-video-mode').textContent = '🎬 Video Playback';
+        document.querySelector('#video-playback-mode option[value="none"]').textContent = '🚫 No Video';
+        document.querySelector('#video-playback-mode option[value="integrated"]').textContent = '🖥️ Integrated (Sound)';
+        document.querySelector('#video-playback-mode option[value="integrated_silent"]').textContent = '🔇 Integrated (Silent)';
+        document.querySelector('#video-playback-mode option[value="popup"]').textContent = '🪟 Popup Tab';
+        document.querySelector('#robot-id option[value="all"]').textContent = '🤖 All Robots';
+
         if (isJP) {
             finalTitle = '🖐️ 領域展開 AR';
             defaultMode = '印を組んで領域を展開せよ！';
             currentLang = 'ja';
             document.getElementById('label-api-endpoint').textContent = '🔗 ロボットAPIエンドポイント';
+            document.getElementById('label-language').textContent = '🌐 言語';
             document.getElementById('save-settings').textContent = '設定を保存';
             document.getElementById('label-target-robot').textContent = '対象ロボット';
             document.getElementById('label-cooldown').textContent = 'クールダウン (s)';
@@ -198,9 +227,10 @@ class HandTracker {
             defaultMode = '結下手印以展開你的領域！';
             currentLang = 'zh';
             document.getElementById('label-api-endpoint').textContent = '🔗 機器人API端點';
+            document.getElementById('label-language').textContent = '🌐 語言';
             document.getElementById('save-settings').textContent = '保存設置';
             document.getElementById('label-target-robot').textContent = '目標機器人';
-            document.getElementById('label-cooldown').textContent = '🤖 冷卻時間 (s)';
+            document.getElementById('label-cooldown').textContent = '冷卻時間 (s)';
             document.getElementById('label-video-mode').textContent = '🎬 影片播放';
             document.querySelector('#video-playback-mode option[value="none"]').textContent = '🚫 不播放影片';
             document.querySelector('#video-playback-mode option[value="integrated"]').textContent = '🖥️ 內置 (音效)';
@@ -320,20 +350,14 @@ class HandTracker {
 
         if (this.videoMode === 'integrated' || this.videoMode === 'integrated_silent') {
             if (!this.integratedPlayer) return;
-
-            // Only update src if it's different to prevent AbortError
             if (!this.integratedPlayer.src.includes(file)) {
                 console.log('[Game] Changing integrated source to:', file);
                 this.integratedPlayer.src = absSrc;
                 this.integratedPlayer.load();
             }
-
             this.integratedContainer.classList.remove('hidden');
             this.integratedPlayer.muted = (this.videoMode === 'integrated_silent');
-            
-            this.integratedPlayer.play().catch(e => {
-                if (e.name !== 'AbortError') console.warn('[Game] Play failed:', e);
-            });
+            this.integratedPlayer.play().catch(e => { if (e.name !== 'AbortError') console.warn('[Game] Play failed:', e); });
         } else if (this.videoMode === 'popup') {
             if (this.playerWindow && !this.playerWindow.closed && this.isPlayerReady) {
                 console.log('[Game] Sending to popup:', file);
