@@ -303,13 +303,16 @@ class DomainExpansionGame {
             case "Chimera Shadow Garden": this.applyChimera(ctx, w, h); break;
             case "Time Cell Moon Palace": this.applyNaoya(ctx, w, h); break;
             case "Lapse Blue": 
-                this.applyLapseBlue(ctx, { x: w * 0.25, y: h * 0.4 }); 
+                if (indexTips.length > 0) this.applyLapseBlue(ctx, indexTips[0]); 
+                else this.applyLapseBlue(ctx, { x: w * 0.25, y: h * 0.4 }); 
                 break;
             case "Reversal Red": 
-                this.applyReversalRed(ctx, { x: w * 0.75, y: h * 0.4 });
+                if (indexTips.length > 0) this.applyReversalRed(ctx, indexTips[0]);
+                else this.applyReversalRed(ctx, { x: w * 0.75, y: h * 0.4 });
                 break;
             case "Hollow Purple": 
-                this.applyHollowPurple(ctx, { x: w * 0.5, y: h * 0.4 }, w, h);
+                if (indexTips.length >= 2) this.applyHollowPurple(ctx, indexTips[0], indexTips[1], w, h);
+                else this.applyHollowPurple(ctx, { x: w * 0.5, y: h * 0.4 }, { x: w * 0.5, y: h * 0.4 }, w, h);
                 break;
         }
     }
@@ -405,17 +408,41 @@ class DomainExpansionGame {
         ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fill();
     }
 
-    applyHollowPurple(ctx, pos, w, h) {
+    applyHollowPurple(ctx, p1, p2, w, h) {
         this.purpleBeamProgress += 0.04; if (this.purpleBeamProgress > 1) this.purpleBeamProgress = 0;
         
-        const r = 180 * (1 + this.purpleBeamProgress * 0.1);
-        ctx.fillStyle = "#9400D3"; // Solid Purple
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 10;
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        
-        ctx.fillStyle = "white";
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 60, 0, Math.PI * 2); ctx.fill();
+        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+        if (dist < 200) {
+            // Merged Huge Purple Ball
+            const r = 180 * (1 + this.purpleBeamProgress * 0.1);
+            ctx.fillStyle = "#9400D3"; 
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 10;
+            ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            
+            ctx.fillStyle = "white";
+            ctx.beginPath(); ctx.arc(center.x, center.y, 60, 0, Math.PI * 2); ctx.fill();
+        } else {
+            // Two tracking orbs (Blue for Right Hand/Screen-Left, Red for Left Hand/Screen-Right)
+            ctx.fillStyle = "#0077FF"; // Blue
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.arc(p1.x, p1.y, 60, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            
+            ctx.fillStyle = "#FF3333"; // Red
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.arc(p2.x, p2.y, 60, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+            // Connecting line
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 4;
+            ctx.setLineDash([15, 10]);
+            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+            ctx.setLineDash([]);
+        }
     }
 }
 
