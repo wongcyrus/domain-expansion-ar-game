@@ -224,7 +224,16 @@
         <canvas id="output-canvas"></canvas>
         <canvas id="vfx-canvas"></canvas>
         <div id="integrated-player-container" class="hidden">
-            <video id="integrated-player" playsinline></video>
+            <video id="integrated-player" playsinline loop></video>
+        </div>
+
+        <!-- Start Overlay -->
+        <div id="start-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+            <div style="text-align: center;">
+                <div style="font-size: 60px; margin-bottom: 20px;">🖐️</div>
+                <div style="font-size: 24px; color: #4A90E2; font-weight: bold;">START AR GAME</div>
+                <div style="font-size: 14px; color: #888; margin-top: 10px;">Click to initialize Camera & VFX</div>
+            </div>
         </div>
     </div>
 

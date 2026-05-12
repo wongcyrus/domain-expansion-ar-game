@@ -192,9 +192,21 @@ class HandTracker {
     
     init() {
         console.log('🚀 Initializing Domain Expansion AR...');
-        this.camera.start();
+
+        // Handle Start Overlay
+        const startOverlay = document.getElementById('start-overlay');
+        if (startOverlay) {
+            startOverlay.addEventListener('click', () => {
+                startOverlay.style.display = 'none';
+                this.camera.start();
+                console.log('📸 Camera started after user interaction.');
+            });
+        } else {
+            this.camera.start();
+        }
+
         this.updateInstructions();
-        
+    ...
         const trackingStatus = document.getElementById('tracking-status');
         const trackingDot = document.getElementById('tracking-dot');
         trackingStatus.textContent = 'Active';
@@ -306,12 +318,17 @@ class HandTracker {
         const file = videoMap[action];
         if (!file) return;
 
-        // Use absolute path for cross-tab reliability
-        const videoSrc = `${window.location.origin}${window.location.pathname.replace('index.html', '')}static/video/${file}`;
+        // Use robust absolute path construction
+        let basePath = window.location.pathname;
+        if (!basePath.endsWith('/')) {
+            basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+        }
+        const videoSrc = `${window.location.origin}${basePath}static/video/${file}`;
 
         if (this.videoMode === 'integrated') {
             this.integratedContainer.classList.remove('hidden');
             this.integratedPlayer.src = videoSrc;
+            this.integratedPlayer.load();
             this.integratedPlayer.play().catch(e => console.warn('Integrated playback failed:', e));
         } else if (this.videoMode === 'popup') {
             if (!this.playerWindow || this.playerWindow.closed) {

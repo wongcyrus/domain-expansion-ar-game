@@ -336,7 +336,7 @@ class DomainExpansionGame {
         }
 
         // Calculate hand center if hands are present
-        let center = { x: w/2, y: h/2 };
+        let center = null;
         if (hands && hands.length > 0) {
             let sx = 0, sy = 0, count = 0;
             hands.forEach(h => {
@@ -375,13 +375,13 @@ class DomainExpansionGame {
                 this.applyNaoya(ctx, w, h);
                 break;
             case "Lapse Blue":
-                this.applyLapseBlue(ctx, center, w, h);
+                if (center) this.applyLapseBlue(ctx, center, w, h);
                 break;
             case "Reversal Red":
-                this.applyReversalRed(ctx, center, w, h);
+                if (center) this.applyReversalRed(ctx, center, w, h);
                 break;
             case "Hollow Purple":
-                this.applyHollowPurple(ctx, center, w, h);
+                if (center) this.applyHollowPurple(ctx, center, w, h);
                 break;
         }
     }
