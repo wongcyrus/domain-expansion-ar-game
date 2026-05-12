@@ -44,7 +44,7 @@ class HandTracker {
         // --- Persistence ---
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
         this.savedRobotId = localStorage.getItem('robot_id') || 'all'; 
-        this.videoMode = localStorage.getItem('video_mode') || 'none';
+        this.videoMode = localStorage.getItem('video_mode') || 'integrated'; // Default to "integrated"
         this.autoOpen = localStorage.getItem('auto_open_popup') === 'true';
 
         this.endpointInput.value = this.apiEndpoint;
@@ -199,7 +199,15 @@ class HandTracker {
             startOverlay.addEventListener('click', () => {
                 startOverlay.style.display = 'none';
                 this.camera.start();
-                console.log('📸 Camera started after user interaction.');
+                
+                // WARM UP Integrated Player (Required for autoplay)
+                if (this.integratedPlayer) {
+                    this.integratedPlayer.muted = true;
+                    this.integratedPlayer.play().then(() => {
+                        this.integratedPlayer.pause();
+                        console.log('🎬 Integrated video player warmed up.');
+                    }).catch(e => console.warn('Video warm-up failed:', e));
+                }
             });
         } else {
             this.camera.start();
@@ -395,7 +403,7 @@ class HandTracker {
                     this.atmosphereOverlay.style.background = this.hexToRgba(domainColor, 0.15);
                 }
 
-                // New: Trigger Video Playback
+                // Trigger Video Playback
                 this.playVideo(action);
             }
 
