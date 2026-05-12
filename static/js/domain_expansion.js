@@ -90,6 +90,10 @@ class DomainExpansionGame {
         this.blueOrbRad = 0;
         this.redOrbRad = 0;
         this.purpleBeamProgress = 0;
+
+        // Load Rika Image for Yuta
+        this.rikaImg = new Image();
+        this.rikaImg.src = 'static/img/rika.png';
     }
 
     initVFX(canvas) {
@@ -363,6 +367,25 @@ class DomainExpansionGame {
 
     applyAuthenticLove(ctx, w, h) {
         this.yutaPhase += 0.02;
+        
+        // Draw Rika background if loaded
+        if (this.rikaImg.complete) {
+            ctx.save();
+            const imgAspect = this.rikaImg.width / this.rikaImg.height;
+            const canvasAspect = w / h;
+            let drawW, drawH;
+            if (canvasAspect > imgAspect) {
+                drawW = w;
+                drawH = w / imgAspect;
+            } else {
+                drawH = h;
+                drawW = h * imgAspect;
+            }
+            ctx.globalAlpha = 0.4 + 0.1 * Math.sin(this.yutaPhase); // Breathing opacity
+            ctx.drawImage(this.rikaImg, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            ctx.restore();
+        }
+
         ctx.fillStyle = "rgba(180, 100, 255, 0.12)"; ctx.fillRect(0, 0, w, h);
         const brightness = 0.05 * Math.sin(this.yutaPhase);
         ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, brightness)})`; ctx.fillRect(0, 0, w, h);
