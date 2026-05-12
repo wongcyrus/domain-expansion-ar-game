@@ -291,7 +291,8 @@ class HandTracker {
         console.log('🚀 Initializing UI components...');
         const startOverlay = document.getElementById('start-overlay');
         if (startOverlay) {
-            startOverlay.addEventListener('click', () => {
+            const startAction = () => {
+                console.log('✅ Start overlay clicked/touched');
                 startOverlay.style.display = 'none';
                 if (this.camera) this.camera.start();
                 if (this.integratedPlayer) {
@@ -303,7 +304,14 @@ class HandTracker {
                         })
                         .catch(e => console.warn('Warm-up failed', e));
                 }
-            });
+            };
+            
+            // Multi-event support for mobile/desktop reliability
+            startOverlay.addEventListener('click', startAction);
+            startOverlay.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startAction();
+            }, { passive: false });
         }
         this.updateInstructions();
         this.setElText('tracking-status', 'Active');
