@@ -16,19 +16,49 @@ class DomainExpansionGame {
         this.vfxCanvas = null;
         this.vfxCtx = null;
 
-        this.displayNames = {
-            "Unlimited Void": "領域展開: 無量空処",
-            "Malevolent Shrine": "領域展開: 伏魔御廚子",
-            "Self-Embodiment of Perfection": "領域展開: 自閉圓頓裹",
-            "Authentic Mutual Love": "領域展開: 真贋相愛",
-            "Idle Death Gamble": "領域展開: 坐殺博徒",
-            "Yuji Itadori": "領域展開: 名称不明",
-            "Chimera Shadow Garden": "領域展開: 嵌合暗翳庭園",
-            "Time Cell Moon Palace": "領域展開: 時胞月宮殿",
-            "Lapse Blue": "术式顺转: 「苍」",
-            "Reversal Red": "术式反转: 「赫」",
-            "Hollow Purple": "虚式: 「茈」"
+        this.lang = 'en'; // Default
+        this.displayNamesMap = {
+            'en': {
+                "Unlimited Void": "Domain Expansion: Unlimited Void",
+                "Malevolent Shrine": "Domain Expansion: Malevolent Shrine",
+                "Self-Embodiment of Perfection": "Domain Expansion: Self-Embodiment",
+                "Authentic Mutual Love": "Domain Expansion: Authentic Love",
+                "Idle Death Gamble": "Domain Expansion: Idle Death Gamble",
+                "Yuji Itadori": "Domain Expansion: Unnamed",
+                "Chimera Shadow Garden": "Domain Expansion: Chimera Garden",
+                "Time Cell Moon Palace": "Domain Expansion: Time Cell Moon",
+                "Lapse Blue": "Technique: Lapse Blue",
+                "Reversal Red": "Technique: Reversal Red",
+                "Hollow Purple": "Technique: Hollow Purple"
+            },
+            'ja': {
+                "Unlimited Void": "領域展開: 無量空処",
+                "Malevolent Shrine": "領域展開: 伏魔御廚子",
+                "Self-Embodiment of Perfection": "領域展開: 自閉圓頓裹",
+                "Authentic Mutual Love": "領域展開: 真贋相愛",
+                "Idle Death Gamble": "領域展開: 坐殺博徒",
+                "Yuji Itadori": "領域展開: 名称不明",
+                "Chimera Shadow Garden": "領域展開: 嵌合暗翳庭園",
+                "Time Cell Moon Palace": "領域展開: 時胞月宮殿",
+                "Lapse Blue": "术式顺转: 「苍」",
+                "Reversal Red": "术式反转: 「赫」",
+                "Hollow Purple": "虚式: 「茈」"
+            },
+            'zh': {
+                "Unlimited Void": "領域展開: 無量空処",
+                "Malevolent Shrine": "領域展開: 伏魔御廚子",
+                "Self-Embodiment of Perfection": "領域展開: 自閉圓頓裹",
+                "Authentic Mutual Love": "領域展開: 真贋相愛",
+                "Idle Death Gamble": "領域展開: 坐殺博徒",
+                "Yuji Itadori": "領域展開: 名称不明",
+                "Chimera Shadow Garden": "領域展開: 嵌合暗翳庭園",
+                "Time Cell Moon Palace": "領域展開: 時胞月宮殿",
+                "Lapse Blue": "术式顺转: 「苍」",
+                "Reversal Red": "术式反转: 「赫」",
+                "Hollow Purple": "虚式: 「茈」"
+            }
         };
+        this.displayNames = this.displayNamesMap['en'];
 
         this.domainColors = {
             "Unlimited Void": "#FFFFFF",
@@ -66,6 +96,13 @@ class DomainExpansionGame {
         this.vfxCanvas = canvas;
         this.vfxCtx = canvas.getContext('2d');
         this.initStars(canvas.width, canvas.height);
+    }
+
+    setLanguage(lang) {
+        if (this.displayNamesMap[lang]) {
+            this.lang = lang;
+            this.displayNames = this.displayNamesMap[lang];
+        }
     }
 
     // --- MediaPipe Helper Functions (JJK Reference) ---

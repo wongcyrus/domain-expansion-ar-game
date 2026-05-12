@@ -172,16 +172,20 @@
     </div>
 
     <div class="overlay header">
-        <h1>🖐️ Domain Expansion AR</h1>
+        <h1 id="main-title">🖐️ Domain Expansion AR</h1>
         <p id="mode-display">Strike a hand sign to expand your domain!</p>
         <div id="domain-display" style="font-size: 2.5rem; font-weight: bold; margin-top: 10px; color: #4A90E2; text-shadow: 0 0 20px rgba(74, 144, 226, 0.8);"></div>
     </div>
 
     <div class="overlay settings-panel" id="settings-panel">
         <div>
-            <label>🔗 Robot API Endpoint</label>
+            <label id="label-game-title">🏷️ Game Title</label>
+            <input type="text" id="game-title-input" placeholder="e.g. 領域展開 AR">
+        </div>
+        <div>
+            <label id="label-api-endpoint">🔗 Robot API Endpoint</label>
             <input type="text" id="api-endpoint" placeholder="https://your-api.com/run_action">
-            <button id="save-endpoint">💾 Save Endpoint</button>
+            <button id="save-settings">💾 Save Settings</button>
         </div>
         <div>
             <label>🤖 Target Robot</label>
