@@ -349,6 +349,13 @@ class DomainExpansionGame {
             center = { x: sx / count, y: sy / count };
         }
 
+        // Safely extract index finger tips for techniques
+        let indexTips = [];
+        if (hands && hands.length > 0) {
+            indexTips = hands.map(h => ({ x: h[I_TIP].x * w, y: h[I_TIP].y * h }));
+            indexTips.sort((a, b) => a.x - b.x); // Sort left-to-right on screen
+        }
+
         switch (stableDomain) {
             case "Unlimited Void":
                 this.applyUnlimitedVoid(ctx, w, h);
@@ -375,13 +382,16 @@ class DomainExpansionGame {
                 this.applyNaoya(ctx, w, h);
                 break;
             case "Lapse Blue":
-                if (center) this.applyLapseBlue(ctx, center, w, h);
+                if (indexTips.length > 0) this.applyLapseBlue(ctx, indexTips[0], w, h);
+                else if (center) this.applyLapseBlue(ctx, center, w, h);
                 break;
             case "Reversal Red":
-                if (center) this.applyReversalRed(ctx, center, w, h);
+                if (indexTips.length > 0) this.applyReversalRed(ctx, indexTips[0], w, h);
+                else if (center) this.applyReversalRed(ctx, center, w, h);
                 break;
             case "Hollow Purple":
-                if (center) this.applyHollowPurple(ctx, center, w, h);
+                if (indexTips.length >= 2) this.applyHollowPurple(ctx, indexTips[0], indexTips[1], w, h);
+                else if (center) this.applyHollowPurple(ctx, center, center, w, h);
                 break;
         }
     }
@@ -516,33 +526,79 @@ class DomainExpansionGame {
         ctx.fillRect(0, 0, w, h);
     }
 
-    applyLapseBlue(ctx, pos, w, h) {
-        this.blueOrbRad = (this.blueOrbRad + 2) % 40;
+    applyLapseBlue(ctx, pos) {
+        this.blueOrbRad = (this.blueOrbRad + 1.5) % 30;
+        const r = this.blueOrbRad + 20;
+        
+        // Multi-layered concentric circles for neon glow (SAFE on mobile)
+        ctx.fillStyle = "rgba(0, 100, 255, 0.15)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 20, 0, Math.PI * 2); ctx.fill();
+        
+        ctx.fillStyle = "rgba(0, 100, 255, 0.4)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 10, 0, Math.PI * 2); ctx.fill();
+        
         ctx.fillStyle = "rgba(0, 100, 255, 0.8)";
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, this.blueOrbRad + 20, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill();
+        
+        // White Core
+        ctx.fillStyle = "white";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2); ctx.fill();
     }
 
-    applyReversalRed(ctx, pos, w, h) {
-        this.redOrbRad = (this.redOrbRad + 3) % 50;
+    applyReversalRed(ctx, pos) {
+        this.redOrbRad = (this.redOrbRad + 2) % 40;
+        const r = this.redOrbRad + 20;
+
+        ctx.fillStyle = "rgba(255, 50, 50, 0.15)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 25, 0, Math.PI * 2); ctx.fill();
+        
+        ctx.fillStyle = "rgba(255, 50, 50, 0.4)";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r + 12, 0, Math.PI * 2); ctx.fill();
+        
         ctx.fillStyle = "rgba(255, 50, 50, 0.8)";
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, this.redOrbRad, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill();
+        
+        // White Core
+        ctx.fillStyle = "white";
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2); ctx.fill();
     }
 
-    applyHollowPurple(ctx, pos, w, h) {
-        this.purpleBeamProgress += 0.05;
+    applyHollowPurple(ctx, p1, p2, w, h) {
+        this.purpleBeamProgress += 0.04;
         if (this.purpleBeamProgress > 1) this.purpleBeamProgress = 0;
         
-        ctx.fillStyle = "rgba(200, 100, 255, 0.3)";
-        ctx.fillRect(0, 0, w, h);
-        
-        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 60 * (1 + this.purpleBeamProgress), 0, Math.PI * 2);
-        ctx.fill();
+        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+        if (dist < 180) {
+            // Combined Purple Ball (SAFE Glow)
+            ctx.fillStyle = "rgba(148, 0, 211, 0.2)";
+            ctx.fillRect(0, 0, w, h);
+            
+            const r = 80 * (1 + this.purpleBeamProgress * 0.1);
+            ctx.fillStyle = "rgba(148, 0, 211, 0.15)";
+            ctx.beginPath(); ctx.arc(center.x, center.y, r + 40, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "rgba(148, 0, 211, 0.4)";
+            ctx.beginPath(); ctx.arc(center.x, center.y, r + 20, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "rgba(148, 0, 211, 0.9)";
+            ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI * 2); ctx.fill();
+            
+            ctx.fillStyle = "white";
+            ctx.beginPath(); ctx.arc(center.x, center.y, 20, 0, Math.PI * 2); ctx.fill();
+        } else {
+            // Blue
+            ctx.fillStyle = "rgba(0, 100, 255, 0.8)";
+            ctx.beginPath(); ctx.arc(p1.x, p1.y, 35, 0, Math.PI * 2); ctx.fill();
+            // Red
+            ctx.fillStyle = "rgba(255, 50, 50, 0.8)";
+            ctx.beginPath(); ctx.arc(p2.x, p2.y, 35, 0, Math.PI * 2); ctx.fill();
+
+            // Dash line connection
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+            ctx.setLineDash([8, 8]);
+            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+            ctx.setLineDash([]);
+        }
     }
 }
 
