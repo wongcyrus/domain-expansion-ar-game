@@ -126,6 +126,9 @@
 
         .instructions div {
             text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
         }
 
         .settings-panel {
@@ -287,7 +290,7 @@
         }
 
         /* Landscape Mobile Optimization */
-        @media (max-width: 930px) and (orientation: landscape) {
+        @media (max-width: 1024px) and (orientation: landscape) {
             .header { top: 5px; width: 45%; padding: 5px 10px; }
             .header h1 { font-size: 0.8rem; }
             .header p { display: none; }
@@ -296,10 +299,11 @@
             .logo-hkiit { top: 5px; left: 10px; }
             .logo-hkiit img { height: 50px; }
             
-            .top-right-stack { top: 5px; right: 10px; gap: 5px; }
+            .top-right-stack { top: 5px; right: 10px; gap: 5px; z-index: 90; }
             .logo-it114115 img { height: 50px; }
             #settings-toggle { width: 30px; height: 30px; font-size: 12px; }
 
+            .instructions { display: none !important; }
             .status-panel { bottom: 10px; left: 10px; padding: 5px; font-size: 9px; flex-direction: row; gap: 10px; }
             .status-panel div { border-top: none !important; padding-top: 0 !important; margin-top: 0 !important; }
             
@@ -417,7 +421,7 @@
             <span>Resp: <span id="last-resp">NONE</span></span>
         </div>
         <div style="font-size: 9px; opacity: 0.4; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 5px; text-align: right;">
-            Build: 2026.05.12.v27
+            Build: 2026.05.12.v28
         </div>
     </div>
 

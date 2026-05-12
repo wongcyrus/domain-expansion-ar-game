@@ -306,7 +306,7 @@ class HandTracker {
     updateInstructions() {
         if (!this.instructionsPanel) return;
         this.instructionsPanel.innerHTML = `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85em;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85em; justify-items: end; text-align: right;">
                 <div>
                     <strong>— Domains —</strong><br>
                     • 五條悟: 無量空處 (1H)<br>
