@@ -21,7 +21,7 @@ class HandTracker {
         
         // --- Persistence ---
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
-        this.savedRobotId = localStorage.getItem('robot_id') || 'robot_1';
+        this.savedRobotId = localStorage.getItem('robot_id') || 'all'; // Default to "all"
         
         this.endpointInput.value = this.apiEndpoint;
         this.robotIdSelect.value = this.savedRobotId;
@@ -136,6 +136,8 @@ class HandTracker {
             currentLang = 'ja';
             document.getElementById('label-api-endpoint').textContent = '🔗 ロボットAPIエンドポイント';
             document.getElementById('save-settings').textContent = '💾 設定を保存';
+            document.getElementById('label-target-robot').textContent = '🤖 対象ロボット';
+            document.getElementById('label-cooldown').textContent = '🤖 クールダウン (s)';
             document.querySelector('#robot-id option[value="all"]').textContent = '🤖 全てのロボット';
         } else if (isZH) {
             finalTitle = '🖐️ 領域展開 AR';
@@ -143,6 +145,8 @@ class HandTracker {
             currentLang = 'zh';
             document.getElementById('label-api-endpoint').textContent = '🔗 機器人API端點';
             document.getElementById('save-settings').textContent = '💾 保存設置';
+            document.getElementById('label-target-robot').textContent = '🤖 目標機器人';
+            document.getElementById('label-cooldown').textContent = '🤖 冷卻時間 (s)';
             document.querySelector('#robot-id option[value="all"]').textContent = '🤖 所有機器人';
         }
 
