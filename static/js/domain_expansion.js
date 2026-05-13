@@ -19,43 +19,43 @@ class DomainExpansionGame {
         this.lang = 'zh'; // Default to ZH
         this.displayNamesMap = {
             'en': {
-                "Unlimited Void": "Domain Expansion: Unlimited Void",
-                "Malevolent Shrine": "Domain Expansion: Malevolent Shrine",
-                "Self-Embodiment of Perfection": "Domain Expansion: Self-Embodiment",
-                "Authentic Mutual Love": "Domain Expansion: Authentic Love",
-                "Idle Death Gamble": "Domain Expansion: Idle Death Gamble",
-                "Yuji Itadori": "Domain Expansion: Unnamed",
-                "Chimera Shadow Garden": "Domain Expansion: Chimera Garden",
-                "Time Cell Moon Palace": "Domain Expansion: Time Cell Moon",
-                "Lapse Blue": "Technique: Lapse Blue",
-                "Reversal Red": "Technique: Reversal Red",
-                "Hollow Purple": "Technique: Hollow Purple"
+                "Unlimited Void": "Gojo Satoru: Unlimited Void",
+                "Malevolent Shrine": "Ryomen Sukuna: Malevolent Shrine",
+                "Self-Embodiment of Perfection": "Mahito: Self-Embodiment",
+                "Authentic Mutual Love": "Yuta Okkotsu: Authentic Love",
+                "Idle Death Gamble": "Kinji Hakari: Idle Death Gamble",
+                "Yuji Itadori": "Yuji Itadori: Unnamed Domain",
+                "Chimera Shadow Garden": "Megumi Fushiguro: Chimera Garden",
+                "Time Cell Moon Palace": "Naoya Zenin: Time Cell Moon",
+                "Lapse Blue": "Gojo Satoru: Lapse Blue",
+                "Reversal Red": "Gojo Satoru: Reversal Red",
+                "Hollow Purple": "Gojo Satoru: Hollow Purple"
             },
             'ja': {
-                "Unlimited Void": "領域展開: 無量空処",
-                "Malevolent Shrine": "領域展開: 伏魔御廚子",
-                "Self-Embodiment of Perfection": "領域展開: 自閉圓頓裹",
-                "Authentic Mutual Love": "領域展開: 真贋相愛",
-                "Idle Death Gamble": "領域展開: 坐殺博徒",
-                "Yuji Itadori": "領域展開: 名称不明",
-                "Chimera Shadow Garden": "領域展開: 嵌合暗翳庭園",
-                "Time Cell Moon Palace": "領域展開: 時胞月宮殿",
-                "Lapse Blue": "术式顺转: 「苍」",
-                "Reversal Red": "术式反转: 「赫」",
-                "Hollow Purple": "虚式: 「茈」"
+                "Unlimited Void": "五条悟: 無量空処",
+                "Malevolent Shrine": "両面宿儺: 伏魔御厨子",
+                "Self-Embodiment of Perfection": "真人: 自閉円頓裹",
+                "Authentic Mutual Love": "乙骨憂太: 真贋相愛",
+                "Idle Death Gamble": "秤金次: 坐殺博徒",
+                "Yuji Itadori": "虎杖悠仁: 名称不明",
+                "Chimera Shadow Garden": "伏黒恵: 嵌合暗翳庭園",
+                "Time Cell Moon Palace": "禪院直哉: 時胞月宮殿",
+                "Lapse Blue": "五条悟: 「蒼」",
+                "Reversal Red": "五条悟: 「赫」",
+                "Hollow Purple": "五条悟: 「茈」"
             },
             'zh': {
-                "Unlimited Void": "領域展開: 無量空處",
-                "Malevolent Shrine": "領域展開: 伏魔御廚子",
-                "Self-Embodiment of Perfection": "領域展開: 自閉圓頓裹",
-                "Authentic Mutual Love": "領域展開: 真贋相愛",
-                "Idle Death Gamble": "領域展開: 坐殺博徒",
-                "Yuji Itadori": "領域展開: 名称不明",
-                "Chimera Shadow Garden": "領域展開: 嵌合暗翳庭園",
-                "Time Cell Moon Palace": "領域展開: 時胞月宮殿",
-                "Lapse Blue": "术式顺转: 「苍」",
-                "Reversal Red": "术式反转: 「赫」",
-                "Hollow Purple": "虚式: 「茈」"
+                "Unlimited Void": "五條悟: 無量空處",
+                "Malevolent Shrine": "兩面宿儺: 伏魔御廚子",
+                "Self-Embodiment of Perfection": "真人: 自閉圓頓裹",
+                "Authentic Mutual Love": "乙骨憂太: 真贋相愛",
+                "Idle Death Gamble": "秤金次: 坐殺博徒",
+                "Yuji Itadori": "虎杖悠仁: 名稱不明",
+                "Chimera Shadow Garden": "伏黑惠: 嵌合暗翳庭園",
+                "Time Cell Moon Palace": "禪院直哉: 時胞月宮殿",
+                "Lapse Blue": "五條悟: 「蒼」",
+                "Reversal Red": "五條悟: 「赫」",
+                "Hollow Purple": "五條悟: 「茈」"
             }
         };
         this.displayNames = this.displayNamesMap['zh'];

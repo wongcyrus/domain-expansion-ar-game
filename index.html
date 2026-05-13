@@ -104,7 +104,8 @@
             flex-direction: column;
             gap: 8px;
             font-size: 16px;
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: pointer;
         }
         .status-item { display: flex; align-items: center; gap: 8px; }
         .dot { width: 10px; height: 10px; border-radius: 50%; background: #666; }
@@ -149,6 +150,9 @@
             opacity: 0;
             pointer-events: none;
         }
+
+        .hidden { display: none !important; }
+
         .settings-header {
             padding: 15px;
             background: rgba(255,255,255,0.05);
@@ -319,7 +323,30 @@
         <div id="integrated-player-container" class="hidden">
             <video id="integrated-player" playsinline loop autoplay></video>
         </div>
+        
+        <!-- Success Feedback -->
+        <div id="success-feedback" class="hidden" style="position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 100; pointer-events: none;">
+            <div style="font-size: 5rem; font-weight: bold; color: #FFFF00; text-shadow: 0 0 20px #FFF, 0 0 40px #FFFF00; animation: success-pop 0.5s ease-out;">SUCCESS!</div>
+        </div>
+
+        <!-- Game Over Overlay -->
+        <div id="game-over-overlay" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 300; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+            <div style="font-size: 3rem; font-weight: bold; color: #FF5252; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 5px;" id="game-over-title">Game Over</div>
+            <div style="font-size: 1.5rem; color: white; margin-bottom: 30px;">
+                <span id="label-final-score">Final Score</span>: <span id="final-score-val" style="color: #FFFF00; font-size: 2.5rem;">0</span>
+            </div>
+            <button id="restart-game-btn" style="background: #4A90E2; color: white; border: none; padding: 15px 40px; border-radius: 30px; font-size: 1.2rem; cursor: pointer; font-weight: bold; box-shadow: 0 4px 15px rgba(74, 144, 226, 0.4); transition: transform 0.2s;">Play Again</button>
+            <button id="exit-game-btn" style="background: transparent; color: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.3); margin-top: 20px; padding: 10px 25px; border-radius: 20px; cursor: pointer;">Close</button>
+        </div>
     </div>
+
+    <style>
+        @keyframes success-pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+    </style>
 
     <!-- Branding -->
     <div class="overlay logo-hkiit">
@@ -337,6 +364,17 @@
         <img src="static/img/jujutsu-kaisen-logo.png" alt="JJK Logo" style="height: 50px; width: auto; margin-bottom: 5px;"><br>
         <h1 id="main-title" style="display: inline-block;">領域展開 AR</h1>
         <p id="mode-display">結下手印以展開你的領域！</p>
+        
+        <!-- Mini Game HUD -->
+        <div id="game-hud" class="hidden" style="margin-top: 10px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 15px; border: 2px solid #FFFF00; display: inline-block;">
+            <div id="game-target-label" style="font-size: 0.8rem; color: #FFFF00; text-transform: uppercase; letter-spacing: 2px;">Target Action</div>
+            <div id="game-target-name" style="font-size: 2rem; font-weight: bold; color: #FFF;">---</div>
+            <div style="display: flex; justify-content: center; gap: 20px; margin-top: 10px;">
+                <div><span id="label-score">Score</span>: <span id="game-score" style="color: #4CAF50; font-weight: bold;">0</span></div>
+                <div><span id="label-timer">Time</span>: <span id="game-timer" style="color: #FF5252; font-weight: bold;">0s</span></div>
+            </div>
+        </div>
+
         <div id="domain-display" style="font-size: 3.5rem; font-weight: bold; margin-top: 15px; color: #4A90E2; text-shadow: 0 0 30px rgba(74, 144, 226, 0.8);"></div>
     </div>
 
@@ -346,6 +384,20 @@
             <button id="close-settings">✕</button>
         </div>
         <div class="settings-content">
+            <div style="background: rgba(74, 144, 226, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(74, 144, 226, 0.3);">
+                <label style="color: #4A90E2; font-weight: bold;">🎮 Mini-Game Mode</label>
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <button id="start-game-btn" style="flex: 1; background: #4CAF50; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold;">Start Round</button>
+                    <button id="stop-game-btn" class="hidden" style="flex: 1; background: #F44336; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold;">Quit Game</button>
+                </div>
+                <div style="margin-top: 10px;">
+                    <label id="label-game-difficulty">⏱️ Time per Action (s)</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="range" id="game-difficulty-slider" min="3" max="15" value="8" style="flex: 1;">
+                        <span id="game-difficulty-val" style="font-size: 13px; width: 30px;">8s</span>
+                    </div>
+                </div>
+            </div>
             <div>
                 <label id="label-api-endpoint">🔗 Robot API Endpoint</label>
                 <input type="text" id="api-endpoint" placeholder="e.g. https://your-site.awsapprunner.com">
@@ -400,7 +452,12 @@
         </div>
     </div>
 
-    <div class="overlay status-panel">
+    <div class="overlay qr-container" id="qr-container" style="bottom: 25px; left: 25px; cursor: pointer; transition: opacity 0.3s, transform 0.3s; background: white; padding: 8px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); z-index: 60; pointer-events: auto;">
+        <img src="static/img/github-qrcode.png" alt="Repo QR" style="width: 100px; height: 100px; display: block; border-radius: 4px;">
+        <div id="qr-label" style="color: #333; font-size: 11px; text-align: center; margin-top: 5px; font-weight: bold; font-family: sans-serif;">GET SOURCE CODE</div>
+    </div>
+
+    <div class="overlay status-panel hidden" id="status-panel-container">
         <div class="status-item">
             <div id="tracking-dot" class="dot"></div>
             <span>Tracking: <span id="tracking-status">Stopped</span></span>

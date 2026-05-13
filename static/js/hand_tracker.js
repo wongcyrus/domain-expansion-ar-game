@@ -31,6 +31,24 @@ class HandTracker {
         this.atmosphereOverlay = document.getElementById('atmosphere-overlay');
         this.cooldownSlider = document.getElementById('cooldown-slider');
         this.cooldownLabel = document.getElementById('cooldown-val');
+        
+        // Mini-Game UI
+        this.gameHud = document.getElementById('game-hud');
+        this.gameTargetName = document.getElementById('game-target-name');
+        this.gameScoreEl = document.getElementById('game-score');
+        this.gameTimerEl = document.getElementById('game-timer');
+        this.startGameBtn = document.getElementById('start-game-btn');
+        this.stopGameBtn = document.getElementById('stop-game-btn');
+        this.gameDifficultySlider = document.getElementById('game-difficulty-slider');
+        this.gameDifficultyLabel = document.getElementById('game-difficulty-val');
+        
+        // Mini-Game Result UI
+        this.gameOverOverlay = document.getElementById('game-over-overlay');
+        this.finalScoreVal = document.getElementById('final-score-val');
+        this.restartGameBtn = document.getElementById('restart-game-btn');
+        this.exitGameBtn = document.getElementById('exit-game-btn');
+        this.successFeedback = document.getElementById('success-feedback');
+
         this.modeDisplay = document.getElementById('mode-display');
         this.domainDisplay = document.getElementById('domain-display');
         this.instructionsPanel = document.getElementById('instructions-panel');
@@ -41,10 +59,11 @@ class HandTracker {
         // 2. Load Persistence
         this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
         this.sessionKey = localStorage.getItem('robot_session_key') || '';
-        this.userLang = localStorage.getItem('user_language') || 'zh'; // Default to "zh"
+        this.userLang = localStorage.getItem('user_language') || 'zh'; 
         this.savedRobotId = localStorage.getItem('robot_id') || 'all'; 
         this.videoMode = localStorage.getItem('video_mode') || 'integrated'; 
         this.autoOpen = localStorage.getItem('auto_open_popup') === 'true';
+        this.gameDifficulty = parseInt(localStorage.getItem('game_difficulty') || '8');
 
         // 3. Set Initial Values
         if (this.endpointInput) this.endpointInput.value = this.apiEndpoint;
@@ -53,6 +72,10 @@ class HandTracker {
         if (this.robotIdSelect) this.robotIdSelect.value = this.savedRobotId;
         if (this.videoModeSelect) this.videoModeSelect.value = this.videoMode;
         if (this.autoOpenPopupCheck) this.autoOpenPopupCheck.checked = this.autoOpen;
+        if (this.gameDifficultySlider) {
+            this.gameDifficultySlider.value = this.gameDifficulty;
+            if (this.gameDifficultyLabel) this.gameDifficultyLabel.textContent = `${this.gameDifficulty}s`;
+        }
         if (this.cooldownSlider && this.cooldownLabel) {
             this.cooldownMs = parseInt(this.cooldownSlider.value) * 1000;
             this.cooldownLabel.textContent = `${this.cooldownSlider.value}s`;
@@ -60,10 +83,19 @@ class HandTracker {
             this.cooldownMs = 10000;
         }
 
-        // 4. Attach Event Listeners IMMEDIATELY
+        // 4. Mini-Game State
+        this.isGameActive = false;
+        this.gameScore = 0;
+        this.gameTimeLeft = 0;
+        this.gameTarget = null;
+        this.gameActionList = [];
+        this.gameTimerInterval = null;
+        this.gameActionInterval = null;
+
+        // 5. Attach Event Listeners IMMEDIATELY
         this.attachListeners();
 
-        // 5. Initialize State
+        // 6. Initialize State
         this.playerWindow = null;
         this.isPlayerReady = false;
         this.pendingVideoAction = null;
@@ -137,6 +169,40 @@ class HandTracker {
             });
         }
 
+        if (this.gameDifficultySlider) {
+            this.gameDifficultySlider.addEventListener('input', () => {
+                this.gameDifficulty = parseInt(this.gameDifficultySlider.value);
+                if (this.gameDifficultyLabel) this.gameDifficultyLabel.textContent = `${this.gameDifficulty}s`;
+                localStorage.setItem('game_difficulty', this.gameDifficulty);
+            });
+        }
+
+        if (this.startGameBtn) {
+            this.startGameBtn.addEventListener('click', () => {
+                if (this.settingsPanel) this.settingsPanel.classList.add('hidden');
+                this.startMiniGame();
+            });
+        }
+
+        if (this.stopGameBtn) {
+            this.stopGameBtn.addEventListener('click', () => {
+                this.stopMiniGame('Game Stopped');
+            });
+        }
+
+        if (this.restartGameBtn) {
+            this.restartGameBtn.addEventListener('click', () => {
+                this.gameOverOverlay.classList.add('hidden');
+                this.startMiniGame();
+            });
+        }
+
+        if (this.exitGameBtn) {
+            this.exitGameBtn.addEventListener('click', () => {
+                this.gameOverOverlay.classList.add('hidden');
+            });
+        }
+
         if (this.settingsToggle) {
             this.settingsToggle.addEventListener('click', () => {
                 if (this.settingsPanel) this.settingsPanel.classList.toggle('hidden');
@@ -151,6 +217,19 @@ class HandTracker {
 
         if (this.openPlayerBtn) {
             this.openPlayerBtn.addEventListener('click', () => this.openPopupPlayer());
+        }
+
+        const qrContainer = document.getElementById('qr-container');
+        const statusPanel = document.getElementById('status-panel-container');
+        if (qrContainer && statusPanel) {
+            qrContainer.addEventListener('click', () => {
+                qrContainer.classList.add('hidden');
+                statusPanel.classList.remove('hidden');
+            });
+            statusPanel.addEventListener('click', () => {
+                statusPanel.classList.add('hidden');
+                qrContainer.classList.remove('hidden');
+            });
         }
 
         window.addEventListener('message', (event) => {
@@ -240,6 +319,17 @@ class HandTracker {
                 this.setElText('label-target-robot', '対象ロボット');
                 this.setElText('label-cooldown', 'クールダウン (s)');
                 this.setElText('label-video-mode', '🎬 ビデオ再生');
+                this.setElText('label-game-difficulty', '⏱️ アクションごとの時間 (s)');
+                this.setElText('start-game-btn', 'ラウンド開始');
+                this.setElText('stop-game-btn', 'ゲーム終了');
+                this.setElText('label-score', 'スコア');
+                this.setElText('label-timer', '残り時間');
+                this.setElText('game-target-label', 'ターゲット');
+                this.setElText('game-over-title', 'ゲーム終了');
+                this.setElText('label-final-score', '最終スコア');
+                this.setElText('restart-game-btn', 'もう一度プレイ');
+                this.setElText('exit-game-btn', '閉じる');
+                this.setElText('qr-label', 'ソースコード');
                 this.setOptText('#video-playback-mode option[value="none"]', '🚫 ビデオなし');
                 this.setOptText('#video-playback-mode option[value="integrated"]', '🖥️ 統合 (音あり)');
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 統合 (静音)');
@@ -256,6 +346,17 @@ class HandTracker {
                 this.setElText('label-target-robot', '目標機器人');
                 this.setElText('label-cooldown', '冷卻時間 (s)');
                 this.setElText('label-video-mode', '🎬 影片播放');
+                this.setElText('label-game-difficulty', '⏱️ 每個動作限時 (s)');
+                this.setElText('start-game-btn', '開始回合');
+                this.setElText('stop-game-btn', '退出遊戲');
+                this.setElText('label-score', '分數');
+                this.setElText('label-timer', '剩餘時間');
+                this.setElText('game-target-label', '目標動作');
+                this.setElText('game-over-title', '遊戲結束');
+                this.setElText('label-final-score', '最終分數');
+                this.setElText('restart-game-btn', '再玩一次');
+                this.setElText('exit-game-btn', '關閉');
+                this.setElText('qr-label', '獲取源代碼');
                 this.setOptText('#video-playback-mode option[value="none"]', '🚫 不播放影片');
                 this.setOptText('#video-playback-mode option[value="integrated"]', '🖥️ 內置 (音效)');
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 內置 (靜音)');
@@ -272,6 +373,17 @@ class HandTracker {
                 this.setElText('label-target-robot', '🤖 Target Robot');
                 this.setElText('label-cooldown', '🤖 Cooldown (s)');
                 this.setElText('label-video-mode', '🎬 Video Playback');
+                this.setElText('label-game-difficulty', '⏱️ Time per Action (s)');
+                this.setElText('start-game-btn', 'Start Round');
+                this.setElText('stop-game-btn', 'Quit Game');
+                this.setElText('label-score', 'Score');
+                this.setElText('label-timer', 'Time Left');
+                this.setElText('game-target-label', 'Target Action');
+                this.setElText('game-over-title', 'Game Over');
+                this.setElText('label-final-score', 'Final Score');
+                this.setElText('restart-game-btn', 'Play Again');
+                this.setElText('exit-game-btn', 'Close');
+                this.setElText('qr-label', 'GET SOURCE CODE');
                 this.setOptText('#video-playback-mode option[value="none"]', '🚫 No Video');
                 this.setOptText('#video-playback-mode option[value="integrated"]', '🖥️ Integrated (Sound)');
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 Integrated (Silent)');
@@ -433,6 +545,31 @@ class HandTracker {
             const displayName = this.domainGame.displayNames[stableDomain] || stableDomain;
             const domainColor = this.domainGame.domainColors[stableDomain];
             
+            // Check Mini-Game Match
+            if (this.isGameActive && stableDomain === this.gameTarget) {
+                console.log('[MiniGame] Success:', stableDomain);
+                this.gameScore++;
+                this.gameTarget = null; // Prevent double scoring
+                clearInterval(this.gameTimerInterval);
+                
+                this.playSuccessSound();
+
+                // Show visual feedback for success
+                if (this.successFeedback) {
+                    this.successFeedback.classList.remove('hidden');
+                    // Force reflow for animation restart
+                    void this.successFeedback.offsetWidth;
+                    setTimeout(() => { if(this.successFeedback) this.successFeedback.classList.add('hidden'); }, 1000);
+                }
+
+                if (this.gameHud) {
+                    this.gameHud.style.borderColor = '#4CAF50';
+                    setTimeout(() => { if(this.gameHud) this.gameHud.style.borderColor = '#FFFF00'; }, 500);
+                }
+                
+                setTimeout(() => this.nextGameAction(), 800); // Small pause after success
+            }
+
             this.domainDisplay.textContent = displayName;
             if (domainColor) this.domainDisplay.style.color = domainColor;
             this.domainDisplay.style.opacity = "1.0";
@@ -479,6 +616,118 @@ class HandTracker {
                 }, 1000);
             }
         }
+    }
+
+    // --- Mini-Game Logic ---
+    startMiniGame() {
+        console.log('[MiniGame] Starting new round...');
+        this.isGameActive = true;
+        this.gameScore = 0;
+        
+        // Prepare action list (Shuffle)
+        const allActions = Object.keys(this.domainGame.displayNamesMap['en']);
+        this.gameActionList = allActions.sort(() => Math.random() - 0.5);
+        
+        if (this.gameHud) this.gameHud.classList.remove('hidden');
+        if (this.startGameBtn) this.startGameBtn.classList.add('hidden');
+        if (this.stopGameBtn) this.stopGameBtn.classList.remove('hidden');
+        
+        this.updateGameHUD();
+        this.nextGameAction();
+    }
+
+    stopMiniGame(reason = 'Game Over') {
+        this.isGameActive = false;
+        clearInterval(this.gameTimerInterval);
+        clearTimeout(this.gameActionInterval);
+        
+        const finalScore = this.gameScore;
+        const total = Object.keys(this.domainGame.displayNamesMap['en']).length;
+        
+        // Show Custom UI instead of alert
+        if (this.gameOverOverlay) {
+            this.gameOverOverlay.classList.remove('hidden');
+            if (this.finalScoreVal) this.finalScoreVal.textContent = `${finalScore} / ${total}`;
+            const titleEl = document.getElementById('game-over-title');
+            if (titleEl) titleEl.textContent = reason;
+        }
+
+        this.playGameOverSound();
+        
+        if (this.gameHud) this.gameHud.classList.add('hidden');
+        if (this.startGameBtn) this.startGameBtn.classList.remove('hidden');
+        if (this.stopGameBtn) this.stopGameBtn.classList.add('hidden');
+        if (this.gameTargetName) this.gameTargetName.textContent = '---';
+        this.gameTarget = null;
+    }
+
+    nextGameAction() {
+        if (!this.isGameActive) return;
+        
+        if (this.gameActionList.length === 0) {
+            this.stopMiniGame('Round Complete');
+            return;
+        }
+
+        this.gameTarget = this.gameActionList.pop();
+        this.gameTimeLeft = this.gameDifficulty;
+        this.updateGameHUD();
+
+        // Timer Interval
+        clearInterval(this.gameTimerInterval);
+        this.gameTimerInterval = setInterval(() => {
+            this.gameTimeLeft--;
+            this.updateGameHUD();
+            if (this.gameTimeLeft <= 0) {
+                clearInterval(this.gameTimerInterval);
+                this.nextGameAction(); // Move to next even if failed
+            }
+        }, 1000);
+    }
+
+    updateGameHUD() {
+        if (this.gameTargetName) {
+            const lang = this.domainGame.lang || 'zh';
+            const displayName = this.domainGame.displayNamesMap[lang][this.gameTarget] || this.gameTarget || '---';
+            this.gameTargetName.textContent = displayName;
+        }
+        if (this.gameScoreEl) this.gameScoreEl.textContent = this.gameScore;
+        if (this.gameTimerEl) this.gameTimerEl.textContent = `${this.gameTimeLeft}s`;
+    }
+
+    // --- Audio Synthesis ---
+    playSuccessSound() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1); // A5
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+        } catch (e) { console.warn('Audio failed', e); }
+    }
+
+    playGameOverSound() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(220, ctx.currentTime); // A3
+            osc.frequency.linearRampToValueAtTime(110, ctx.currentTime + 0.5); // A2
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.5);
+        } catch (e) { console.warn('Audio failed', e); }
     }
 
     async triggerRobotAction(robotId, action) {

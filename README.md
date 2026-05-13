@@ -3,8 +3,14 @@
 A standalone AR experience for triggering Domain Expansions and Techniques using hand gestures.
 一款用於觸發手勢控制「領域展開」與「術式」的獨立 AR 體驗遊戲。
 
+### 🎮 [Play the Game Now | 立即開始遊戲](https://wongcyrus.github.io/domain-expansion-ar-game/)
+
+[![Domain Expansion Demo](https://img.youtube.com/vi/Tck6WSV_YXQ/0.jpg)](https://www.youtube.com/watch?v=Tck6WSV_YXQ)
+
 ## Features | 功能
 
+- **Mini-Game Mode**: Challenge yourself to perform gestures within a time limit and score points!
+- **迷你遊戲模式**: 在限時內挑戰完成手勢並獲取分數！
 - **No WebSocket Required**: Operates via standalone HTTP API requests.
 - **無須 WebSocket**: 透過獨立的 HTTP API 請求運行。
 - **Configurable Endpoint**: Save your Robot API URL locally.
@@ -45,10 +51,6 @@ To test the AR Game on a mobile device via a local network, you must use **HTTPS
 5. 結下手印即可開始！
 
 ## 🖐️ Hand Gesture Guide | 手勢指南
-
-[![Domain Expansion Demo](https://img.youtube.com/vi/Tck6WSV_YXQ/0.jpg)](https://www.youtube.com/watch?v=Tck6WSV_YXQ)
-
-### 🎮 [Play the Game Now | 立即開始遊戲](https://wongcyrus.github.io/domain-expansion-ar-game/)
 
 ### Domain Expansions | 領域展開
 
