@@ -225,12 +225,12 @@ class HandTracker {
             const isJP = lang.startsWith('ja');
             const isZH = lang.startsWith('zh');
             
-            let finalTitle = '🖐️ 領域展開 AR'; // Default to ZH
+            let finalTitle = '領域展開 AR'; // Default to ZH
             let defaultMode = '結下手印以展開你的領域！';
             let currentLang = 'zh';
 
             if (isJP) {
-                finalTitle = '🖐️ 領域展開 AR';
+                finalTitle = '領域展開 AR';
                 defaultMode = '印を組んで領域を展開せよ！';
                 currentLang = 'ja';
                 this.setElText('label-api-endpoint', '🔗 ロボットAPIエンドポイント');
@@ -246,7 +246,7 @@ class HandTracker {
                 this.setOptText('#video-playback-mode option[value="popup"]', '🪟 ポップアップ');
                 this.setOptText('#robot-id option[value="all"]', '🤖 全てのロボット');
             } else if (isZH) {
-                finalTitle = '🖐️ 領域展開 AR';
+                finalTitle = '領域展開 AR';
                 defaultMode = '結下手印以展開你的領域！';
                 currentLang = 'zh';
                 this.setElText('label-api-endpoint', '🔗 機器人API端點');
@@ -262,7 +262,7 @@ class HandTracker {
                 this.setOptText('#video-playback-mode option[value="popup"]', '🪟 彈出視窗');
                 this.setOptText('#robot-id option[value="all"]', '🤖 所有機器人');
             } else {
-                finalTitle = '🖐️ Domain Expansion AR';
+                finalTitle = 'Domain Expansion AR';
                 defaultMode = 'Strike a hand sign to expand your domain!';
                 currentLang = 'en';
                 this.setElText('label-api-endpoint', '🔗 Robot API Endpoint');
