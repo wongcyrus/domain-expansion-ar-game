@@ -234,8 +234,26 @@ class HandTracker {
         const qrContainer = document.getElementById('qr-container');
         const demoQrContainer = document.getElementById('demo-qr-container');
         const statusPanel = document.getElementById('status-panel-container');
+        const restoreBtn = document.getElementById('left-panel-restore-btn');
         
-        if (qrContainer && demoQrContainer && statusPanel) {
+        if (qrContainer && demoQrContainer && statusPanel && restoreBtn) {
+            const hideButtons = document.querySelectorAll('.left-panel-hide');
+            hideButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Don't trigger the cycle
+                    qrContainer.classList.add('hidden');
+                    demoQrContainer.classList.add('hidden');
+                    statusPanel.classList.add('hidden');
+                    restoreBtn.classList.remove('hidden');
+                });
+            });
+
+            restoreBtn.addEventListener('click', () => {
+                restoreBtn.classList.add('hidden');
+                // Show default (Demo QR)
+                demoQrContainer.classList.remove('hidden');
+            });
+
             // Cycle: Repo QR -> Demo QR -> Status Panel -> Repo QR
             qrContainer.addEventListener('click', () => {
                 qrContainer.classList.add('hidden');
@@ -248,6 +266,22 @@ class HandTracker {
             statusPanel.addEventListener('click', () => {
                 statusPanel.classList.add('hidden');
                 qrContainer.classList.remove('hidden');
+            });
+        }
+
+        // Right Panel Logic
+        const instructionsPanel = document.getElementById('instructions-panel');
+        const closeInstructions = document.getElementById('close-instructions');
+        const restoreInstructions = document.getElementById('right-panel-restore-btn');
+
+        if (instructionsPanel && closeInstructions && restoreInstructions) {
+            closeInstructions.addEventListener('click', () => {
+                instructionsPanel.classList.add('hidden');
+                restoreInstructions.classList.remove('hidden');
+            });
+            restoreInstructions.addEventListener('click', () => {
+                restoreInstructions.classList.add('hidden');
+                instructionsPanel.classList.remove('hidden');
             });
         }
 
@@ -454,8 +488,9 @@ class HandTracker {
     }
 
     updateInstructions() {
-        if (!this.instructionsPanel) return;
-        this.instructionsPanel.innerHTML = `
+        const content = document.getElementById('instructions-content');
+        if (!content) return;
+        content.innerHTML = `
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85em; justify-items: end; text-align: right;">
                 <div>
                     <strong>— Domains —</strong><br>
