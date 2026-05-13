@@ -54,13 +54,13 @@ To test the AR Game on a mobile device via a local network, you must use **HTTPS
 
 | User | Domain Name | Gesture | Robot Behavior | 角色 | 領域名稱 | 手印 | 機器人行為 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Gojo Satoru** | **Unlimited Void** | **(1H)** Crossed fingers | **Ascension**: Rhythmic focus (Twist). | **五條悟** | **無量空處** | **(單手)** 交叉食指與中指 | **升天**: 節奏性扭動。 |
-| **Sukuna** | **Malevolent Shrine** | **(2H)** Claw hands | **Desolation**: Sharp strikes (Kung Fu). | **兩面宿儺** | **伏魔御廚子** | **(雙手)** 合十且手指如爪 | **荒蕪**: 尖銳打擊 (功夫)。 |
+| **Gojo Satoru** | **Unlimited Void** | **(1H)** Crossed fingers | **Ascension**: Rhythmic focus with background image. | **五條悟** | **無量空處** | **(單手)** 交叉食指與中指 | **升天**: 節奏性扭動並顯示背景圖。 |
+| **Sukuna** | **Malevolent Shrine** | **(2H)** Claw hands | **Desolation**: Sharp strikes with background image. | **兩面宿儺** | **伏魔御廚子** | **(雙手)** 合十且手指如爪 | **荒蕪**: 尖銳打擊並顯示背景圖。 |
 | **Mahito** | **Self-Embodiment** | **(2H)** Egg shape | **Mutation**: Direct strike with background image. | **真人** | **自閉圓頓裹** | **(雙手)** 拇指小指相觸 | **突變**: 直接打擊並顯示背景圖。 |
 | **Yuta Okkotsu** | **Authentic Love** | **(2H)** Wide apart | **Embrace**: Bow with Rika background image. | **乙骨憂太** | **真贋相愛** | **(雙手)** 雙手拉開 | **擁抱**: 鞠躬並顯示里香背景圖。 |
 | **Hakari Kinji** | **Idle Death Gamble** | **(2H)** Vertical stack | **Jackpot**: Upbeat waving with background image. | **秤金次** | **坐殺博徒** | **(雙手)** 垂直疊放 | **大獎**: 歡快揮手並顯示背景圖。 |
-| **Megumi Fushiguro** | **Chimera Garden** | **(2H)** Two fists | **Submerge**: Shadow strength (Weightlifting). | **伏黑惠** | **嵌合暗翳庭園** | **(雙手)** 雙拳併攏 | **下沉**: 影之力量 (舉重)。 |
-| **Naoya Zenin** | **Time Cell Palace** | **(2H)** L-shape hands | **Projection**: Frame-by-frame strike (Left Shot). | **禪院直哉** | **時胞月宮殿** | **(雙手)** 雙手呈 L 型 | **投射**: 影格打擊 (左衝)。 |
+| **Megumi Fushiguro** | **Chimera Garden** | **(2H)** Two fists | **Submerge**: Shadow strength with background image. | **伏黑惠** | **嵌合暗翳庭園** | **(雙手)** 雙拳併攏 | **下沉**: 影之力量並顯示背景圖。 |
+| **Naoya Zenin** | **Time Cell Palace** | **(2H)** L-shape hands | **Projection**: Frame-by-frame strike with background image. | **禪院直哉** | **時胞月宮殿** | **(雙手)** 雙手呈 L 型 | **投射**: 影格打擊並顯示背景圖。 |
 | **Yuji Itadori** | **Unnamed Domain** | **(2H)** Pointing fingers | **Physical Mastery**: Sit-ups (Sit ups). | **虎杖悠仁** | **名稱不明** | **(雙手)** 食指相對 | **肉體巔峰**: 仰臥起坐 (仰臥起坐)。 |
 
 ### Techniques | 術式

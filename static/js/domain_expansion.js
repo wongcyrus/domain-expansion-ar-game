@@ -97,7 +97,7 @@ class DomainExpansionGame {
 
         // Load Shrine Image for Sukuna
         this.shrineImg = new Image();
-        this.shrineImg.src = 'static/img/malevolent_shrine.png';
+        this.shrineImg.src = 'static/img/malevolent-shrine.png';
 
         // Load Mahito Image
         this.mahitoImg = new Image();
@@ -106,6 +106,22 @@ class DomainExpansionGame {
         // Load Hakari Image
         this.hakariImg = new Image();
         this.hakariImg.src = 'static/img/idle-death-gamble.png';
+
+        // Load Chimera Garden Image
+        this.chimeraImg = new Image();
+        this.chimeraImg.src = 'static/img/chimera-garden.png';
+
+        this.chimeraPhase = 0;
+
+        // Load Naoya Image
+        this.naoyaImg = new Image();
+        this.naoyaImg.src = 'static/img/time-cell-palace.png';
+
+        // Load Unlimited Void Image
+        this.voidImg = new Image();
+        this.voidImg.src = 'static/img/unlimited-void.png';
+
+        this.voidPhase = 0;
     }
 
     initVFX(canvas) {
@@ -344,7 +360,32 @@ class DomainExpansionGame {
     }
 
     applyUnlimitedVoid(ctx, w, h) {
+        this.voidPhase += 0.05;
         ctx.fillStyle = "rgba(0, 0, 0, 0.4)"; ctx.fillRect(0, 0, w, h);
+        
+        // Draw Unlimited Void background if loaded
+        if (this.voidImg.complete) {
+            ctx.save();
+            ctx.scale(-1, 1);
+            
+            const imgAspect = this.voidImg.width / this.voidImg.height;
+            const canvasAspect = w / h;
+            let drawW, drawH;
+            if (canvasAspect > imgAspect) {
+                drawW = w;
+                drawH = w / imgAspect;
+            } else {
+                drawH = h;
+                drawW = h * imgAspect;
+            }
+            
+            ctx.globalAlpha = 0.3 + 0.1 * Math.sin(this.voidPhase);
+            ctx.drawImage(this.voidImg, -w + (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            
+            if (!this._voidLogged) { console.log('🌌 Unlimited Void Manifested!'); this._voidLogged = true; }
+            ctx.restore();
+        }
+
         ctx.fillStyle = "white";
         this.stars.forEach(s => { s.y = (s.y + s.speed) % h; ctx.beginPath(); ctx.arc(s.x, s.y, 1, 0, Math.PI * 2); ctx.fill(); });
         ctx.font = "15px monospace";
@@ -490,7 +531,32 @@ class DomainExpansionGame {
     }
 
     applyChimera(ctx, w, h) {
+        this.chimeraPhase++;
         ctx.fillStyle = "rgba(20, 20, 40, 0.4)"; ctx.fillRect(0, 0, w, h);
+        
+        // Draw Chimera background if loaded
+        if (this.chimeraImg.complete) {
+            ctx.save();
+            ctx.scale(-1, 1);
+            
+            const imgAspect = this.chimeraImg.width / this.chimeraImg.height;
+            const canvasAspect = w / h;
+            let drawW, drawH;
+            if (canvasAspect > imgAspect) {
+                drawW = w;
+                drawH = w / imgAspect;
+            } else {
+                drawH = h;
+                drawW = h * imgAspect;
+            }
+            
+            ctx.globalAlpha = 0.4 + 0.1 * Math.sin(this.chimeraPhase * 0.1);
+            ctx.drawImage(this.chimeraImg, -w + (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            
+            if (!this._chimeraLogged) { console.log('🌑 Chimera Shadow Garden Manifested!'); this._chimeraLogged = true; }
+            ctx.restore();
+        }
+
         ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
         for (let i = 0; i < 5; i++) {
             const time = (Date.now() / 1000 + i) % 2, radius = time * 100;
@@ -501,6 +567,30 @@ class DomainExpansionGame {
     applyNaoya(ctx, w, h) {
         ctx.fillStyle = "rgba(255, 100, 150, 0.2)"; ctx.fillRect(0, 0, w, h);
         const pulse = Math.abs(Math.sin(Date.now() / 200)) * 0.2;
+        
+        // Draw Naoya background if loaded
+        if (this.naoyaImg.complete) {
+            ctx.save();
+            ctx.scale(-1, 1);
+            
+            const imgAspect = this.naoyaImg.width / this.naoyaImg.height;
+            const canvasAspect = w / h;
+            let drawW, drawH;
+            if (canvasAspect > imgAspect) {
+                drawW = w;
+                drawH = w / imgAspect;
+            } else {
+                drawH = h;
+                drawW = h * imgAspect;
+            }
+            
+            ctx.globalAlpha = 0.4 + pulse;
+            ctx.drawImage(this.naoyaImg, -w + (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            
+            if (!this._naoyaLogged) { console.log('📽️ Time Cell Moon Palace Manifested!'); this._naoyaLogged = true; }
+            ctx.restore();
+        }
+
         ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`; ctx.fillRect(0, 0, w, h);
     }
 
