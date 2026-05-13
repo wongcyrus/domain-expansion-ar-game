@@ -286,20 +286,19 @@ class DomainExpansionGame {
 
         const handList = hands ? Array.from(hands) : [];
 
-        // Unified Coordinate Extraction (Mirrored to match scaleX(-1))
+        // Unified Coordinate Extraction (CSS scaleX(-1) handles the mirroring automatically)
         let primaryIdx = null;
         let secondIdx = null;
         let center = null;
 
         if (handList.length > 0) {
-            // NOTE: We subtract from 'w' because the CSS scaleX(-1) mirrors the context
             const sorted = [...handList].sort((a, b) => a[0].x - b[0].x);
-            if (sorted[0] && sorted[0][8]) primaryIdx = { x: (1 - sorted[0][8].x) * w, y: sorted[0][8].y * h };
-            if (sorted[1] && sorted[1][8]) secondIdx = { x: (1 - sorted[1][8].x) * w, y: sorted[1][8].y * h };
+            if (sorted[0] && sorted[0][8]) primaryIdx = { x: sorted[0][8].x * w, y: sorted[0][8].y * h };
+            if (sorted[1] && sorted[1][8]) secondIdx = { x: sorted[1][8].x * w, y: sorted[1][8].y * h };
             
             let sx = 0, sy = 0, count = 0;
             handList.forEach(hand => {
-                for(let i=0; i<21; i++) { if(hand[i]) { sx += (1 - hand[i].x) * w; sy += hand[i].y * h; count++; } }
+                for(let i=0; i<21; i++) { if(hand[i]) { sx += hand[i].x * w; sy += hand[i].y * h; count++; } }
             });
             if (count > 0) center = { x: sx / count, y: sy / count };
         }
