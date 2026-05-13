@@ -286,22 +286,6 @@ class DomainExpansionGame {
 
         const handList = hands ? Array.from(hands) : [];
 
-        // 1. Proven Hand Center Calculation
-        let center = null;
-        if (handList.length > 0) {
-            let sx = 0, sy = 0, totalLm = 0;
-            handList.forEach(hand => {
-                for(let i=0; i<21; i++) {
-                    if (hand[i]) {
-                        sx += (hand[i].x * w);
-                        sy += (hand[i].y * h);
-                        totalLm++;
-                    }
-                }
-            });
-            if (totalLm > 0) center = { x: sx / totalLm, y: sy / totalLm };
-        }
-
         // Unified Coordinate Extraction (Mirrored to match scaleX(-1))
         let primaryIdx = null;
         let secondIdx = null;
