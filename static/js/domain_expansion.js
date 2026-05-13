@@ -98,6 +98,14 @@ class DomainExpansionGame {
         // Load Shrine Image for Sukuna
         this.shrineImg = new Image();
         this.shrineImg.src = 'static/img/malevolent_shrine.png';
+
+        // Load Mahito Image
+        this.mahitoImg = new Image();
+        this.mahitoImg.src = 'static/img/self-embodiment.png';
+
+        // Load Hakari Image
+        this.hakariImg = new Image();
+        this.hakariImg.src = 'static/img/idle-death-gamble.png';
     }
 
     initVFX(canvas) {
@@ -371,8 +379,34 @@ class DomainExpansionGame {
     }
 
     applySelfEmbodiment(ctx, w, h) {
-        this.mahitoPhase += 0.2;
-        ctx.fillStyle = `rgba(150, 0, 150, ${0.2 + 0.05 * Math.sin(this.mahitoPhase)})`;
+        this.mahitoPhase += 0.02;
+        
+        // Draw Mahito background if loaded
+        if (this.mahitoImg.complete) {
+            ctx.save();
+            ctx.scale(-1, 1);
+            
+            const imgAspect = this.mahitoImg.width / this.mahitoImg.height;
+            const canvasAspect = w / h;
+            let drawW, drawH;
+            if (canvasAspect > imgAspect) {
+                drawW = w;
+                drawH = w / imgAspect;
+            } else {
+                drawH = h;
+                drawW = h * imgAspect;
+            }
+            
+            ctx.globalAlpha = 0.4 + 0.1 * Math.sin(this.mahitoPhase * 2);
+            ctx.drawImage(this.mahitoImg, -w + (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            
+            if (!this._mahitoLogged) { console.log('🤚 Self-Embodiment Manifested!'); this._mahitoLogged = true; }
+            ctx.restore();
+        } else {
+            if (!this._mahitoLoadWarned) { console.warn('⚠️ Mahito image not yet loaded'); this._mahitoLoadWarned = true; }
+        }
+
+        ctx.fillStyle = `rgba(150, 0, 150, ${0.15 + 0.05 * Math.sin(this.mahitoPhase * 4)})`;
         ctx.fillRect(0, 0, w, h);
     }
 
@@ -414,7 +448,32 @@ class DomainExpansionGame {
     }
 
     applyIdleDeathGamble(ctx, w, h) {
-        this.hakariPhase++; ctx.fillStyle = "rgba(255, 215, 0, 0.2)"; ctx.fillRect(0, 0, w, h);
+        this.hakariPhase++;
+        
+        // Draw Hakari background if loaded
+        if (this.hakariImg.complete) {
+            ctx.save();
+            ctx.scale(-1, 1);
+            
+            const imgAspect = this.hakariImg.width / this.hakariImg.height;
+            const canvasAspect = w / h;
+            let drawW, drawH;
+            if (canvasAspect > imgAspect) {
+                drawW = w;
+                drawH = w / imgAspect;
+            } else {
+                drawH = h;
+                drawW = h * imgAspect;
+            }
+            
+            ctx.globalAlpha = 0.5 + 0.1 * Math.sin(this.hakariPhase * 0.1);
+            ctx.drawImage(this.hakariImg, -w + (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            
+            if (!this._hakariLogged) { console.log('🎰 Jackpot! Idle Death Gamble Manifested!'); this._hakariLogged = true; }
+            ctx.restore();
+        }
+
+        ctx.fillStyle = "rgba(255, 215, 0, 0.2)"; ctx.fillRect(0, 0, w, h);
         if (this.hakariPhase % 3 === 0) this.slotNumbers = [Math.floor(Math.random()*10).toString(), Math.floor(Math.random()*10).toString(), Math.floor(Math.random()*10).toString()];
         ctx.fillStyle = "white"; ctx.font = "bold 40px Arial"; ctx.textAlign = "center";
         ctx.fillText(`[${this.slotNumbers[0]}] [${this.slotNumbers[1]}] [${this.slotNumbers[2]}]`, w/2, h - 50);
