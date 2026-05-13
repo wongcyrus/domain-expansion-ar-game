@@ -94,6 +94,10 @@ class DomainExpansionGame {
         // Load Rika Image for Yuta
         this.rikaImg = new Image();
         this.rikaImg.src = 'static/img/rika.png';
+
+        // Load Shrine Image for Sukuna
+        this.shrineImg = new Image();
+        this.shrineImg.src = 'static/img/malevolent_shrine.png';
     }
 
     initVFX(canvas) {
@@ -341,6 +345,21 @@ class DomainExpansionGame {
 
     applyMalevolentShrine(ctx, w, h) {
         ctx.fillStyle = "rgba(255, 0, 0, 0.2)"; ctx.fillRect(0, 0, w, h);
+        
+        // Draw Shrine background if loaded
+        if (this.shrineImg.complete) {
+            ctx.save();
+            ctx.scale(-1, 1); // Un-mirror image
+            const imgAspect = this.shrineImg.width / this.shrineImg.height;
+            const canvasAspect = w / h;
+            let drawW, drawH;
+            if (canvasAspect > imgAspect) { drawW = w; drawH = w / imgAspect; } 
+            else { drawH = h; drawW = h * imgAspect; }
+            ctx.globalAlpha = 0.5; // Fixed opacity for shrine
+            ctx.drawImage(this.shrineImg, -w + (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
+            ctx.restore();
+        }
+
         this.flashCounter++;
         if (this.flashCounter % 10 === 0) { ctx.fillStyle = "rgba(255, 255, 255, 0.8)"; ctx.fillRect(0, 0, w, h); }
         if (Math.random() < 0.6) {
