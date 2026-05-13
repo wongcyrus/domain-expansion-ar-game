@@ -232,10 +232,17 @@ class HandTracker {
         }
 
         const qrContainer = document.getElementById('qr-container');
+        const demoQrContainer = document.getElementById('demo-qr-container');
         const statusPanel = document.getElementById('status-panel-container');
-        if (qrContainer && statusPanel) {
+        
+        if (qrContainer && demoQrContainer && statusPanel) {
+            // Cycle: Repo QR -> Demo QR -> Status Panel -> Repo QR
             qrContainer.addEventListener('click', () => {
                 qrContainer.classList.add('hidden');
+                demoQrContainer.classList.remove('hidden');
+            });
+            demoQrContainer.addEventListener('click', () => {
+                demoQrContainer.classList.add('hidden');
                 statusPanel.classList.remove('hidden');
             });
             statusPanel.addEventListener('click', () => {
@@ -342,6 +349,7 @@ class HandTracker {
                 this.setElText('restart-game-btn', 'もう一度プレイ');
                 this.setElText('exit-game-btn', '閉じる');
                 this.setElText('qr-label', 'ソースコード');
+                this.setElText('demo-qr-label', 'デモを再生');
                 this.setOptText('#video-playback-mode option[value="none"]', '🚫 ビデオなし');
                 this.setOptText('#video-playback-mode option[value="integrated"]', '🖥️ 統合 (音あり)');
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 統合 (静音)');
@@ -369,6 +377,7 @@ class HandTracker {
                 this.setElText('restart-game-btn', '再玩一次');
                 this.setElText('exit-game-btn', '關閉');
                 this.setElText('qr-label', '獲取源代碼');
+                this.setElText('demo-qr-label', '播放演示');
                 this.setOptText('#video-playback-mode option[value="none"]', '🚫 不播放影片');
                 this.setOptText('#video-playback-mode option[value="integrated"]', '🖥️ 內置 (音效)');
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 內置 (靜音)');
@@ -396,6 +405,7 @@ class HandTracker {
                 this.setElText('restart-game-btn', 'Play Again');
                 this.setElText('exit-game-btn', 'Close');
                 this.setElText('qr-label', 'GET SOURCE CODE');
+                this.setElText('demo-qr-label', 'PLAY DEMO');
                 this.setOptText('#video-playback-mode option[value="none"]', '🚫 No Video');
                 this.setOptText('#video-playback-mode option[value="integrated"]', '🖥️ Integrated (Sound)');
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 Integrated (Silent)');

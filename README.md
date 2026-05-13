@@ -44,34 +44,34 @@ To test the AR Game on a mobile device via a local network, you must use **HTTPS
    - 在手機上開啟 **`https://<您的IP>:8443`**。
    - 點擊「進階」->「繼續前往」以跳過自我簽署憑證警告。
 
-1. 在網覽器中開啟 `index.html`。
-2. 在設置面板中輸入您的機器人 API 端點。
-3. 輸入您的加密會話密鑰 (Session Key)。
-4. 點擊「保存設置」(Save Settings)。
-5. 結下手印即可開始！
+3. 在網覽器中開啟 `index.html`。
+4. 在設置面板中輸入您的機器人 API 端點。
+5. 輸入您的加密會話密鑰 (Session Key)。
+6. 點擊「保存設置」(Save Settings)。
+7. 結下手印即可開始！
 
 ## 🖐️ Hand Gesture Guide | 手勢指南
 
 ### Domain Expansions | 領域展開
 
-| User | Domain Name | Gesture | Robot Behavior | 角色 | 領域名稱 | 手印 | 機器人行為 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Gojo Satoru** | **Unlimited Void** | **(1H)** Crossed fingers | **Ascension**: Rhythmic focus with background image. | **五條悟** | **無量空處** | **(單手)** 交叉食指與中指 | **升天**: 節奏性扭動並顯示背景圖。 |
-| **Sukuna** | **Malevolent Shrine** | **(2H)** Claw hands | **Desolation**: Sharp strikes with background image. | **兩面宿儺** | **伏魔御廚子** | **(雙手)** 合十且手指如爪 | **荒蕪**: 尖銳打擊並顯示背景圖。 |
-| **Mahito** | **Self-Embodiment** | **(2H)** Egg shape | **Mutation**: Direct strike with background image. | **真人** | **自閉圓頓裹** | **(雙手)** 拇指小指相觸 | **突變**: 直接打擊並顯示背景圖。 |
-| **Yuta Okkotsu** | **Authentic Love** | **(2H)** Wide apart | **Embrace**: Bow with Rika background image. | **乙骨憂太** | **真贋相愛** | **(雙手)** 雙手拉開 | **擁抱**: 鞠躬並顯示里香背景圖。 |
-| **Hakari Kinji** | **Idle Death Gamble** | **(2H)** Vertical stack | **Jackpot**: Upbeat waving with background image. | **秤金次** | **坐殺博徒** | **(雙手)** 垂直疊放 | **大獎**: 歡快揮手並顯示背景圖。 |
-| **Megumi Fushiguro** | **Chimera Garden** | **(2H)** Two fists | **Submerge**: Shadow strength with background image. | **伏黑惠** | **嵌合暗翳庭園** | **(雙手)** 雙拳併攏 | **下沉**: 影之力量並顯示背景圖。 |
-| **Naoya Zenin** | **Time Cell Palace** | **(2H)** L-shape hands | **Projection**: Frame-by-frame strike with background image. | **禪院直哉** | **時胞月宮殿** | **(雙手)** 雙手呈 L 型 | **投射**: 影格打擊並顯示背景圖。 |
-| **Yuji Itadori** | **Unnamed Domain** | **(2H)** Pointing fingers | **Physical Mastery**: Sit-ups (Sit ups). | **虎杖悠仁** | **名稱不明** | **(雙手)** 食指相對 | **肉體巔峰**: 仰臥起坐 (仰臥起坐)。 |
+| User                 | Domain Name           | Gesture                   | Robot Behavior                                               | 角色         | 領域名稱         | 手印                      | 機器人行為                          |
+| :------------------- | :-------------------- | :------------------------ | :----------------------------------------------------------- | :----------- | :--------------- | :------------------------ | :---------------------------------- |
+| **Gojo Satoru**      | **Unlimited Void**    | **(1H)** Crossed fingers  | **Ascension**: Rhythmic focus with background image.         | **五條悟**   | **無量空處**     | **(單手)** 交叉食指與中指 | **升天**: 節奏性扭動並顯示背景圖。  |
+| **Sukuna**           | **Malevolent Shrine** | **(2H)** Claw hands       | **Desolation**: Sharp strikes with background image.         | **兩面宿儺** | **伏魔御廚子**   | **(雙手)** 合十且手指如爪 | **荒蕪**: 尖銳打擊並顯示背景圖。    |
+| **Mahito**           | **Self-Embodiment**   | **(2H)** Egg shape        | **Mutation**: Direct strike with background image.           | **真人**     | **自閉圓頓裹**   | **(雙手)** 拇指小指相觸   | **突變**: 直接打擊並顯示背景圖。    |
+| **Yuta Okkotsu**     | **Authentic Love**    | **(2H)** Wide apart       | **Embrace**: Bow with Rika background image.                 | **乙骨憂太** | **真贋相愛**     | **(雙手)** 雙手拉開       | **擁抱**: 鞠躬並顯示里香背景圖。    |
+| **Hakari Kinji**     | **Idle Death Gamble** | **(2H)** Vertical stack   | **Jackpot**: Upbeat waving with background image.            | **秤金次**   | **坐殺博徒**     | **(雙手)** 垂直疊放       | **大獎**: 歡快揮手並顯示背景圖。    |
+| **Megumi Fushiguro** | **Chimera Garden**    | **(2H)** Two fists        | **Submerge**: Shadow strength with background image.         | **伏黑惠**   | **嵌合暗翳庭園** | **(雙手)** 雙拳併攏       | **下沉**: 影之力量並顯示背景圖。    |
+| **Naoya Zenin**      | **Time Cell Palace**  | **(2H)** L-shape hands    | **Projection**: Frame-by-frame strike with background image. | **禪院直哉** | **時胞月宮殿**   | **(雙手)** 雙手呈 L 型    | **投射**: 影格打擊並顯示背景圖。    |
+| **Yuji Itadori**     | **Unnamed Domain**    | **(2H)** Pointing fingers | **Physical Mastery**: Sit-ups (Sit ups).                     | **虎杖悠仁** | **名稱不明**     | **(雙手)** 食指相對       | **肉體巔峰**: 仰臥起坐 (仰臥起坐)。 |
 
 ### Techniques | 術式
 
-| Technique | Japanese | Gesture | Robot Behavior | 術式名稱 | 日文 | 手印 | 機器人行為 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Lapse Blue** | 術式順轉「苍」 | **(1H)** Index Point | **Attraction**: Left hand upward strike. | **「蒼」** | 術式順轉「苍」 | **(單手)** 食指指點 | **吸引**: 左手向上打擊。 |
-| **Reversal Red** | 術式反轉「赫」 | **(1H)** Open Palm | **Repulsion**: Right hand upward strike. | **「赫」** | 術式反轉「赫」 | **(單手)** 手掌張開 | **排斥**: 右手向上打擊。 |
-| **Hollow Purple** | 虚式「茈」 | **(2H)** Blue + Red | **Total Purge**: 2-hand expansion blast. | **「茈」** | 虚式「茈」 | **(雙手)** 組合手勢 | **肅清**: 雙手擴張衝擊。 |
+| Technique         | Japanese       | Gesture              | Robot Behavior                           | 術式名稱   | 日文           | 手印                | 機器人行為               |
+| :---------------- | :------------- | :------------------- | :--------------------------------------- | :--------- | :------------- | :------------------ | :----------------------- |
+| **Lapse Blue**    | 術式順轉「苍」 | **(1H)** Index Point | **Attraction**: Left hand upward strike. | **「蒼」** | 術式順轉「苍」 | **(單手)** 食指指點 | **吸引**: 左手向上打擊。 |
+| **Reversal Red**  | 術式反轉「赫」 | **(1H)** Open Palm   | **Repulsion**: Right hand upward strike. | **「赫」** | 術式反轉「赫」 | **(單手)** 手掌張開 | **排斥**: 右手向上打擊。 |
+| **Hollow Purple** | 虚式「茈」     | **(2H)** Blue + Red  | **Total Purge**: 2-hand expansion blast. | **「茈」** | 虚式「茈」     | **(雙手)** 組合手勢 | **肅清**: 雙手擴張衝擊。 |
 
 ---
 
@@ -98,9 +98,9 @@ This project is a **non-commercial, fan-made application** created for education
 
 ## 🎓 Development Team | 開發團隊
 
-This project was developed by the **Higher Diploma in Cloud and Data Centre Administration (IT114115)** program at **HKIIT**. Our curriculum empowers students to master cloud infrastructure, DevOps, and innovative AR/IoT integrations.
+This project was developed by the **Higher Diploma in Cloud and Data Centre Administration (IT114115)** program at **HKIIT**. Our curriculum empowers students to master cloud infrastructure, DevOps, and innovative Ai integrations.
 
-本專案由 **HKIIT** 的**雲端系統及數據中心管理高級文憑 (IT114115)** 課程團隊開發。本課程致力於培訓學生掌握雲端架構、DevOps 以及創新的 AR/IoT 技術應用。
+本專案由 **HKIIT** 的**雲端系統及數據中心管理高級文憑 (IT114115)** 課程團隊開發。本課程致力於培訓學生掌握雲端架構、DevOps 以及創新的 Ai 技術應用。
 
 🔗 **Explore our program (English): [IT114115 - Higher Diploma in Cloud and Data Centre Administration](https://hkiit.edu.hk/our-programmes?our-programmes=it114115-higher-diploma-in-cloud-and-data-centre-administration)**
 
@@ -112,6 +112,7 @@ This project was developed by the **Higher Diploma in Cloud and Data Centre Admi
 
 Based on the logic and models from:
 本專案建基於以下專案的邏輯與模型：
+
 - [Humanoid Robot Simulator](https://github.com/wongcyrus/humanoid-robot-simulator)
 - [JJK Domain Expansion (TheAgencyMGE)](https://github.com/TheAgencyMGE/JJKDomainExpansion)
 - [Domain Expansion (montasirmoyen)](https://github.com/montasirmoyen/domain-expansion)
