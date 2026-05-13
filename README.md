@@ -22,6 +22,22 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 4. Click "Save Settings".
 5. Strike a hand sign to start!
 
+## 🧪 Local Testing & Mobile Development | 本地測試與行動端開發
+
+To test the AR Game on a mobile device via a local network, you must use **HTTPS** for camera access. We provide a convenient script for this:
+若要在本地網絡透過行動裝置測試 AR 遊戲，必須使用 **HTTPS** 才能啟用相機。我們提供了一個便捷的腳本：
+
+1. **Start HTTPS Server | 啟動 HTTPS 伺服器**:
+   ```bash
+   python3 serve_https.py
+   ```
+2. **Access on Phone | 行動端存取**:
+   - Find your PC's local IP (e.g., `192.168.1.x`).
+   - Open **`https://<YOUR_IP>:8443`** on your phone.
+   - Click "Advanced" -> "Proceed" to bypass the self-signed certificate warning.
+   - 在手機上開啟 **`https://<您的IP>:8443`**。
+   - 點擊「進階」->「繼續前往」以跳過自我簽署憑證警告。
+
 1. 在網覽器中開啟 `index.html`。
 2. 在設置面板中輸入您的機器人 API 端點。
 3. 輸入您的加密會話密鑰 (Session Key)。
@@ -41,7 +57,7 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 | **Gojo Satoru** | **Unlimited Void** | **(1H)** Crossed fingers | **Ascension**: Rhythmic focus (Twist). | **五條悟** | **無量空處** | **(單手)** 交叉食指與中指 | **升天**: 節奏性扭動。 |
 | **Sukuna** | **Malevolent Shrine** | **(2H)** Claw hands | **Desolation**: Sharp strikes (Kung Fu). | **兩面宿儺** | **伏魔御廚子** | **(雙手)** 合十且手指如爪 | **荒蕪**: 尖銳打擊 (功夫)。 |
 | **Mahito** | **Self-Embodiment** | **(2H)** Egg shape | **Mutation**: Direct strike (Right Shot). | **真人** | **自閉圓頓裹** | **(雙手)** 拇指小指相觸 | **突變**: 直接打擊 (右衝)。 |
-| **Yuta Okkotsu** | **Authentic Love** | **(2H)** Wide apart | **Embrace**: A respectful bow (Bow). | **乙骨憂太** | **真贋相愛** | **(雙手)** 雙手拉開 | **擁抱**: 莊重的鞠躬。 |
+| **Yuta Okkotsu** | **Authentic Love** | **(2H)** Wide apart | **Embrace**: Bow with Rika background image. | **乙骨憂太** | **真贋相愛** | **(雙手)** 雙手拉開 | **擁抱**: 鞠躬並顯示里香背景圖。 |
 | **Hakari Kinji** | **Idle Death Gamble** | **(2H)** Vertical stack | **Jackpot**: Upbeat waving (Wave). | **秤金次** | **坐殺博徒** | **(雙手)** 垂直疊放 | **大獎**: 歡快揮手。 |
 | **Megumi Fushiguro** | **Chimera Garden** | **(2H)** Two fists | **Submerge**: Shadow strength (Weightlifting). | **伏黑惠** | **嵌合暗翳庭園** | **(雙手)** 雙拳併攏 | **下沉**: 影之力量 (舉重)。 |
 | **Naoya Zenin** | **Time Cell Palace** | **(2H)** L-shape hands | **Projection**: Frame-by-frame strike (Left Shot). | **禪院直哉** | **時胞月宮殿** | **(雙手)** 雙手呈 L 型 | **投射**: 影格打擊 (左衝)。 |
