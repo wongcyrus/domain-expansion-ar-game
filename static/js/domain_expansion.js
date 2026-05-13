@@ -344,7 +344,7 @@ class DomainExpansionGame {
     }
 
     applyMalevolentShrine(ctx, w, h) {
-        ctx.fillStyle = "rgba(255, 0, 0, 0.2)"; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "rgba(255, 0, 0, 0.35)"; ctx.fillRect(0, 0, w, h);
         
         // Draw Shrine background if loaded
         if (this.shrineImg.complete) {
@@ -355,7 +355,7 @@ class DomainExpansionGame {
             let drawW, drawH;
             if (canvasAspect > imgAspect) { drawW = w; drawH = w / imgAspect; } 
             else { drawH = h; drawW = h * imgAspect; }
-            ctx.globalAlpha = 0.5; // Fixed opacity for shrine
+            ctx.globalAlpha = 0.85; // Increased opacity for better visibility
             ctx.drawImage(this.shrineImg, -w + (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
             ctx.restore();
         }
