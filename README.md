@@ -96,6 +96,18 @@ This project is a **non-commercial, fan-made application** created for education
 
 ---
 
+## 🎓 Development Team | 開發團隊
+
+This project was developed by the **Higher Diploma in Cloud and Data Centre Administration (IT114115)** program at **HKIIT**. Our curriculum empowers students to master cloud infrastructure, DevOps, and innovative AR/IoT integrations.
+
+本專案由 **HKIIT** 的**雲端系統及數據中心管理高級文憑 (IT114115)** 課程團隊開發。本課程致力於培訓學生掌握雲端架構、DevOps 以及創新的 AR/IoT 技術應用。
+
+🔗 **Explore our program (English): [IT114115 - Higher Diploma in Cloud and Data Centre Administration](https://hkiit.edu.hk/our-programmes?our-programmes=it114115-higher-diploma-in-cloud-and-data-centre-administration)**
+
+🔗 **了解更多課程資訊 (繁體中文): [IT114115 - 雲端系統及數據中心管理高級文憑](https://hkiit.edu.hk/zh-hant/our-programmes?our-programmes=it114115-higher-diploma-in-cloud-and-data-centre-administration)**
+
+---
+
 ## Credits | 致謝
 
 Based on the logic and models from:

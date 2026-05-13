@@ -39,6 +39,7 @@ class HandTracker {
         this.gameTimerEl = document.getElementById('game-timer');
         this.startGameBtn = document.getElementById('start-game-btn');
         this.stopGameBtn = document.getElementById('stop-game-btn');
+        this.gameToggleBtn = document.getElementById('game-toggle-btn');
         this.gameDifficultySlider = document.getElementById('game-difficulty-slider');
         this.gameDifficultyLabel = document.getElementById('game-difficulty-val');
         
@@ -200,6 +201,17 @@ class HandTracker {
         if (this.exitGameBtn) {
             this.exitGameBtn.addEventListener('click', () => {
                 this.gameOverOverlay.classList.add('hidden');
+            });
+        }
+
+        if (this.gameToggleBtn) {
+            this.gameToggleBtn.addEventListener('click', () => {
+                if (this.isGameActive) {
+                    this.stopMiniGame('Game Stopped');
+                } else {
+                    if (this.settingsPanel) this.settingsPanel.classList.add('hidden');
+                    this.startMiniGame();
+                }
             });
         }
 
@@ -632,6 +644,13 @@ class HandTracker {
         if (this.startGameBtn) this.startGameBtn.classList.add('hidden');
         if (this.stopGameBtn) this.stopGameBtn.classList.remove('hidden');
         
+        // Update main HUD button
+        if (this.gameToggleBtn) {
+            this.gameToggleBtn.textContent = '⏹️';
+            this.gameToggleBtn.style.background = '#FF5252';
+            this.gameToggleBtn.style.color = '#FFF';
+        }
+
         this.updateGameHUD();
         this.nextGameAction();
     }
@@ -658,6 +677,14 @@ class HandTracker {
         if (this.startGameBtn) this.startGameBtn.classList.remove('hidden');
         if (this.stopGameBtn) this.stopGameBtn.classList.add('hidden');
         if (this.gameTargetName) this.gameTargetName.textContent = '---';
+
+        // Reset main HUD button
+        if (this.gameToggleBtn) {
+            this.gameToggleBtn.textContent = '🎮';
+            this.gameToggleBtn.style.background = '#FFFF00';
+            this.gameToggleBtn.style.color = '#000';
+        }
+
         this.gameTarget = null;
     }
 

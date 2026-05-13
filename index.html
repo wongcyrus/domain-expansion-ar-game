@@ -291,6 +291,19 @@
                 font-size: 10px; 
                 z-index: 30;
             }
+
+            .qr-container {
+                bottom: 25px !important;
+                left: 15px !important;
+                padding: 4px !important;
+            }
+            .qr-container img {
+                width: 60px !important;
+                height: 60px !important;
+            }
+            #qr-label {
+                font-size: 8px !important;
+            }
         }
 
         /* Landscape Mobile Optimization */
@@ -357,7 +370,10 @@
         <div class="logo-it114115">
             <img src="static/img/it114115-logo.png" alt="IT114115 Logo">
         </div>
-        <button id="settings-toggle">⚙️</button>
+        <div style="display: flex; gap: 10px;">
+            <button id="game-toggle-btn" style="width: 56px; height: 56px; border-radius: 50%; background: #FFFF00; color: #000; border: none; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.4); pointer-events: auto;">🎮</button>
+            <button id="settings-toggle">⚙️</button>
+        </div>
     </div>
 
     <div class="overlay header">
