@@ -87,6 +87,13 @@ This standalone AR game uses **MediaPipe Hands** by Google for high-fidelity han
 
 ---
 
+## ⚖️ Copyright Disclaimer | 版權聲明
+
+This project is a **non-commercial, fan-made application** created for educational purposes. All rights to **"Jujutsu Kaisen"** (characters, logos, terminology) belong to **Gege Akutami**, **Shueisha**, and **MAPPA**. No copyright infringement is intended.
+本專案為**非商業性質的愛好者作品**，僅供教學用途。《術式迴戰》的所有權利（包括角色、標誌及相關術語）均歸原作者**芥見下下**、**集英社**及 **MAPPA** 所有。本專案無意侵犯版權。
+
+---
+
 ## Credits | 致謝
 
 Based on the logic and models from:
