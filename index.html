@@ -232,12 +232,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.85);
+            background: rgba(0,0,0,0.9);
             z-index: 200; /* Absolute Top for interaction */
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
+            overflow-y: auto; /* Handle small screens */
         }
 
         .shake {
@@ -412,7 +413,7 @@
             <span>Resp: <span id="last-resp">NONE</span></span>
         </div>
         <div style="font-size: 9px; opacity: 0.4; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 5px; text-align: right;">
-            Build: 2026.05.12.v59
+            Build: 2026.05.12.v60
         </div>
     </div>
 
@@ -421,14 +422,14 @@
     </div>
 
     <div id="start-overlay" style="pointer-events: auto;">
-        <div style="text-align: center; max-width: 90vw;">
+        <div style="text-align: center; max-width: 90vw; padding: 40px 0;">
             <div style="font-size: 42px; color: #FFFF00; font-weight: bold; text-shadow: 0 0 20px rgba(255,255,0,0.5); line-height: 1.1;">
                 START<br>
                 <img src="static/img/Jujutsu_Kaisen_logo_in_Japan.png" alt="JJK Logo" style="max-height: 180px; width: 85%; object-fit: contain; margin: 15px 0;"><br>
                 AR GAME
             </div>
             <div style="font-size: 18px; color: #FFF; margin-top: 30px; letter-spacing: 1px;">Click or Tap to initialize</div>
-            <div style="font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 40px; line-height: 1.4; font-style: italic; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+            <div style="font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 35px; line-height: 1.4; font-style: italic; border-top: 1px solid rgba(255,255,255,0.2); padding: 15px 10px; max-width: 600px; margin-left: auto; margin-right: auto;">
                 Disclaimer: Fan-made project for educational use. All JJK rights belong to Akutami Gege / Shueisha / MAPPA. No infringement intended.
                 <br>聲明：本專案為愛好者教育用途。所有《術式迴戰》權利均屬原作者與製作委員會。
             </div>
