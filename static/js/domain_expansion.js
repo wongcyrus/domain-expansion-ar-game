@@ -379,7 +379,7 @@ class DomainExpansionGame {
                 drawW = h * imgAspect;
             }
             
-            ctx.globalAlpha = 0.6 + 0.1 * Math.sin(this.yutaPhase);
+            ctx.globalAlpha = 0.3 + 0.1 * Math.sin(this.yutaPhase);
             // Coordinates are -w to 0 because of scale(-1, 1)
             ctx.drawImage(this.rikaImg, -w + (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
             
