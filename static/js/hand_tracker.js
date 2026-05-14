@@ -93,8 +93,22 @@ class HandTracker {
         this.gameTimerInterval = null;
         this.gameActionInterval = null;
 
+        // Result Videos
+        this.loseVideos = Array.from({length: 9}, (_, i) => `shiba${i+1}.mp4`);
+        this.winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4'];
+
+        // Result UI Elements
+        this.resultVideoContainer = document.getElementById('result-video-container');
+        this.resultVideoPlayer = document.getElementById('result-video');
+
         // 5. Attach Event Listeners IMMEDIATELY
         this.attachListeners();
+
+        if (this.resultVideoPlayer) {
+            this.resultVideoPlayer.addEventListener('ended', () => {
+                if (this.resultVideoContainer) this.resultVideoContainer.style.display = 'none';
+            });
+        }
 
         // 6. Initialize State
         this.playerWindow = null;
@@ -194,6 +208,8 @@ class HandTracker {
         if (this.restartGameBtn) {
             this.restartGameBtn.addEventListener('click', () => {
                 this.gameOverOverlay.classList.add('hidden');
+                if (this.resultVideoPlayer) this.resultVideoPlayer.pause();
+                if (this.resultVideoContainer) this.resultVideoContainer.style.display = 'none';
                 this.startMiniGame();
             });
         }
@@ -201,13 +217,15 @@ class HandTracker {
         if (this.exitGameBtn) {
             this.exitGameBtn.addEventListener('click', () => {
                 this.gameOverOverlay.classList.add('hidden');
+                if (this.resultVideoPlayer) this.resultVideoPlayer.pause();
+                if (this.resultVideoContainer) this.resultVideoContainer.style.display = 'none';
             });
         }
 
         if (this.gameToggleBtn) {
             this.gameToggleBtn.addEventListener('click', () => {
                 if (this.isGameActive) {
-                    this.stopMiniGame('Game Stopped');
+                    this.stopMiniGame('Game Stopped', true);
                 } else {
                     if (this.settingsPanel) this.settingsPanel.classList.add('hidden');
                     this.startMiniGame();
@@ -696,27 +714,58 @@ class HandTracker {
             this.gameToggleBtn.style.color = '#FFF';
         }
 
+        // --- Optimization: Preload Result Videos ---
+        this.preloadResultVideos();
+
         this.updateGameHUD();
         this.nextGameAction();
     }
 
-    stopMiniGame(reason = 'Game Over') {
+    preloadResultVideos() {
+        // Preload one win and two lose videos randomly
+        const folder = window.location.pathname.replace(/\/[^\/]*$/, '');
+        const toPreload = [
+            `static/video/win/${this.winVideos[Math.floor(Math.random() * this.winVideos.length)]}`,
+            `static/video/lose/${this.loseVideos[Math.floor(Math.random() * this.loseVideos.length)]}`,
+            `static/video/lose/${this.loseVideos[Math.floor(Math.random() * this.loseVideos.length)]}`
+        ];
+
+        toPreload.forEach(path => {
+            const link = document.createElement('link');
+            link.rel = 'preload';
+            link.as = 'video';
+            link.href = `${window.location.origin}${folder}/${path}`;
+            document.head.appendChild(link);
+            console.log(`[Game] Preloading: ${path}`);
+        });
+    }
+
+    stopMiniGame(reason = 'Game Over', manualStop = false) {
         this.isGameActive = false;
         clearInterval(this.gameTimerInterval);
         clearTimeout(this.gameActionInterval);
         
         const finalScore = this.gameScore;
         const total = Object.keys(this.domainGame.displayNamesMap['en']).length;
-        
+        const isWin = !manualStop && (finalScore === total);
+        const finalReason = isWin ? (this.userLang === 'zh' ? '完美祓除！' : 'PERFECT!') : reason;
+
         // Show Custom UI instead of alert
         if (this.gameOverOverlay) {
             this.gameOverOverlay.classList.remove('hidden');
             if (this.finalScoreVal) this.finalScoreVal.textContent = `${finalScore} / ${total}`;
             const titleEl = document.getElementById('game-over-title');
-            if (titleEl) titleEl.textContent = reason;
+            if (titleEl) {
+                titleEl.textContent = finalReason;
+                titleEl.style.color = isWin ? '#4CAF50' : '#FF5252';
+            }
         }
 
-        this.playGameOverSound();
+        if (isWin) this.playSuccessSound();
+        else this.playGameOverSound();
+        
+        // Play Result Video
+        this.playResultVideo(isWin);
         
         if (this.gameHud) this.gameHud.classList.add('hidden');
         if (this.startGameBtn) this.startGameBtn.classList.remove('hidden');
@@ -733,11 +782,42 @@ class HandTracker {
         this.gameTarget = null;
     }
 
+    playResultVideo(isWin) {
+        const folder = isWin ? 'win' : 'lose';
+        const videoList = isWin ? this.winVideos : this.loseVideos;
+        
+        if (videoList.length === 0) {
+            console.warn(`[Game] No videos found for ${folder}`);
+            if (this.resultVideoContainer) this.resultVideoContainer.style.display = 'none';
+            return;
+        }
+
+        const randomVideo = videoList[Math.floor(Math.random() * videoList.length)];
+        let basePath = window.location.pathname;
+        if (!basePath.endsWith('/')) basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+        const absSrc = `${window.location.origin}${basePath}static/video/${folder}/${randomVideo}`;
+
+        console.log(`[Game] Playing ${folder} video in result panel: ${randomVideo}`);
+
+        // Stop any background technique/domain video
+        if (this.integratedPlayer) {
+            this.integratedPlayer.pause();
+            if (this.integratedContainer) this.integratedContainer.classList.add('hidden');
+        }
+
+        if (this.resultVideoPlayer && this.resultVideoContainer) {
+            this.resultVideoPlayer.src = absSrc;
+            this.resultVideoPlayer.muted = false;
+            this.resultVideoContainer.style.display = 'block';
+            this.resultVideoPlayer.play().catch(e => console.warn('[Game] Result panel play failed:', e));
+        }
+    }
+
     nextGameAction() {
         if (!this.isGameActive) return;
         
         if (this.gameActionList.length === 0) {
-            this.stopMiniGame('Round Complete');
+            this.stopMiniGame('Round Complete', false); // Not manual stop, logic will check score
             return;
         }
 
