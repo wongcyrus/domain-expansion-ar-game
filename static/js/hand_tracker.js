@@ -31,6 +31,7 @@ class HandTracker {
         this.atmosphereOverlay = document.getElementById('atmosphere-overlay');
         this.cooldownSlider = document.getElementById('cooldown-slider');
         this.cooldownLabel = document.getElementById('cooldown-val');
+        this.disableApiCheck = document.getElementById('disable-api-check');
         
         // Mini-Game UI
         this.gameHud = document.getElementById('game-hud');
@@ -64,6 +65,7 @@ class HandTracker {
         this.savedRobotId = localStorage.getItem('robot_id') || 'all'; 
         this.videoMode = localStorage.getItem('video_mode') || 'integrated'; 
         this.autoOpen = localStorage.getItem('auto_open_popup') === 'true';
+        this.disableApi = localStorage.getItem('disable_robot_api') === 'true';
         this.gameDifficulty = parseInt(localStorage.getItem('game_difficulty') || '8');
 
         // 3. Set Initial Values
@@ -73,6 +75,7 @@ class HandTracker {
         if (this.robotIdSelect) this.robotIdSelect.value = this.savedRobotId;
         if (this.videoModeSelect) this.videoModeSelect.value = this.videoMode;
         if (this.autoOpenPopupCheck) this.autoOpenPopupCheck.checked = this.autoOpen;
+        if (this.disableApiCheck) this.disableApiCheck.checked = this.disableApi;
         if (this.gameDifficultySlider) {
             this.gameDifficultySlider.value = this.gameDifficulty;
             if (this.gameDifficultyLabel) this.gameDifficultyLabel.textContent = `${this.gameDifficulty}s`;
@@ -135,6 +138,7 @@ class HandTracker {
                 this.savedRobotId = this.robotIdSelect.value;
                 this.videoMode = this.videoModeSelect.value;
                 this.autoOpen = this.autoOpenPopupCheck.checked;
+                this.disableApi = this.disableApiCheck.checked;
                 
                 localStorage.setItem('robot_api_endpoint', this.apiEndpoint);
                 localStorage.setItem('robot_session_key', this.sessionKey);
@@ -142,9 +146,18 @@ class HandTracker {
                 localStorage.setItem('robot_id', this.savedRobotId);
                 localStorage.setItem('video_mode', this.videoMode);
                 localStorage.setItem('auto_open_popup', this.autoOpen);
+                localStorage.setItem('disable_robot_api', this.disableApi);
                 
                 this.updateAPIStatus();
                 alert('Settings saved locally!');
+            });
+        }
+
+        if (this.disableApiCheck) {
+            this.disableApiCheck.addEventListener('change', () => {
+                this.disableApi = this.disableApiCheck.checked;
+                localStorage.setItem('disable_robot_api', this.disableApi);
+                this.updateAPIStatus();
             });
         }
 
@@ -389,6 +402,7 @@ class HandTracker {
                 this.setElText('save-settings', '設定を保存');
                 this.setElText('label-target-robot', '対象ロボット');
                 this.setElText('label-cooldown', 'クールダウン (s)');
+                this.setElText('label-disable-api', '🚫 ロボットAPIを無効にする');
                 this.setElText('label-video-mode', '🎬 ビデオ再生');
                 this.setElText('label-game-difficulty', '⏱️ アクションごとの時間 (s)');
                 this.setElText('start-game-btn', 'ラウンド開始');
@@ -417,6 +431,7 @@ class HandTracker {
                 this.setElText('save-settings', '保存設置');
                 this.setElText('label-target-robot', '目標機器人');
                 this.setElText('label-cooldown', '冷卻時間 (s)');
+                this.setElText('label-disable-api', '🚫 禁用機器人 API');
                 this.setElText('label-video-mode', '🎬 影片播放');
                 this.setElText('label-game-difficulty', '⏱️ 每個動作限時 (s)');
                 this.setElText('start-game-btn', '開始回合');
@@ -445,6 +460,7 @@ class HandTracker {
                 this.setElText('save-settings', '💾 Save Settings');
                 this.setElText('label-target-robot', '🤖 Target Robot');
                 this.setElText('label-cooldown', '🤖 Cooldown (s)');
+                this.setElText('label-disable-api', '🚫 Disable Robot API');
                 this.setElText('label-video-mode', '🎬 Video Playback');
                 this.setElText('label-game-difficulty', '⏱️ Time per Action (s)');
                 this.setElText('start-game-btn', 'Start Round');
@@ -883,6 +899,11 @@ class HandTracker {
     }
 
     async triggerRobotAction(robotId, action) {
+        if (this.disableApi) {
+            console.log('[API] Robot API is disabled. Skipping call.');
+            if (this.lastResp) this.lastResp.textContent = 'DISABLED';
+            return;
+        }
         try {
             let url = this.apiEndpoint.trim();
             const parts = url.split('?');
