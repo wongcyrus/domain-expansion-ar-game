@@ -65,6 +65,7 @@ The game now supports a professional 3-monitor "Battle Setup" without any backen
     **螢幕 3 (觀眾席)**: 開啟 `battle.html`。
 
 ### Features | 功能
+
 - **Pure Client-Side**: Uses WebRTC and `BroadcastChannel` for instant local synchronization.
 - **純前端運作**: 使用 WebRTC 與 `BroadcastChannel` 實現即時本地同步。
 - **Synchronized Match Control**: Start the game for both players simultaneously with a visual countdown.
@@ -122,9 +123,9 @@ This project is a **non-commercial, fan-made application** created for education
 
 ## 🎓 Development Team | 開發團隊
 
-This project was developed by the **Higher Diploma in Cloud and Data Centre Administration (IT114115)** program at **HKIIT**. Our curriculum empowers students to master cloud infrastructure, DevOps, and innovative Ai integrations.
+This project was developed by the **Higher Diploma in Cloud and Data Centre Administration (IT114115)** program at **HKIIT**. Our curriculum empowers students to master cloud infrastructure, DevOps, and innovative AI integrations.
 
-本專案由 **HKIIT** 的**雲端系統及數據中心管理高級文憑 (IT114115)** 課程團隊開發。本課程致力於培訓學生掌握雲端架構、DevOps 以及創新的 Ai 技術應用。
+本專案由 **HKIIT** 的**雲端系統及數據中心管理高級文憑 (IT114115)** 課程團隊開發。本課程致力於培訓學生掌握雲端架構、DevOps 以及創新的 AI 技術應用。
 
 🔗 **Explore our program (English): [IT114115 - Higher Diploma in Cloud and Data Centre Administration](https://hkiit.edu.hk/our-programmes?our-programmes=it114115-higher-diploma-in-cloud-and-data-centre-administration)**
 
