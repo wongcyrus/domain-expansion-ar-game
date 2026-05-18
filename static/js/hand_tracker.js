@@ -33,6 +33,14 @@ class HandTracker {
         this.cooldownLabel = document.getElementById('cooldown-val');
         this.disableApiCheck = document.getElementById('disable-api-check');
         
+        // Battle Mode UI
+        this.battleRoleSelect = document.getElementById('battle-role');
+        this.cameraSelect = document.getElementById('camera-select');
+        this.openBattleViewerBtn = document.getElementById('open-battle-viewer');
+        this.streamCanvas = document.getElementById('stream-canvas');
+        this.streamCtx = this.streamCanvas ? this.streamCanvas.getContext('2d') : null;
+        this.battleSync = null;
+
         // Mini-Game UI
         this.gameHud = document.getElementById('game-hud');
         this.gameTargetName = document.getElementById('game-target-name');
@@ -50,6 +58,8 @@ class HandTracker {
         this.restartGameBtn = document.getElementById('restart-game-btn');
         this.exitGameBtn = document.getElementById('exit-game-btn');
         this.successFeedback = document.getElementById('success-feedback');
+        this.gameOverRole = document.getElementById('game-over-role');
+        this.hudRole = document.getElementById('hud-role');
 
         this.modeDisplay = document.getElementById('mode-display');
         this.domainDisplay = document.getElementById('domain-display');
@@ -57,16 +67,28 @@ class HandTracker {
         this.settingsPanel = document.getElementById('settings-panel');
         this.settingsToggle = document.getElementById('settings-toggle');
         this.closeSettings = document.getElementById('close-settings');
+        this.roleBadge = document.getElementById('player-role-badge');
 
         // 2. Load Persistence
-        this.apiEndpoint = localStorage.getItem('robot_api_endpoint') || '';
-        this.sessionKey = localStorage.getItem('robot_session_key') || '';
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRole = urlParams.get('role');
+        const urlRobotId = urlParams.get('robot_id');
+        const urlApi = urlParams.get('api_endpoint');
+        const urlKey = urlParams.get('session_key');
+        
+        this.apiEndpoint = urlApi || localStorage.getItem('robot_api_endpoint') || '';
+        this.sessionKey = urlKey || localStorage.getItem('robot_session_key') || '';
         this.userLang = localStorage.getItem('user_language') || 'zh'; 
-        this.savedRobotId = localStorage.getItem('robot_id') || 'all'; 
+        this.savedRobotId = urlRobotId || localStorage.getItem('robot_id') || 'all'; 
         this.videoMode = localStorage.getItem('video_mode') || 'integrated'; 
         this.autoOpen = localStorage.getItem('auto_open_popup') === 'true';
         this.disableApi = localStorage.getItem('disable_robot_api') === 'true';
         this.gameDifficulty = parseInt(localStorage.getItem('game_difficulty') || '8');
+        this.battleRole = urlRole || localStorage.getItem('battle_role') || 'none';
+        
+        // Load camera ID based on role for independence
+        const cameraKey = `selected_camera_id_${this.battleRole}`;
+        this.selectedCameraId = localStorage.getItem(cameraKey) || localStorage.getItem('selected_camera_id') || 'default';
 
         // 3. Set Initial Values
         if (this.endpointInput) this.endpointInput.value = this.apiEndpoint;
@@ -76,6 +98,10 @@ class HandTracker {
         if (this.videoModeSelect) this.videoModeSelect.value = this.videoMode;
         if (this.autoOpenPopupCheck) this.autoOpenPopupCheck.checked = this.autoOpen;
         if (this.disableApiCheck) this.disableApiCheck.checked = this.disableApi;
+        if (this.battleRoleSelect) {
+            this.battleRoleSelect.value = this.battleRole;
+            this.updateBattleSync();
+        }
         if (this.gameDifficultySlider) {
             this.gameDifficultySlider.value = this.gameDifficulty;
             if (this.gameDifficultyLabel) this.gameDifficultyLabel.textContent = `${this.gameDifficulty}s`;
@@ -98,7 +124,7 @@ class HandTracker {
 
         // Result Videos
         this.loseVideos = Array.from({length: 9}, (_, i) => `shiba${i+1}.mp4`);
-        this.winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4'];
+        this.winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8-gate.mp4', 'escanor.mp4', 'onepunch.mp4', 'onepunch2.mp4'];
 
         // Result UI Elements
         this.resultVideoContainer = document.getElementById('result-video-container');
@@ -125,7 +151,6 @@ class HandTracker {
 
         this.localizeUI(); 
         this.updateAPIStatus();
-        this.setupMediaPipe();
         this.init();
     }
 
@@ -147,9 +172,32 @@ class HandTracker {
                 localStorage.setItem('video_mode', this.videoMode);
                 localStorage.setItem('auto_open_popup', this.autoOpen);
                 localStorage.setItem('disable_robot_api', this.disableApi);
+                localStorage.setItem('battle_role', this.battleRoleSelect.value);
+                
+                const cameraKey = `selected_camera_id_${this.battleRoleSelect.value}`;
+                localStorage.setItem(cameraKey, this.cameraSelect.value);
+                localStorage.setItem('selected_camera_id', this.cameraSelect.value); // Fallback
+                
+                this.battleRole = this.battleRoleSelect.value;
+                this.selectedCameraId = this.cameraSelect.value;
+                this.updateBattleSync();
                 
                 this.updateAPIStatus();
                 alert('Settings saved locally!');
+            });
+        }
+
+        if (this.battleRoleSelect) {
+            this.battleRoleSelect.addEventListener('change', () => {
+                this.battleRole = this.battleRoleSelect.value;
+                localStorage.setItem('battle_role', this.battleRole);
+                this.updateBattleSync();
+            });
+        }
+
+        if (this.openBattleViewerBtn) {
+            this.openBattleViewerBtn.addEventListener('click', () => {
+                window.open('battle.html', '_blank');
             });
         }
 
@@ -330,6 +378,153 @@ class HandTracker {
         });
     }
 
+    async enumerateCameras() {
+        if (!this.cameraSelect) return;
+        try {
+            // Request permission first to get labels
+            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            tempStream.getTracks().forEach(track => track.stop());
+            
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            
+            console.log('[Game] Found cameras:', videoDevices.length);
+            this.cameraSelect.innerHTML = '';
+            
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Camera ${index + 1}`;
+                if (device.deviceId === this.selectedCameraId) option.selected = true;
+                this.cameraSelect.appendChild(option);
+            });
+
+            // If we have a saved ID, but it's not in the list, reset to first available
+            if (this.selectedCameraId !== 'default' && !videoDevices.find(d => d.deviceId === this.selectedCameraId)) {
+                if (videoDevices.length > 0) {
+                    this.selectedCameraId = videoDevices[0].deviceId;
+                    localStorage.setItem('selected_camera_id', this.selectedCameraId);
+                }
+            }
+
+            this.cameraSelect.addEventListener('change', () => {
+                this.selectedCameraId = this.cameraSelect.value;
+                const cameraKey = `selected_camera_id_${this.battleRole}`;
+                localStorage.setItem(cameraKey, this.selectedCameraId);
+                localStorage.setItem('selected_camera_id', this.selectedCameraId);
+                
+                console.log('[Game] Switching camera to:', this.selectedCameraId);
+                this.startCamera();
+            });
+        } catch (err) {
+            console.error('Error enumerating cameras:', err);
+        }
+    }
+
+    async startCamera() {
+        console.log('[Game] startCamera called with ID:', this.selectedCameraId);
+        
+        // 1. Stop existing tracks and loop
+        this.stopCamera();
+
+        // 2. Build constraints
+        const constraints = {
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
+        };
+
+        if (this.selectedCameraId && this.selectedCameraId !== 'default') {
+            constraints.video.deviceId = { exact: this.selectedCameraId };
+        } else {
+            constraints.video.facingMode = 'user';
+        }
+
+        try {
+            // 3. Get new stream
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (err) {
+                console.warn('[Game] Primary camera constraint failed, trying fallback:', err);
+                if (this.selectedCameraId !== 'default') {
+                    // Try without deviceId
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+                    // Update settings if fallback worked
+                    this.selectedCameraId = 'default';
+                } else {
+                    throw err;
+                }
+            }
+
+            this.video.srcObject = stream;
+            await this.video.play();
+            
+            this.isCameraRunning = true;
+            this.requestCameraFrame();
+            
+            console.log('[Game] Camera stream successfully attached and playing.');
+        } catch (err) {
+            console.error('[Game] Failed to start camera:', err);
+            // If specific device fails, try default
+            if (this.selectedCameraId !== 'default') {
+                this.selectedCameraId = 'default';
+                this.startCamera();
+            }
+        }
+    }
+
+    stopCamera() {
+        this.isCameraRunning = false;
+        if (this.frameRequestHandle) {
+            cancelAnimationFrame(this.frameRequestHandle);
+            this.frameRequestHandle = null;
+        }
+        if (this.video.srcObject) {
+            this.video.srcObject.getTracks().forEach(track => track.stop());
+            this.video.srcObject = null;
+        }
+        if (this.camera) {
+            try { this.camera.stop(); } catch(e) {}
+            this.camera = null;
+        }
+    }
+
+    async requestCameraFrame() {
+        if (!this.isCameraRunning || !this.hands) return;
+        
+        // Prevent concurrent frame processing
+        if (this.isProcessingFrame) {
+            requestAnimationFrame(() => this.requestCameraFrame());
+            return;
+        }
+
+        if (this.video.readyState >= 3) { // HAVE_FUTURE_DATA (more stable than CURRENT_DATA)
+            try {
+                this.isProcessingFrame = true;
+                if (this.canvas.width !== this.video.videoWidth || this.canvas.height !== this.video.videoHeight) {
+                    this.canvas.width = this.video.videoWidth;
+                    this.canvas.height = this.video.videoHeight;
+                    this.vfxCanvas.width = this.video.videoWidth;
+                    this.vfxCanvas.height = this.video.videoHeight;
+                    if (this.streamCanvas) {
+                        this.streamCanvas.width = this.video.videoWidth;
+                        this.streamCanvas.height = this.video.videoHeight;
+                    }
+                    this.domainGame.initVFX(this.vfxCanvas);
+                }
+                await this.hands.send({image: this.video});
+            } catch (err) {
+                console.error('[Game] Frame processing error:', err);
+            } finally {
+                this.isProcessingFrame = false;
+            }
+        }
+        
+        this.frameRequestHandle = requestAnimationFrame(() => this.requestCameraFrame());
+    }
+
     setupMediaPipe() {
         this.hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -341,22 +536,6 @@ class HandTracker {
             minTrackingConfidence: 0.5
         });
         this.hands.onResults(this.onResults.bind(this));
-        
-        this.camera = new Camera(this.video, {
-            onFrame: async () => {
-                if (this.canvas.width !== this.video.videoWidth || this.canvas.height !== this.video.videoHeight) {
-                    this.canvas.width = this.video.videoWidth;
-                    this.canvas.height = this.video.videoHeight;
-                    this.vfxCanvas.width = this.video.videoWidth;
-                    this.vfxCanvas.height = this.video.videoHeight;
-                    this.domainGame.initVFX(this.vfxCanvas);
-                }
-                await this.hands.send({image: this.video});
-            },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user'
-        });
     }
 
     updateAPIStatus() {
@@ -367,6 +546,66 @@ class HandTracker {
         } else {
             this.apiStatus.textContent = 'Incomplete';
             this.apiDot.classList.remove('active');
+        }
+    }
+
+    updateBattleSync() {
+        // Update Role Badge
+        if (this.roleBadge) {
+            if (this.battleRole === 'none') {
+                this.roleBadge.classList.add('hidden');
+            } else {
+                this.roleBadge.classList.remove('hidden');
+                this.roleBadge.textContent = this.battleRole === 'player1' ? '👤 Player 1' : '👤 Player 2';
+                this.roleBadge.style.background = this.battleRole === 'player1' ? 'rgba(74, 144, 226, 0.4)' : 'rgba(255, 215, 0, 0.4)';
+                this.roleBadge.style.borderColor = this.battleRole === 'player1' ? '#4A90E2' : '#FFD700';
+            }
+        }
+        
+        if (this.gameOverRole) {
+            this.gameOverRole.textContent = this.battleRole === 'none' ? '' : (this.battleRole === 'player1' ? 'Player 1' : 'Player 2');
+            this.gameOverRole.style.color = this.battleRole === 'player1' ? '#4A90E2' : '#FFFF00';
+        }
+
+        if (this.hudRole) {
+            this.hudRole.textContent = this.battleRole === 'none' ? '' : (this.battleRole === 'player1' ? 'Player 1' : 'Player 2');
+            this.hudRole.style.color = this.battleRole === 'player1' ? '#4A90E2' : '#FFFF00';
+        }
+
+        if (this.battleRole === 'none') {
+            if (this.battleSync) {
+                this.battleSync.close();
+                this.battleSync = null;
+            }
+            return;
+        }
+
+        if (!this.battleSync || this.battleSync.role !== this.battleRole) {
+            console.log('[Battle] Initializing sync as:', this.battleRole);
+            if (this.battleSync) this.battleSync.close();
+            
+            this.battleSync = new BattleModeSync(this.battleRole);
+            
+            this.battleSync.onStartBattle = (config) => {
+                console.log('[Battle] Remote start received!', config);
+                this.startMiniGame(config);
+            };
+
+            this.battleSync.onCloseOverlays = () => {
+                console.log('[Battle] Remote close overlays received!');
+                this.hideOverlays();
+            };
+
+            // Ensure players ignore each other's game states/technique events
+
+            this.battleSync.onPlayVideoSync = null;
+            this.battleSync.onStateReceived = null;
+
+            // Start broadcasting once camera is ready
+            if (this.streamCanvas) {
+                const stream = this.streamCanvas.captureStream(30);
+                this.battleSync.startBroadcasting(stream);
+            }
         }
     }
 
@@ -489,14 +728,18 @@ class HandTracker {
         } catch (e) { console.error('[Game] Localization failed:', e); }
     }
     
-    init() {
+    async init() {
         console.log('🚀 Initializing UI components...');
+        await this.enumerateCameras();
+        this.setupMediaPipe();
+        
         const startOverlay = document.getElementById('start-overlay');
         if (startOverlay) {
             const startAction = () => {
                 console.log('✅ Start overlay clicked/touched');
                 startOverlay.style.display = 'none';
-                if (this.camera) this.camera.start();
+                this.startCamera();
+
                 if (this.integratedPlayer) {
                     this.integratedPlayer.muted = false;
                     this.integratedPlayer.play()
@@ -568,6 +811,35 @@ class HandTracker {
             }
             this.processDomainExpansion(stableDomain, results.multiHandLandmarks);
             this.domainGame.drawVFX(this.vfxCanvas, stableDomain, results.multiHandLandmarks);
+            
+            // Battle Mode: Draw Composite Frame
+            if (this.battleSync && this.streamCtx) {
+                this.streamCtx.clearRect(0, 0, this.streamCanvas.width, this.streamCanvas.height);
+                this.streamCtx.save();
+                this.streamCtx.scale(-1, 1);
+                this.streamCtx.drawImage(this.video, -this.streamCanvas.width, 0, this.streamCanvas.width, this.streamCanvas.height);
+                this.streamCtx.restore();
+                
+                this.streamCtx.save();
+                this.streamCtx.scale(-1, 1);
+                this.streamCtx.drawImage(this.canvas, -this.streamCanvas.width, 0, this.streamCanvas.width, this.streamCanvas.height);
+                this.streamCtx.restore();
+                
+                this.streamCtx.save();
+                this.streamCtx.scale(-1, 1);
+                this.streamCtx.drawImage(this.vfxCanvas, -this.streamCanvas.width, 0, this.streamCanvas.width, this.streamCanvas.height);
+                this.streamCtx.restore();
+
+                // Send Game State
+                const displayName = stableDomain ? (this.domainGame.displayNames[stableDomain] || stableDomain) : null;
+                this.battleSync.sendState({
+                    domain: displayName,
+                    score: this.gameScore,
+                    timer: this.gameTimeLeft,
+                    isGameActive: this.isGameActive
+                });
+            }
+
             if (this.ctx) this.ctx.restore();
         } catch (err) { console.error('❌ Tracking Error:', err); if (this.ctx) this.ctx.restore(); }
     }
@@ -603,6 +875,16 @@ class HandTracker {
         let basePath = window.location.pathname;
         if (!basePath.endsWith('/')) basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
         const absSrc = `${window.location.origin}${basePath}static/video/${file}`;
+
+        // Sync to Battle Viewer (Always broadcast if in battle mode)
+        if (this.battleSync) {
+            this.battleSync.broadcast('PLAY_VIDEO_SYNC', absSrc);
+            // If in battle mode, we skip local playback to keep player view clean
+            if (this.battleRole !== 'none') {
+                if (this.integratedContainer) this.integratedContainer.classList.add('hidden');
+                return;
+            }
+        }
 
         if (this.videoMode === 'integrated' || this.videoMode === 'integrated_silent') {
             if (!this.integratedPlayer) return;
@@ -658,7 +940,8 @@ class HandTracker {
                     setTimeout(() => { if(this.gameHud) this.gameHud.style.borderColor = '#FFFF00'; }, 500);
                 }
                 
-                setTimeout(() => this.nextGameAction(), 800); // Small pause after success
+                clearTimeout(this.gameActionInterval);
+                this.gameActionInterval = setTimeout(() => this.nextGameAction(), 800); // Small pause after success
             }
 
             this.domainDisplay.textContent = displayName;
@@ -676,10 +959,13 @@ class HandTracker {
                 } else if (this.atmosphereOverlay) {
                     this.atmosphereOverlay.style.background = 'transparent';
                 }
-                
-                this.playVideo(stableDomain);
+
+                // Play Cinematic Video (Only if game is active or not in battle mode)
+                if (this.isGameActive || this.battleRole === 'none') {
+                    this.playVideo(stableDomain);
+                }
             }
-            
+
             if (now - this.lastActionTime >= this.cooldownMs) {
                 if (this.apiEndpoint && this.sessionKey) {
                     this.lastActionTime = now;
@@ -710,14 +996,43 @@ class HandTracker {
     }
 
     // --- Mini-Game Logic ---
-    startMiniGame() {
+    startMiniGame(config = null) {
         console.log('[MiniGame] Starting new round...');
+        if (config) console.log('[MiniGame] Applying config:', config);
+        
+        // 1. Explicitly stop any existing round/timers first
+        this.isGameActive = false;
+        if (this.gameTimerInterval) clearInterval(this.gameTimerInterval);
+        if (this.gameActionInterval) clearTimeout(this.gameActionInterval);
+        this.gameTimerInterval = null;
+        this.gameActionInterval = null;
+        this.gameActionList = []; // Clear current list
+
+        // Apply config overrides if provided
+        if (config) {
+            if (config.difficulty) this.gameDifficulty = config.difficulty;
+        }
+
+        // 2. Force hide Game Over and Result screens
+        this.hideOverlays();
+        const titleEl = document.getElementById('game-over-title');
+        if (titleEl) titleEl.textContent = 'Game Over';
+
+        // 3. New state initialization
         this.isGameActive = true;
         this.gameScore = 0;
-        
-        // Prepare action list (Shuffle)
+
+        // 3. Prepare action list (Shuffle)
         const allActions = Object.keys(this.domainGame.displayNamesMap['en']);
-        this.gameActionList = allActions.sort(() => Math.random() - 0.5);
+        let shuffled = allActions.sort(() => Math.random() - 0.5);
+        
+        // Respect round length if configured
+        if (config && config.count) {
+            shuffled = shuffled.slice(0, Math.min(config.count, shuffled.length));
+        }
+        
+        this.gameActionList = shuffled;
+        console.log(`[MiniGame] Round started with ${this.gameActionList.length} actions.`);
         
         if (this.gameHud) this.gameHud.classList.remove('hidden');
         if (this.startGameBtn) this.startGameBtn.classList.add('hidden');
@@ -757,9 +1072,13 @@ class HandTracker {
     }
 
     stopMiniGame(reason = 'Game Over', manualStop = false) {
+        if (!this.isGameActive && !manualStop) return; // Ignore redundant stops
+        console.log(`[MiniGame] stopMiniGame called. Reason: ${reason}, Manual: ${manualStop}`);
         this.isGameActive = false;
         clearInterval(this.gameTimerInterval);
         clearTimeout(this.gameActionInterval);
+        this.gameTimerInterval = null;
+        this.gameActionInterval = null;
         
         const finalScore = this.gameScore;
         const total = Object.keys(this.domainGame.displayNamesMap['en']).length;
@@ -769,6 +1088,7 @@ class HandTracker {
         // Show Custom UI instead of alert
         if (this.gameOverOverlay) {
             this.gameOverOverlay.classList.remove('hidden');
+            this.gameOverOverlay.style.display = 'flex'; // Restore flex display
             if (this.finalScoreVal) this.finalScoreVal.textContent = `${finalScore} / ${total}`;
             const titleEl = document.getElementById('game-over-title');
             if (titleEl) {
@@ -798,7 +1118,26 @@ class HandTracker {
         this.gameTarget = null;
     }
 
+    hideOverlays() {
+        if (this.gameOverOverlay) {
+            this.gameOverOverlay.classList.add('hidden');
+            this.gameOverOverlay.style.display = 'none';
+        }
+        if (this.resultVideoContainer) {
+            this.resultVideoContainer.style.display = 'none';
+            if (this.resultVideoPlayer) {
+                this.resultVideoPlayer.pause();
+                this.resultVideoPlayer.src = "";
+            }
+        }
+    }
+
     playResultVideo(isWin) {
+        if (this.battleRole !== 'none') {
+            console.log('[Game] Battle mode: Skipping local result video');
+            return;
+        }
+
         const folder = isWin ? 'win' : 'lose';
         const videoList = isWin ? this.winVideos : this.loseVideos;
         

@@ -19,6 +19,8 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 - **高畫質視覺效果**: 包含完整的粒子與環境特效。
 - **Hand-Centered Interaction**: Techniques follow your hand movements.
 - **以手部為中心的互動**: 術式效果會跟隨您的手部動作。
+- **Battle Mode (Multi-Monitor)**: Play with a friend on two monitors and a 3rd monitor for the audience view.
+- **對戰模式 (多螢幕支援)**: 與朋友在兩個螢幕上對戰，並有第三個螢幕作為觀眾視角。
 
 ## Setup | 設定
 
@@ -49,6 +51,28 @@ To test the AR Game on a mobile device via a local network, you must use **HTTPS
 5. 輸入您的加密會話密鑰 (Session Key)。
 6. 點擊「保存設置」(Save Settings)。
 7. 結下手印即可開始！
+
+## ⚔️ Battle Mode | 對戰模式
+
+The game now supports a professional 3-monitor "Battle Setup" without any backend server.
+遊戲現已支援專業的三螢幕「對戰設定」，無須任何後端伺服器：
+
+1.  **Monitor 1 (Player 1)**: Open `index.html?role=player1`.
+    **螢幕 1 (玩家 1)**: 開啟 `index.html?role=player1`。
+2.  **Monitor 2 (Player 2)**: Open `index.html?role=player2`.
+    **螢幕 2 (玩家 2)**: 開啟 `index.html?role=player2`。
+3.  **Monitor 3 (Viewer)**: Open `battle.html`.
+    **螢幕 3 (觀眾席)**: 開啟 `battle.html`。
+
+### Features | 功能
+- **Pure Client-Side**: Uses WebRTC and `BroadcastChannel` for instant local synchronization.
+- **純前端運作**: 使用 WebRTC 與 `BroadcastChannel` 實現即時本地同步。
+- **Synchronized Match Control**: Start the game for both players simultaneously with a visual countdown.
+- **同步比賽控制**: 具備視覺化倒數功能，能同時為兩位玩家啟動遊戲。
+- **Cinematic Results**: Celebratory win videos (with sound) play for "Perfect Victories" (Score 10/10).
+- **電影級結算**: 「完美勝出」(得分 10/10) 時會播放帶有音效的勝利慶祝影片。
+- **Customizable Rules**: Adjust countdown, difficulty, and technique counts via the viewer's settings panel.
+- **自定義規則**: 可透過觀眾席設定面板調整倒數、難度及回合手勢數量。
 
 ## 🖐️ Hand Gesture Guide | 手勢指南
 
