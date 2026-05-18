@@ -68,9 +68,9 @@
         <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                 <label style="font-size: 11px; color: #888;">TIME PER ACTION (S)</label>
-                <span id="val-difficulty" style="font-size: 12px; font-weight: bold; color: #FFFF00;">8s</span>
+                <span id="val-difficulty" style="font-size: 12px; font-weight: bold; color: #FFFF00;">5s</span>
             </div>
-            <input type="range" id="cfg-difficulty" value="8" min="3" max="15" style="width: 100%;">
+            <input type="range" id="cfg-difficulty" value="5" min="3" max="15" style="width: 100%;">
         </div>
         <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
@@ -227,35 +227,68 @@
             resultOverlay.style.display = 'flex';
             
             // Refined Cinematic Logic
-            const isFullMarkWin = (p1ScoreVal >= FULL_MARK || p2ScoreVal >= FULL_MARK);
-            const isDoubleFailure = (p1ScoreVal < PASS_MARK && p2ScoreVal < PASS_MARK);
-
-            if (isFullMarkWin) {
-                playGlobalResultVideo(true); // Perfect win cinematic
-            } else if (isDoubleFailure) {
-                playGlobalResultVideo(false); // Both failed cinematic
+            const winnerScore = Math.max(p1ScoreVal, p2ScoreVal);
+            
+            if (winnerScore >= PASS_MARK) {
+                // Someone actually passed the challenge!
+                playGlobalResultVideo(true); 
+                console.log(`[Battle] Winner passed (${winnerScore}), playing Win video.`);
+            } else {
+                // Even the winner failed to reach the passing mark
+                playGlobalResultVideo(false);
+                console.log(`[Battle] Winner failed to pass (${winnerScore}), playing Lose video.`);
             }
-            // Note: Normal victories (e.g. 8 vs 4) show the overlay but play no global video
         }
 
         sync.onStateReceived = (playerID, state) => {
             const { domain, score, timer, isGameActive } = state;
             if (playerID === 'player1') {
                 const wasActive = p1Active; p1Active = isGameActive; p1ScoreVal = score; p1Score.textContent = score;
+                p1Time = isGameActive ? timer : 0; 
+                
                 if (domain) { p1Domain.textContent = domain; p1Domain.classList.add('active'); } else { p1Domain.classList.remove('active'); }
-                if (isGameActive) { p1Time = timer; p1TimerSub.textContent = `(${timer}s)`; timerDisplay.textContent = timer + 's'; }
-                else { p1TimerSub.textContent = ''; if (wasActive && !p2Active) { if (winnerTimeoutHandle) clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = setTimeout(showWinner, 1500); } }
+                if (isGameActive) {
+                    p1TimerSub.textContent = `(${timer}s)`;
+                } else {
+                    p1TimerSub.textContent = '';
+                    if (wasActive && !p2Active) { if (winnerTimeoutHandle) clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = setTimeout(showWinner, 1500); }
+                }
             } else if (playerID === 'player2') {
                 const wasActive = p2Active; p2Active = isGameActive; p2ScoreVal = score; p2Score.textContent = score;
+                p2Time = isGameActive ? timer : 0;
+
                 if (domain) { p2Domain.textContent = domain; p2Domain.classList.add('active'); } else { p2Domain.classList.remove('active'); }
-                if (isGameActive) { p2Time = timer; p2TimerSub.textContent = `(${timer}s)`; if (!p1Active) timerDisplay.textContent = timer + 's'; }
-                else { p2TimerSub.textContent = ''; if (wasActive && !p1Active) { if (winnerTimeoutHandle) clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = setTimeout(showWinner, 1500); } }
+                if (isGameActive) {
+                    p2TimerSub.textContent = `(${timer}s)`;
+                } else {
+                    p2TimerSub.textContent = '';
+                    if (wasActive && !p1Active) { if (winnerTimeoutHandle) clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = setTimeout(showWinner, 1500); }
+                }
+            }
+
+            // Central timer follows the SLOWEST remaining player
+            const activeTime = Math.max(p1Time, p2Time);
+            if (p1Active || p2Active) {
+                timerDisplay.textContent = activeTime + 's';
+            } else {
+                timerDisplay.textContent = '00:00';
             }
         };
         closeResultBtn.addEventListener('click', () => { 
             resultOverlay.style.display = 'none'; 
             emergencyUnmute.style.display = 'none'; 
             isMatchOver = false; 
+            
+            // Stop and hide all cinematic videos
+            resultCinema.pause();
+            resultCinema.style.display = 'none';
+            resultCinema.src = "";
+            [p1Cinema, p2Cinema].forEach(c => {
+                c.pause();
+                c.style.display = 'none';
+                c.src = "";
+            });
+
             sync.broadcast('CLOSE_OVERLAYS', null);
         });
     </script>

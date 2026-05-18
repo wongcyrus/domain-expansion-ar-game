@@ -1075,6 +1075,7 @@ class HandTracker {
         if (!this.isGameActive && !manualStop) return; // Ignore redundant stops
         console.log(`[MiniGame] stopMiniGame called. Reason: ${reason}, Manual: ${manualStop}`);
         this.isGameActive = false;
+        this.gameTimeLeft = 0; // Ensure timer shows 0 on end
         clearInterval(this.gameTimerInterval);
         clearTimeout(this.gameActionInterval);
         this.gameTimerInterval = null;
