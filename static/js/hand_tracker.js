@@ -117,7 +117,9 @@ class HandTracker {
         this.isGameActive = false;
         this.gameScore = 0;
         this.gameTimeLeft = 0;
-        this.gameTarget = null;
+        this.gameDifficulty = 8;
+        this.isPaused = false;
+
         this.gameActionList = [];
         this.gameTimerInterval = null;
         this.gameActionInterval = null;
@@ -125,6 +127,39 @@ class HandTracker {
         // Result Videos
         this.loseVideos = Array.from({length: 9}, (_, i) => `shiba${i+1}.mp4`);
         this.winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8-gate.mp4', 'escanor.mp4', 'onepunch.mp4', 'onepunch2.mp4'];
+
+        // Video Durations in milliseconds based on provided table
+        this.videoDurations = {
+            "domain_chimera_shadow_garden.mp4": 3520,
+            "domain_authentic_love.mp4": 9870,
+            "domain_self_embodiment.mp4": 28180,
+            "domain_yuji_itadori.mp4": 18940,
+            "domain_malevolent_shrine.mp4": 25000,
+            "domain_idle_death_gamble.mp4": 15800,
+            "domain_unlimited_void.mp4": 7330,
+            "domain_time_cell_moon_palace.mp4": 7800,
+            "technique_hollow_purple.mp4": 22030,
+            "technique_reversal_red.mp4": 10580,
+            "technique_lapse_blue.mp4": 24440,
+            // Win Videos
+            "heroacademy.mp4": 74660,
+            "solo-leveling.mp4": 65830,
+            "onepunchman.mp4": 53730,
+            "8-gate.mp4": 70400,
+            "escanor.mp4": 46180,
+            "onepunch.mp4": 28730,
+            "onepunch2.mp4": 67280,
+            // Lose Videos
+            "shiba1.mp4": 15550,
+            "shiba2.mp4": 64060,
+            "shiba3.mp4": 7610,
+            "shiba4.mp4": 11600,
+            "shiba5.mp4": 7560,
+            "shiba6.mp4": 21590,
+            "shiba7.mp4": 16950,
+            "shiba8.mp4": 14720,
+            "shiba9.mp4": 20080
+        };
 
         // Result UI Elements
         this.resultVideoContainer = document.getElementById('result-video-container');
@@ -500,7 +535,7 @@ class HandTracker {
             return;
         }
 
-        if (this.video.readyState >= 3) { // HAVE_FUTURE_DATA (more stable than CURRENT_DATA)
+        if (this.video.readyState >= 2) { // HAVE_CURRENT_DATA or better
             try {
                 this.isProcessingFrame = true;
                 if (this.canvas.width !== this.video.videoWidth || this.canvas.height !== this.video.videoHeight) {
@@ -520,6 +555,25 @@ class HandTracker {
             } finally {
                 this.isProcessingFrame = false;
             }
+        }
+
+        // Battle Mode: Draw Composite Frame (Always run at full FPS if ready)
+        if (this.battleSync && this.streamCtx && this.video.readyState >= 2) {
+            this.streamCtx.clearRect(0, 0, this.streamCanvas.width, this.streamCanvas.height);
+            this.streamCtx.save();
+            this.streamCtx.scale(-1, 1);
+            this.streamCtx.drawImage(this.video, -this.streamCanvas.width, 0, this.streamCanvas.width, this.streamCanvas.height);
+            this.streamCtx.restore();
+            
+            this.streamCtx.save();
+            this.streamCtx.scale(-1, 1);
+            this.streamCtx.drawImage(this.canvas, -this.streamCanvas.width, 0, this.streamCanvas.width, this.streamCanvas.height);
+            this.streamCtx.restore();
+            
+            this.streamCtx.save();
+            this.streamCtx.scale(-1, 1);
+            this.streamCtx.drawImage(this.vfxCanvas, -this.streamCanvas.width, 0, this.streamCanvas.width, this.streamCanvas.height);
+            this.streamCtx.restore();
         }
         
         this.frameRequestHandle = requestAnimationFrame(() => this.requestCameraFrame());
@@ -596,6 +650,29 @@ class HandTracker {
                 this.hideOverlays();
             };
 
+            this.battleSync.onMatchPause = () => {
+                console.log('[Battle] Match PAUSE received');
+                this.isPaused = true;
+                if (this.gameTimerInterval) {
+                    clearInterval(this.gameTimerInterval);
+                    this.gameTimerInterval = null;
+                }
+            };
+
+            this.battleSync.onMatchResume = () => {
+                console.log('[Battle] Match RESUME received');
+                this.isPaused = false;
+                if (this.isGameActive) {
+                    if (this.gameTarget === null) {
+                        // This player scored and is waiting for the next action
+                        this.nextGameAction();
+                    } else {
+                        // This player was in the middle of a task, just resume timer
+                        this.startGameTimer();
+                    }
+                }
+            };
+
             // Ensure players ignore each other's game states/technique events
 
             this.battleSync.onPlayVideoSync = null;
@@ -603,8 +680,22 @@ class HandTracker {
 
             // Start broadcasting once camera is ready
             if (this.streamCanvas) {
-                const stream = this.streamCanvas.captureStream(30);
-                this.battleSync.startBroadcasting(stream);
+                const startBroadcast = () => {
+                    if (this.video.videoWidth > 0) {
+                        this.streamCanvas.width = this.video.videoWidth;
+                        this.streamCanvas.height = this.video.videoHeight;
+                    }
+                    console.log('[Battle] Starting stream broadcast', this.streamCanvas.width, 'x', this.streamCanvas.height);
+                    const stream = this.streamCanvas.captureStream(30);
+                    this.battleSync.startBroadcasting(stream);
+                };
+
+                if (this.video.videoWidth > 0) {
+                    startBroadcast();
+                } else {
+                    // Wait for metadata if not ready
+                    this.video.onloadedmetadata = startBroadcast;
+                }
             }
         }
     }
@@ -812,25 +903,8 @@ class HandTracker {
             this.processDomainExpansion(stableDomain, results.multiHandLandmarks);
             this.domainGame.drawVFX(this.vfxCanvas, stableDomain, results.multiHandLandmarks);
             
-            // Battle Mode: Draw Composite Frame
-            if (this.battleSync && this.streamCtx) {
-                this.streamCtx.clearRect(0, 0, this.streamCanvas.width, this.streamCanvas.height);
-                this.streamCtx.save();
-                this.streamCtx.scale(-1, 1);
-                this.streamCtx.drawImage(this.video, -this.streamCanvas.width, 0, this.streamCanvas.width, this.streamCanvas.height);
-                this.streamCtx.restore();
-                
-                this.streamCtx.save();
-                this.streamCtx.scale(-1, 1);
-                this.streamCtx.drawImage(this.canvas, -this.streamCanvas.width, 0, this.streamCanvas.width, this.streamCanvas.height);
-                this.streamCtx.restore();
-                
-                this.streamCtx.save();
-                this.streamCtx.scale(-1, 1);
-                this.streamCtx.drawImage(this.vfxCanvas, -this.streamCanvas.width, 0, this.streamCanvas.width, this.streamCanvas.height);
-                this.streamCtx.restore();
-
-                // Send Game State
+            // Battle Mode: Send Game State
+            if (this.battleSync) {
                 const displayName = stableDomain ? (this.domainGame.displayNames[stableDomain] || stableDomain) : null;
                 this.battleSync.sendState({
                     domain: displayName,
@@ -912,25 +986,34 @@ class HandTracker {
     }
 
     processDomainExpansion(stableDomain, landmarks) {
+        if (this.isPaused) return; // Freeze logic during cinematics
+
+        const now = Date.now();
         if (stableDomain) {
             if (this.resetTimer) { clearTimeout(this.resetTimer); this.resetTimer = null; }
-            const now = Date.now();
             const displayName = this.domainGame.displayNames[stableDomain] || stableDomain;
             const domainColor = this.domainGame.domainColors[stableDomain];
-            
+
             // Check Mini-Game Match
             if (this.isGameActive && stableDomain === this.gameTarget) {
                 console.log('[MiniGame] Success:', stableDomain);
                 this.gameScore++;
                 this.gameTarget = null; // Prevent double scoring
-                clearInterval(this.gameTimerInterval);
-                
+                if (this.gameTimerInterval) {
+                    clearInterval(this.gameTimerInterval);
+                    this.gameTimerInterval = null;
+                }
+
                 this.playSuccessSound();
+
+                // IN BATTLE MODE: We play the video ONLY ON SUCCESS SCORE
+                if (this.battleRole !== 'none') {
+                    this.playVideo(stableDomain);
+                }
 
                 // Show visual feedback for success
                 if (this.successFeedback) {
                     this.successFeedback.classList.remove('hidden');
-                    // Force reflow for animation restart
                     void this.successFeedback.offsetWidth;
                     setTimeout(() => { if(this.successFeedback) this.successFeedback.classList.add('hidden'); }, 1000);
                 }
@@ -939,11 +1022,24 @@ class HandTracker {
                     this.gameHud.style.borderColor = '#4CAF50';
                     setTimeout(() => { if(this.gameHud) this.gameHud.style.borderColor = '#FFFF00'; }, 500);
                 }
-                
-                clearTimeout(this.gameActionInterval);
-                this.gameActionInterval = setTimeout(() => this.nextGameAction(), 800); // Small pause after success
-            }
 
+                clearTimeout(this.gameActionInterval);
+                // IN BATTLE MODE: We wait for the MATCH_RESUME signal to trigger the next action
+                if (this.battleRole === 'none') {
+                    // Use dynamic wait time based on video duration if available
+                    const videoMap = {
+                        "Unlimited Void": "domain_unlimited_void.mp4", "Malevolent Shrine": "domain_malevolent_shrine.mp4",
+                        "Self-Embodiment of Perfection": "domain_self_embodiment.mp4", "Authentic Mutual Love": "domain_authentic_love.mp4",
+                        "Idle Death Gamble": "domain_idle_death_gamble.mp4", "Yuji Itadori": "domain_yuji_itadori.mp4",
+                        "Chimera Shadow Garden": "domain_chimera_shadow_garden.mp4", "Time Cell Moon Palace": "domain_time_cell_moon_palace.mp4",
+                        "Lapse Blue": "technique_lapse_blue.mp4", "Reversal Red": "technique_reversal_red.mp4", "Hollow Purple": "technique_hollow_purple.mp4"
+                    };
+                    const videoFile = videoMap[stableDomain];
+                    const waitTime = (videoFile && this.videoDurations[videoFile]) ? this.videoDurations[videoFile] + 500 : 800;
+                    console.log(`[Game] Single Player Wait Time: ${waitTime}ms for ${stableDomain}`);
+                    this.gameActionInterval = setTimeout(() => this.nextGameAction(), waitTime);
+                }
+                }
             this.domainDisplay.textContent = displayName;
             if (domainColor) this.domainDisplay.style.color = domainColor;
             this.domainDisplay.style.opacity = "1.0";
@@ -951,7 +1047,7 @@ class HandTracker {
             if (this.lastVFXDomain !== stableDomain) {
                 this.lastVFXDomain = stableDomain;
                 if (this.mainContainer) { this.mainContainer.classList.remove('shake'); void this.mainContainer.offsetWidth; this.mainContainer.classList.add('shake'); setTimeout(() => this.mainContainer.classList.remove('shake'), 500); }
-                
+
                 // Skip atmosphere for minor techniques to focus on orbs
                 const isMinorTech = (stableDomain === "Lapse Blue" || stableDomain === "Reversal Red" || stableDomain === "Hollow Purple");
                 if (this.atmosphereOverlay && domainColor && !isMinorTech) {
@@ -960,12 +1056,26 @@ class HandTracker {
                     this.atmosphereOverlay.style.background = 'transparent';
                 }
 
-                // Play Cinematic Video (Only if game is active or not in battle mode)
-                if (this.isGameActive || this.battleRole === 'none') {
+                // Play Cinematic Video (ONLY IF NOT IN BATTLE MODE)
+                // In Battle Mode, this is now handled by the scoring logic above
+                if (this.battleRole === 'none') {
                     this.playVideo(stableDomain);
                 }
-            }
 
+                // Update cooldown based on video duration
+                const videoMap = {
+                    "Unlimited Void": "domain_unlimited_void.mp4", "Malevolent Shrine": "domain_malevolent_shrine.mp4",
+                    "Self-Embodiment of Perfection": "domain_self_embodiment.mp4", "Authentic Mutual Love": "domain_authentic_love.mp4",
+                    "Idle Death Gamble": "domain_idle_death_gamble.mp4", "Yuji Itadori": "domain_yuji_itadori.mp4",
+                    "Chimera Shadow Garden": "domain_chimera_shadow_garden.mp4", "Time Cell Moon Palace": "domain_time_cell_moon_palace.mp4",
+                    "Lapse Blue": "technique_lapse_blue.mp4", "Reversal Red": "technique_reversal_red.mp4", "Hollow Purple": "technique_hollow_purple.mp4"
+                };
+                const videoFile = videoMap[stableDomain];
+                if (videoFile && this.videoDurations[videoFile]) {
+                    this.cooldownMs = this.videoDurations[videoFile] + 1000; // Add 1s buffer
+                    console.log(`[Game] Dynamic Cooldown set to ${this.cooldownMs}ms for ${stableDomain}`);
+                }
+            }
             if (now - this.lastActionTime >= this.cooldownMs) {
                 if (this.apiEndpoint && this.sessionKey) {
                     this.lastActionTime = now;
@@ -1165,13 +1275,45 @@ class HandTracker {
             this.resultVideoPlayer.src = absSrc;
             this.resultVideoPlayer.muted = false;
             this.resultVideoContainer.style.display = 'block';
+            
+            // Hide buttons during video (Wait time according to table)
+            if (this.restartGameBtn) this.restartGameBtn.style.display = 'none';
+            if (this.exitGameBtn) this.exitGameBtn.style.display = 'none';
+
+            const duration = this.videoDurations[randomVideo] || 15000;
+            let hasEnded = false;
+            const endResult = () => {
+                if (hasEnded) return;
+                hasEnded = true;
+                if (this.restartGameBtn) this.restartGameBtn.style.display = 'block';
+                if (this.exitGameBtn) this.exitGameBtn.style.display = 'block';
+            };
+
+            this.resultVideoPlayer.onended = endResult;
+            setTimeout(endResult, duration + 1000); // Fallback
+
             this.resultVideoPlayer.play().catch(e => console.warn('[Game] Result panel play failed:', e));
         }
     }
 
+    startGameTimer() {
+        if (this.gameTimerInterval) clearInterval(this.gameTimerInterval);
+        this.gameTimerInterval = setInterval(() => {
+            if (this.isPaused) return; // Freeze countdown
+
+            this.gameTimeLeft--;
+            this.updateGameHUD();
+            if (this.gameTimeLeft <= 0) {
+                clearInterval(this.gameTimerInterval);
+                this.gameTimerInterval = null;
+                this.nextGameAction(); // Move to next even if failed
+            }
+        }, 1000);
+    }
+
     nextGameAction() {
-        if (!this.isGameActive) return;
-        
+        if (!this.isGameActive || this.isPaused) return;
+
         if (this.gameActionList.length === 0) {
             this.stopMiniGame('Round Complete', false); // Not manual stop, logic will check score
             return;
@@ -1181,18 +1323,8 @@ class HandTracker {
         this.gameTimeLeft = this.gameDifficulty;
         this.updateGameHUD();
 
-        // Timer Interval
-        clearInterval(this.gameTimerInterval);
-        this.gameTimerInterval = setInterval(() => {
-            this.gameTimeLeft--;
-            this.updateGameHUD();
-            if (this.gameTimeLeft <= 0) {
-                clearInterval(this.gameTimerInterval);
-                this.nextGameAction(); // Move to next even if failed
-            }
-        }, 1000);
+        this.startGameTimer();
     }
-
     updateGameHUD() {
         if (this.gameTargetName) {
             const lang = this.domainGame.lang || 'zh';

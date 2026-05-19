@@ -33,7 +33,10 @@ class BattleModeSync {
                     if (this.isPlayer()) this.handleViewerJoin(from);
                     break;
                 case 'PLAYER_READY':
-                    if (this.role === 'viewer') this.handleViewerJoin(from);
+                    if (this.role === 'viewer') {
+                        console.log(`[BattleSync] Player ${from} is ready, requesting stream...`);
+                        this.broadcast('VIEWER_JOIN', null, from);
+                    }
                     break;
                 case 'OFFER':
                     if (this.role === 'viewer') this.handleOffer(from, data);
@@ -57,6 +60,16 @@ class BattleModeSync {
                 case 'CLOSE_OVERLAYS':
                     if (this.isPlayer() && this.onCloseOverlays) {
                         this.onCloseOverlays();
+                    }
+                    break;
+                case 'MATCH_PAUSE':
+                    if (this.isPlayer() && this.onMatchPause) {
+                        this.onMatchPause();
+                    }
+                    break;
+                case 'MATCH_RESUME':
+                    if (this.isPlayer() && this.onMatchResume) {
+                        this.onMatchResume();
                     }
                     break;
                 case 'PLAY_VIDEO_SYNC':
@@ -119,6 +132,10 @@ class BattleModeSync {
         console.log('[BattleSync] Viewer joined, creating offer...');
         if (!this.localStream) return;
 
+        if (this.localPC) {
+            try { this.localPC.close(); } catch(e) {}
+        }
+
         this.localPC = new RTCPeerConnection({
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         });
@@ -148,6 +165,11 @@ class BattleModeSync {
 
     async handleOffer(playerID, offer) {
         console.log(`[BattleSync] Received offer from ${playerID}`);
+        
+        if (this.pcMap.has(playerID)) {
+            try { this.pcMap.get(playerID).close(); } catch(e) {}
+        }
+
         const pc = new RTCPeerConnection({
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         });

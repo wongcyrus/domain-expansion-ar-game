@@ -107,6 +107,40 @@
         const p1Cinema = document.getElementById('p1-cinema'), p2Cinema = document.getElementById('p2-cinema'), resultCinema = document.getElementById('result-cinema'), emergencyUnmute = document.getElementById('emergency-unmute');
         const resultOverlay = document.getElementById('match-result-overlay'), winnerText = document.getElementById('winner-text'), winnerSubtext = document.getElementById('winner-subtext'), resScoreP1 = document.getElementById('res-score-p1'), resScoreP2 = document.getElementById('res-score-p2'), closeResultBtn = document.getElementById('close-result-btn');
         const winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8-gate.mp4', 'escanor.mp4', 'onepunch.mp4', 'onepunch2.mp4'], loseVideos = Array.from({length: 9}, (_, i) => `shiba${i+1}.mp4`);
+
+        // Video Durations in milliseconds based on provided table
+        const VIDEO_DURATIONS = {
+            "domain_chimera_shadow_garden.mp4": 3520,
+            "domain_authentic_love.mp4": 9870,
+            "domain_self_embodiment.mp4": 28180,
+            "domain_yuji_itadori.mp4": 18940,
+            "domain_malevolent_shrine.mp4": 25000,
+            "domain_idle_death_gamble.mp4": 15800,
+            "domain_unlimited_void.mp4": 7330,
+            "domain_time_cell_moon_palace.mp4": 7800,
+            "technique_hollow_purple.mp4": 22030,
+            "technique_reversal_red.mp4": 10580,
+            "technique_lapse_blue.mp4": 24440,
+            // Win Videos
+            "heroacademy.mp4": 74660,
+            "solo-leveling.mp4": 65830,
+            "onepunchman.mp4": 53730,
+            "8-gate.mp4": 70400,
+            "escanor.mp4": 46180,
+            "onepunch.mp4": 28730,
+            "onepunch2.mp4": 67280,
+            // Lose Videos
+            "shiba1.mp4": 15550,
+            "shiba2.mp4": 64060,
+            "shiba3.mp4": 7610,
+            "shiba4.mp4": 11600,
+            "shiba5.mp4": 7560,
+            "shiba6.mp4": 21590,
+            "shiba7.mp4": 16950,
+            "shiba8.mp4": 14720,
+            "shiba9.mp4": 20080
+        };
+
         const powerP1 = document.getElementById('power-p1'), powerP2 = document.getElementById('power-p2'), ticker = document.getElementById('battle-ticker'), viewP1 = document.getElementById('p1-view'), viewP2 = document.getElementById('p2-view');
         const settingsToggle = document.getElementById('battle-settings-toggle'), settingsPanel = document.getElementById('battle-settings-panel'), saveCfgBtn = document.getElementById('save-battle-cfg');
         const inCountdown = document.getElementById('cfg-countdown'), inDifficulty = document.getElementById('cfg-difficulty'), inCount = document.getElementById('cfg-count');
@@ -128,6 +162,7 @@
         });
 
         let p1Time = 0, p2Time = 0, p1Active = false, p2Active = false, p1ScoreVal = 0, p2ScoreVal = 0, isMatchOver = false, winnerTimeoutHandle = null;
+        let activeCinematicsCount = 0;
 
         let isAudioUnlocked = false;
         async function masterAudioUnlock() {
@@ -146,6 +181,7 @@
         function resetViewerState() {
             if (winnerTimeoutHandle) clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = null;
             isMatchOver = false; p1Active = false; p2Active = false; p1ScoreVal = 0; p2ScoreVal = 0;
+            activeCinematicsCount = 0;
             resultOverlay.style.display = 'none'; emergencyUnmute.style.display = 'none';
             resultCinema.pause(); resultCinema.style.display = 'none'; resultCinema.src = "";
             [p1Cinema, p2Cinema].forEach(c => { c.pause(); if(!inQuadMode.checked) c.style.display = 'none'; c.src = ""; });
@@ -170,22 +206,73 @@
         startBtn.addEventListener('click', startMatch);
 
         sync.onStreamReceived = (playerID, stream) => {
-            if (playerID === 'player1') { p1Video.srcObject = stream; p1Waiting.style.display = 'none'; }
-            else if (playerID === 'player2') { p2Video.srcObject = stream; p2Waiting.style.display = 'none'; }
+            console.log(`[Battle] Stream received for ${playerID}`, stream);
+            if (playerID === 'player1') { 
+                p1Video.srcObject = stream; 
+                p1Waiting.style.display = 'none'; 
+                p1Video.play().catch(e => console.warn("[Battle] P1 video play failed:", e));
+            }
+            else if (playerID === 'player2') { 
+                p2Video.srcObject = stream; 
+                p2Waiting.style.display = 'none'; 
+                p2Video.play().catch(e => console.warn("[Battle] P2 video play failed:", e));
+            }
         };
 
         sync.onPlayVideoSync = (playerID, videoSrc) => {
             if (isMatchOver) return;
+            console.log(`[Battle] playing cinematic for ${playerID}: ${videoSrc}`);
+            
+            // Increment active count
+            activeCinematicsCount++;
+            
+            // Broadcast global match pause (Safe to call multiple times)
+            sync.broadcast('MATCH_PAUSE', null);
+            addTickerMsg(`MATCH PAUSED FOR CINEMATIC`, '');
+
             const cinema = (playerID === 'player1') ? p1Cinema : p2Cinema;
             cinema.src = videoSrc; cinema.style.display = 'block'; cinema.load();
-            cinema.oncanplay = () => { cinema.muted = false; cinema.volume = 1.0; cinema.play().catch(() => { cinema.muted = true; cinema.play(); }); };
-            cinema.onended = () => { if(!inQuadMode.checked) cinema.style.display = 'none'; };
+
+            // Safety Fallback based on Table Durations
+            const videoFile = videoSrc.split('/').pop();
+            const duration = VIDEO_DURATIONS[videoFile] || 15000;
+            let hasEnded = false;
+
+            const endLogic = () => {
+                if (hasEnded) return;
+                hasEnded = true;
+                if(!inQuadMode.checked) cinema.style.display = 'none';
+                
+                // Decrement active count
+                activeCinematicsCount--;
+                
+                // Only resume if all cinematics finished
+                if (activeCinematicsCount <= 0) {
+                    activeCinematicsCount = 0; // Guard
+                    console.log('[Battle] All cinematics ended, resuming match');
+                    sync.broadcast('MATCH_RESUME', null);
+                    addTickerMsg(`MATCH RESUMED`, '');
+                }
+            };
+
+            cinema.oncanplay = () => {
+                cinema.muted = false;
+                cinema.volume = 1.0;
+                cinema.play().catch(() => { cinema.muted = true; cinema.play(); });
+            };
+            cinema.onended = endLogic;
+            setTimeout(endLogic, duration + 1000); // 1s extra buffer
         };
 
         function playGlobalResultVideo(isWin) {
             const folder = isWin ? 'win' : 'lose';
             const video = (isWin ? winVideos : loseVideos)[Math.floor(Math.random() * (isWin ? winVideos : loseVideos).length)];
             const absSrc = `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, '')}/static/video/${folder}/${video}`;
+            
+            // Hide lobby button during result video
+            closeResultBtn.style.display = 'none';
+            const duration = VIDEO_DURATIONS[video] || 15000;
+
             resultCinema.pause(); resultCinema.src = absSrc; resultCinema.style.display = 'block'; resultCinema.load();
             const onCanPlay = () => {
                 resultCinema.muted = false; resultCinema.volume = 1.0;
@@ -193,7 +280,17 @@
                 resultCinema.removeEventListener('canplay', onCanPlay);
             };
             resultCinema.addEventListener('canplay', onCanPlay);
-            resultCinema.onended = () => { resultCinema.style.display = 'none'; };
+
+            let hasEnded = false;
+            const endResult = () => {
+                if (hasEnded) return;
+                hasEnded = true;
+                resultCinema.style.display = 'none';
+                closeResultBtn.style.display = 'block';
+            };
+
+            resultCinema.onended = endResult;
+            setTimeout(endResult, duration + 1000);
         }
 
         function showWinner() {
