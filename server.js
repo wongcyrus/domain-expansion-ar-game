@@ -1,5 +1,6 @@
 const express = require('express');
 const https = require('https');
+const http = require('http');
 const fs = require('fs');
 const { Server } = require('socket.io');
 const path = require('path');
@@ -8,16 +9,38 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// Serve static files from the project root
-app.use(express.static(path.join(__dirname)));
+// --- Security: White-list static files/folders ---
+// Only serve what is necessary for the game
+const publicPaths = ['static', 'index.html', 'battle.html', 'player.html', 'favicon.ico'];
 
-// HTTPS Configuration
-const options = {
-    key: fs.readFileSync(path.join(__dirname, 'key.pem')),
-    cert: fs.readFileSync(path.join(__dirname, 'cert.pem'))
-};
+publicPaths.forEach(p => {
+    app.use(`/${p === 'index.html' ? '' : p}`, express.static(path.join(__dirname, p)));
+});
 
-const server = https.createServer(options, app);
+// Explicitly serve root for index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+const PORT = process.env.PORT || 3000;
+let server;
+
+// HTTPS Configuration for local use
+const keyPath = path.join(__dirname, 'key.pem');
+const certPath = path.join(__dirname, 'cert.pem');
+
+if (fs.existsSync(keyPath) && fs.readFileSync(keyPath).length > 0 && !process.env.CLOUD_RUN) {
+    console.log('[Server] SSL certificates found, starting in HTTPS mode');
+    const options = {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath)
+    };
+    server = https.createServer(options, app);
+} else {
+    console.log('[Server] SSL certificates not found or CLOUD_RUN detected, starting in HTTP mode');
+    server = http.createServer(app);
+}
+
 const io = new Server(server, {
     cors: {
         origin: "*",
@@ -79,7 +102,6 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`[Server] Signaling server running on port ${PORT}`);
 });

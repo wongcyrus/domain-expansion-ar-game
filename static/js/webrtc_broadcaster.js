@@ -71,10 +71,18 @@ class BattleModeSync {
             : window.location.origin;
 
         console.log(`[BattleSync] Connecting to server: ${serverUrl}`);
-        this.socket = io(serverUrl, {
+        
+        const socketOptions = {
             secure: true,
-            rejectUnauthorized: false // Since we're likely using self-signed certs
-        });
+            rejectUnauthorized: false
+        };
+
+        // If not local, we likely don't need port 3443 and might not need rejectUnauthorized
+        if (!isLocal) {
+            delete socketOptions.rejectUnauthorized;
+        }
+
+        this.socket = io(serverUrl, socketOptions);
 
         this.socket.on('connect', () => {
             this.socketId = this.socket.id;

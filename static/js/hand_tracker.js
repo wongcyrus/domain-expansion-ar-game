@@ -143,7 +143,7 @@ class HandTracker {
 
         // Result Videos
         this.loseVideos = Array.from({length: 9}, (_, i) => `shiba${i+1}.mp4`);
-        this.winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8-gate.mp4', 'escanor.mp4', 'onepunch.mp4', 'onepunch2.mp4'];
+        this.winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8-gate.mp4', 'escanor.mp4', 'onepunch.mp4', 'onepunch2.mp4', 'demon-slayer-s2.mp4', 'demon-slayer-s1.mp4'];
 
         // Video Durations in milliseconds based on provided table
         this.videoDurations = {
@@ -166,6 +166,8 @@ class HandTracker {
             "escanor.mp4": 46180,
             "onepunch.mp4": 28730,
             "onepunch2.mp4": 67280,
+            "demon-slayer-s2.mp4": 68000,
+            "demon-slayer-s1.mp4": 77760,
             // Lose Videos
             "shiba1.mp4": 15550,
             "shiba2.mp4": 64060,
@@ -975,6 +977,21 @@ class HandTracker {
         }
     }
 
+    getVideoUrl(subPath) {
+        const hostname = window.location.hostname;
+        const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
+        const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || isIp || window.location.protocol === 'file:';
+        const GITHUB_PAGES_BASE = "https://wongcyrus.github.io/domain-expansion-ar-game/";
+        
+        if (isLocal) {
+            let basePath = window.location.pathname;
+            if (!basePath.endsWith('/')) basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+            return `${window.location.origin}${basePath}static/video/${subPath}`;
+        } else {
+            return `${GITHUB_PAGES_BASE}static/video/${subPath}`;
+        }
+    }
+
     playVideo(action) {
         const videoMap = {
             "Unlimited Void": "domain_unlimited_void.mp4", "Malevolent Shrine": "domain_malevolent_shrine.mp4",
@@ -986,9 +1003,7 @@ class HandTracker {
         const file = videoMap[action];
         if (!file) return;
 
-        let basePath = window.location.pathname;
-        if (!basePath.endsWith('/')) basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
-        const absSrc = `${window.location.origin}${basePath}static/video/${file}`;
+        const absSrc = this.getVideoUrl(file);
 
         // Sync to Battle Viewer (Always broadcast if in battle mode)
         if (this.battleSync) {
@@ -1310,9 +1325,7 @@ class HandTracker {
         }
 
         const randomVideo = videoList[Math.floor(Math.random() * videoList.length)];
-        let basePath = window.location.pathname;
-        if (!basePath.endsWith('/')) basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
-        const absSrc = `${window.location.origin}${basePath}static/video/${folder}/${randomVideo}`;
+        const absSrc = this.getVideoUrl(`${folder}/${randomVideo}`);
 
         console.log(`[Game] Playing ${folder} video in result panel: ${randomVideo}`);
 

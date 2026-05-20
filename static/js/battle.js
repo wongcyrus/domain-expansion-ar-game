@@ -4,7 +4,8 @@ const p1Score = document.getElementById('p1-score'), p2Score = document.getEleme
 const timerDisplay = document.getElementById('timer-display'), p1TimerSub = document.getElementById('p1-timer-sub'), p2TimerSub = document.getElementById('p2-timer-sub'), startBtn = document.getElementById('start-battle-btn'), audioHint = document.getElementById('audio-status-hint');
 const p1Cinema = document.getElementById('p1-cinema'), p2Cinema = document.getElementById('p2-cinema'), resultCinema = document.getElementById('result-cinema'), emergencyUnmute = document.getElementById('emergency-unmute');
 const resultOverlay = document.getElementById('match-result-overlay'), winnerText = document.getElementById('winner-text'), winnerSubtext = document.getElementById('winner-subtext'), resScoreP1 = document.getElementById('res-score-p1'), resScoreP2 = document.getElementById('res-score-p2'), closeResultBtn = document.getElementById('close-result-btn'), skipResultBtn = document.getElementById('skip-result-btn');
-const winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8-gate.mp4', 'escanor.mp4', 'onepunch.mp4', 'onepunch2.mp4'], loseVideos = Array.from({length: 9}, (_, i) => `shiba${i+1}.mp4`);
+const winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8-gate.mp4', 'escanor.mp4', 'onepunch.mp4', 'onepunch2.mp4', 'demon-slayer-s2.mp4', 'demon-slayer-s1.mp4'], loseVideos = Array.from({length: 9}, (_, i) => `shiba${i+1}.mp4`);
+
 
 // Network Config
 const netModeSelect = document.getElementById('cfg-net-mode'), valNetMode = document.getElementById('val-net-mode');
@@ -64,6 +65,8 @@ const VIDEO_DURATIONS = {
     "escanor.mp4": 46180,
     "onepunch.mp4": 28730,
     "onepunch2.mp4": 67280,
+    "demon-slayer-s2.mp4": 68000,
+    "demon-slayer-s1.mp4": 77760,
     // Lose Videos
     "shiba1.mp4": 15550,
     "shiba2.mp4": 64060,
@@ -150,11 +153,24 @@ async function startMatch() {
 }
 startBtn.addEventListener('click', startMatch);
 
+function getVideoUrl(subPath) {
+    const hostname = window.location.hostname;
+    const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || isIp || window.location.protocol === 'file:';
+    const GITHUB_PAGES_BASE = "https://wongcyrus.github.io/domain-expansion-ar-game/";
+    
+    if (isLocal) {
+        return `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, '')}/static/video/${subPath}`;
+    } else {
+        return `${GITHUB_PAGES_BASE}static/video/${subPath}`;
+    }
+}
+
 function playGlobalResultVideo(isWin) {
     console.log(`[Battle] playGlobalResultVideo(isWin=${isWin})`);
     const folder = isWin ? 'win' : 'lose';
     const video = (isWin ? winVideos : loseVideos)[Math.floor(Math.random() * (isWin ? winVideos : loseVideos).length)];
-    const absSrc = `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, '')}/static/video/${folder}/${video}`;
+    const absSrc = getVideoUrl(`${folder}/${video}`);
     console.log(`[Battle] Result video selected: ${absSrc}`);
     
     // Hide lobby button during result video, show skip button

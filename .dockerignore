@@ -1,0 +1,12 @@
+static/video
+node_modules
+.git
+.gemini
+Dockerfile
+docker-compose.yml
+deploy.sh
+undeploy.sh
+*.pem
+README.md
+package-lock.json
+.dockerignore

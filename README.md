@@ -91,6 +91,53 @@ To enable Online Multiplayer, you can easily run the signaling server using Dock
 
 ---
 
+## ☁️ Google Cloud Run Deployment | Google Cloud Run 部署
+
+This application is ready for deployment on **Google Cloud Run**.
+本應用程式已準備好部署於 **Google Cloud Run**：
+
+1. **Prerequisites | 準備工作**:
+   - Install [Google Cloud SDK](https://cloud.google.com/sdk/docs/install).
+   - Create a project on Google Cloud Console.
+
+2. **Deploy | 部署**:
+   ```bash
+   chmod +x deploy.sh
+   ./deploy.sh
+   ```
+
+   > **Note**: The scripts default to the **Hong Kong** region (`asia-east2`). To use a different region, simply edit the `REGION` variable in `deploy.sh` and `undeploy.sh`.
+   > **注意**：腳本預設部署於**香港**區域 (`asia-east2`)。若需使用其他區域，請直接修改 `deploy.sh` 與 `undeploy.sh` 中的 `REGION` 變數。
+
+3. **Undeploy | 卸載**:
+   ```bash
+   chmod +x undeploy.sh
+   ./undeploy.sh
+   ```
+
+### Public Access Setup | 公共存取設定
+If you encounter a **403 Forbidden** error after deployment, you must manually grant public access in the Google Cloud Console:
+若部署後遇到 **403 Forbidden** 錯誤，您必須在 Google Cloud 控制台中手動授權公共存取：
+
+1.  Go to the [Cloud Run Console](https://console.cloud.google.com/run).
+2.  Select your service (`domain-expansion-ar`).
+3.  Click the **"Security"** tab or look for the **"Permissions"** panel.
+4.  Click **"ALLOW UNAUTHENTICATED"** (or "Allow public access") at the top.
+5.  If this is blocked by policy, see the "Domain Restricted Sharing" note below.
+
+1.  前往 [Cloud Run 控制台](https://console.cloud.google.com/run)。
+2.  選擇您的服務 (`domain-expansion-ar`)。
+3.  點擊 **「安全性」** 標籤或尋找 **「權限」** 面板。
+4.  點擊頂部的 **「允許未經身分驗證」** (或「允許公共存取」)。
+5.  若受政策阻擋，請參閱下方的「網域限制共用」說明。
+
+### Important Cloud Run Notes | 重要注意事項
+- **SSL Termination**: Cloud Run handles HTTPS automatically at the edge. The container is configured to switch to HTTP internally when deployed there.
+- **Session Affinity**: The `--session-affinity` flag is **required** for Socket.io to maintain stable connections between your device and the signaling server.
+- **Port**: The application respects the `$PORT` environment variable (defaulting to 8080 on Cloud Run).
+
+---
+
 ## 📐 Architecture Design | 架構設計
 
 ### System Overview | 系統概覽
