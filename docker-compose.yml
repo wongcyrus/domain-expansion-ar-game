@@ -1,0 +1,10 @@
+services:
+  game-server:
+    build: .
+    ports:
+      - "3443:3443"
+    environment:
+      - PORT=3443
+    volumes:
+      - .:/app
+      - /app/node_modules

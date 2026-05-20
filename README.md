@@ -54,26 +54,97 @@ To test the AR Game on a mobile device via a local network, you must use **HTTPS
 
 ## ⚔️ Battle Mode | 對戰模式
 
-The game now supports a professional 3-monitor "Battle Setup" without any backend server.
-遊戲現已支援專業的三螢幕「對戰設定」，無須任何後端伺服器：
+The game supports two types of multi-monitor setup for professional battles:
+遊戲支援兩種專業對戰設定：
 
-1.  **Monitor 1 (Player 1)**: Open `index.html?role=player1`.
-    **螢幕 1 (玩家 1)**: 開啟 `index.html?role=player1`。
-2.  **Monitor 2 (Player 2)**: Open `index.html?role=player2`.
-    **螢幕 2 (玩家 2)**: 開啟 `index.html?role=player2`。
-3.  **Monitor 3 (Viewer)**: Open `battle.html`.
-    **螢幕 3 (觀眾席)**: 開啟 `battle.html`。
+### 1. Local Mode (Same Browser) | 本地模式 (同網覽器)
+**No server required.** Uses `BroadcastChannel` for instant local synchronization.
+**無須伺服器。** 使用 `BroadcastChannel` 實現本地即時同步。
 
-### Features | 功能
+- **Setup**: Open `index.html?role=player1`, `index.html?role=player2`, and `battle.html` as tabs in the same browser.
 
-- **Pure Client-Side**: Uses WebRTC and `BroadcastChannel` for instant local synchronization.
-- **純前端運作**: 使用 WebRTC 與 `BroadcastChannel` 實現即時本地同步。
-- **Synchronized Match Control**: Start the game for both players simultaneously with a visual countdown.
-- **同步比賽控制**: 具備視覺化倒數功能，能同時為兩位玩家啟動遊戲。
-- **Cinematic Results**: Celebratory win videos (with sound) play for "Perfect Victories" (Score 10/10).
-- **電影級結算**: 「完美勝出」(得分 10/10) 時會播放帶有音效的勝利慶祝影片。
-- **Customizable Rules**: Adjust countdown, difficulty, and technique counts via the viewer's settings panel.
-- **自定義規則**: 可透過觀眾席設定面板調整倒數、難度及回合手勢數量。
+### 2. Online Mode (Internet) | 線上模式 (網際網路)
+**Supports different devices/networks.** Uses a Node.js + Socket.io backend as a signaling switchboard.
+**支援跨裝置與跨網絡。** 使用 Node.js + Socket.io 後端作為信令交換機。
+
+- **Setup**:
+  1. Start the backend server (see [Docker Setup](#-docker-setup)).
+  2. In the Viewer (`battle.html`), select **ONLINE** mode. It will show a **Room Code** (Default: `BTL1`).
+  3. On players' devices, go to Settings, select **ONLINE** mode, enter the Room Code, and click **JOIN**.
+- **P2P Privacy**: Video streams travel **directly between devices (Peer-to-Peer)** via WebRTC. The server only handles small text signals (scores/triggers) and never sees your camera.
+
+---
+
+## 🐳 Docker Setup | Docker 設定
+
+To enable Online Multiplayer, you can easily run the signaling server using Docker:
+若要啟用線上對戰，您可以使用 Docker 輕鬆運行信令伺服器：
+
+1. **Build & Start | 建構與啟動**:
+   ```bash
+   docker-compose up --build -d
+   ```
+2. **Access | 存取**:
+   - The server runs on **HTTPS** port **3443** (Required for webcam access).
+   - Open **`https://<YOUR_IP>:3443`** in your browsers.
+   - 伺服器運行於 **HTTPS** 埠 **3443**（相機存取必備）。
+
+---
+
+## 📐 Architecture Design | 架構設計
+
+### System Overview | 系統概覽
+```mermaid
+graph TD
+    subgraph "Online Mode (Different Devices/Networks)"
+        P1[Player 1 Device]
+        P2[Player 2 Device]
+        BV[Battle Viewer / Host]
+        NodeServer[Signaling Server<br/>Node.js + Socket.io]
+        
+        P1 <-->|JSON Signaling| NodeServer
+        P2 <-->|JSON Signaling| NodeServer
+        BV <-->|JSON Signaling| NodeServer
+        
+        P1 ====|WebRTC P2P Video + VFX|====> BV
+        P2 ====|WebRTC P2P Video + VFX|====> BV
+    end
+
+    subgraph "Local Mode (Same Browser Tabs)"
+        L_P1[Player 1 Tab]
+        L_P2[Player 2 Tab]
+        L_BV[Battle Viewer Tab]
+        BC[BroadcastChannel API]
+        
+        L_P1 <--> BC
+        L_P2 <--> BC
+        L_BV <--> BC
+        
+        L_P1 ====|WebRTC P2P Video|====> L_BV
+        L_P2 ====|WebRTC P2P Video|====> L_BV
+    end
+
+    style NodeServer fill:#f9f,stroke:#333,stroke-width:2px
+    style BC fill:#bbf,stroke:#333,stroke-width:2px
+```
+
+### Dual-Transport Signaling | 雙傳輸信令系統
+The game uses a **decoupled signaling architecture** that switches transports dynamically based on your settings:
+遊戲採用**解耦信令架構**，根據設定動態切換傳輸方式：
+
+1.  **Transport A: `BroadcastChannel`**: Used for Local mode. It provides zero-latency communication within the same browser context without touching any network infrastructure.
+2.  **Transport B: `Socket.io (WebSockets)`**: Used for Online mode. It acts as a "matchmaker" to introduce devices across the internet, allowing them to perform a WebRTC handshake.
+
+### WebRTC P2P Video | WebRTC 點對點影像
+The most data-intensive part—the high-definition webcam and VFX stream—uses **WebRTC Peer-to-Peer** technology.
+影像傳輸最密集的部（高畫質相機與特效流）採用 **WebRTC P2P** 技術：
+
+- **Low Latency**: Streams bypass the server entirely, flowing directly from Player -> Viewer.
+- **Privacy & Cost**: No video data is processed or stored on the server, ensuring privacy and allowing the server to handle hundreds of concurrent matches with minimal CPU usage.
+
+### Score & Logic Sync | 分數與邏輯同步
+The "Battle Viewer" acts as the **Match Authority**. Players broadcast their state (score, remaining time, current technique) multiple times per second. The Viewer uses this data to decide early-win conditions and trigger synchronized global cinematic videos.
+「觀眾席」充當**比賽仲裁**。玩家每秒多次廣播狀態（分數、剩餘時間、當前術式）。觀眾席根據這些數據判定提前勝出條件，並觸發同步的電影級結算影片。
 
 ## 🖐️ Hand Gesture Guide | 手勢指南
 

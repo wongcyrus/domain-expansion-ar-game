@@ -1,0 +1,14 @@
+{
+  "name": "domain-expansion-ar-game",
+  "version": "1.0.0",
+  "description": "Online signaling server for Domain Expansion AR Game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}

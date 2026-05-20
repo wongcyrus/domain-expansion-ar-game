@@ -69,9 +69,18 @@ class HandTracker {
         this.closeSettings = document.getElementById('close-settings');
         this.roleBadge = document.getElementById('player-role-badge');
 
+        // Battle Mode Online UI
+        this.battleNetModeSelect = document.getElementById('battle-net-mode');
+        this.onlineRoomContainer = document.getElementById('online-room-container');
+        this.onlineRoomCodeInput = document.getElementById('online-room-code');
+        this.connectOnlineBtn = document.getElementById('connect-online-btn');
+        this.onlineStatus = document.getElementById('online-status');
+
         // 2. Load Persistence
         const urlParams = new URLSearchParams(window.location.search);
         const urlRole = urlParams.get('role');
+        const urlNetMode = urlParams.get('net_mode');
+        const urlRoom = urlParams.get('room');
         const urlRobotId = urlParams.get('robot_id');
         const urlApi = urlParams.get('api_endpoint');
         const urlKey = urlParams.get('session_key');
@@ -85,6 +94,8 @@ class HandTracker {
         this.disableApi = localStorage.getItem('disable_robot_api') === 'true';
         this.gameDifficulty = parseInt(localStorage.getItem('game_difficulty') || '8');
         this.battleRole = urlRole || localStorage.getItem('battle_role') || 'none';
+        this.battleNetMode = urlNetMode || localStorage.getItem('battle_net_mode') || 'local';
+        this.onlineRoomCode = urlRoom || localStorage.getItem('online_room_code') || 'BTL1';
         
         // Load camera ID based on role for independence
         const cameraKey = `selected_camera_id_${this.battleRole}`;
@@ -98,6 +109,12 @@ class HandTracker {
         if (this.videoModeSelect) this.videoModeSelect.value = this.videoMode;
         if (this.autoOpenPopupCheck) this.autoOpenPopupCheck.checked = this.autoOpen;
         if (this.disableApiCheck) this.disableApiCheck.checked = this.disableApi;
+        if (this.battleNetModeSelect) {
+            this.battleNetModeSelect.value = this.battleNetMode;
+            this.toggleOnlineUI();
+        }
+        if (this.onlineRoomCodeInput) this.onlineRoomCodeInput.value = this.onlineRoomCode;
+
         if (this.battleRoleSelect) {
             this.battleRoleSelect.value = this.battleRole;
             this.updateBattleSync();
@@ -190,6 +207,7 @@ class HandTracker {
     }
 
     attachListeners() {
+        this.setupOnlineListeners();
         if (this.saveBtn) {
             this.saveBtn.addEventListener('click', () => {
                 this.apiEndpoint = this.endpointInput.value.trim();
@@ -232,7 +250,12 @@ class HandTracker {
 
         if (this.openBattleViewerBtn) {
             this.openBattleViewerBtn.addEventListener('click', () => {
-                window.open('battle.html', '_blank');
+                const url = new URL('battle.html', window.location.href);
+                if (this.battleNetMode === 'online' && this.onlineRoomCode) {
+                    url.searchParams.set('net_mode', 'online');
+                    url.searchParams.set('room', this.onlineRoomCode);
+                }
+                window.open(url.href, '_blank');
             });
         }
 
@@ -626,6 +649,12 @@ class HandTracker {
             this.hudRole.style.color = this.battleRole === 'player1' ? '#4A90E2' : '#FFFF00';
         }
 
+        // --- Start Online Refactor ---
+        const needsReinit = !this.battleSync || 
+                           this.battleSync.role !== this.battleRole || 
+                           this.battleSync.mode !== this.battleNetMode ||
+                           (this.battleNetMode === 'online' && this.battleSync.roomCode !== this.onlineRoomCode);
+
         if (this.battleRole === 'none') {
             if (this.battleSync) {
                 this.battleSync.close();
@@ -634,11 +663,11 @@ class HandTracker {
             return;
         }
 
-        if (!this.battleSync || this.battleSync.role !== this.battleRole) {
-            console.log('[Battle] Initializing sync as:', this.battleRole);
+        if (needsReinit) {
+            console.log(`[Battle] Initializing sync: Role=${this.battleRole}, Mode=${this.battleNetMode}, Room=${this.onlineRoomCode}`);
             if (this.battleSync) this.battleSync.close();
             
-            this.battleSync = new BattleModeSync(this.battleRole);
+            this.battleSync = new BattleModeSync(this.battleRole, this.battleNetMode, this.onlineRoomCode);
             
             this.battleSync.onStartBattle = (config) => {
                 console.log('[Battle] Remote start received!', config);
@@ -653,13 +682,7 @@ class HandTracker {
                 this.hideOverlays();
                 
                 // Signal viewer that we are clean
-                this.battleSync.sendState({
-                    domain: null,
-                    score: 0,
-                    timer: 0,
-                    isGameActive: false,
-                    totalActions: 0
-                });
+                this.syncBattleState();
             };
 
             this.battleSync.onMatchOver = () => {
@@ -695,13 +718,7 @@ class HandTracker {
 
             this.battleSync.onViewerJoin = () => {
                 console.log('[Battle] Viewer joined, syncing current state');
-                this.battleSync.sendState({
-                    domain: this.gameTarget ? (this.domainGame.displayNames[this.gameTarget] || this.gameTarget) : null,
-                    score: this.gameScore,
-                    timer: this.gameTimeLeft,
-                    isGameActive: this.isGameActive,
-                    totalActions: this.gameActionList ? (this.gameActionList.length + (this.gameTarget ? 1 : 0)) : 0
-                });
+                this.syncBattleState();
             };
 
             // Ensure players ignore each other's game states/technique events
@@ -935,16 +952,7 @@ class HandTracker {
             this.domainGame.drawVFX(this.vfxCanvas, stableDomain, results.multiHandLandmarks);
             
             // Battle Mode: Send Game State
-            if (this.battleSync) {
-                const displayName = stableDomain ? (this.domainGame.displayNames[stableDomain] || stableDomain) : null;
-                this.battleSync.sendState({
-                    domain: displayName,
-                    score: this.gameScore,
-                    timer: this.gameTimeLeft,
-                    isGameActive: this.isGameActive,
-                    totalActions: this.gameActionList ? (this.gameActionList.length + (this.gameTarget ? 1 : 0)) : 0
-                });
-            }
+            this.syncBattleState(stableDomain);
 
             if (this.ctx) this.ctx.restore();
         } catch (err) { console.error('❌ Tracking Error:', err); if (this.ctx) this.ctx.restore(); }
@@ -1031,6 +1039,10 @@ class HandTracker {
                 console.log('[MiniGame] Success:', stableDomain);
                 this.gameScore++;
                 this.gameTarget = null; // Prevent double scoring
+                
+                // Force immediate sync on score to prevent race conditions at match end
+                this.syncBattleState();
+                
                 if (this.gameTimerInterval) {
                     clearInterval(this.gameTimerInterval);
                     this.gameTimerInterval = null;
@@ -1071,7 +1083,20 @@ class HandTracker {
                     console.log(`[Game] Single Player Wait Time: ${waitTime}ms for ${stableDomain}`);
                     this.gameActionInterval = setTimeout(() => this.nextGameAction(), waitTime);
                 }
+
+                // --- NEW: Trigger API Action on SCORE ---
+                if (this.apiEndpoint && this.sessionKey) {
+                    const actionMap = {
+                        "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
+                        "Self-Embodiment of Perfection": "domain_self_embodiment", "Authentic Mutual Love": "domain_authentic_love",
+                        "Idle Death Gamble": "domain_idle_death_gamble", "Yuji Itadori": "domain_yuji_itadori",
+                        "Chimera Shadow Garden": "domain_chimera_shadow_garden", "Time Cell Moon Palace": "domain_time_cell_moon_palace",
+                        "Lapse Blue": "lapse_blue", "Reversal Red": "reversal_red", "Hollow Purple": "hollow_purple"
+                    };
+                    console.log(`[API] Triggering score action: ${actionMap[stableDomain]}`);
+                    this.triggerRobotAction(this.savedRobotId, actionMap[stableDomain]);
                 }
+            }
             this.domainDisplay.textContent = displayName;
             if (domainColor) this.domainDisplay.style.color = domainColor;
             this.domainDisplay.style.opacity = "1.0";
@@ -1109,17 +1134,7 @@ class HandTracker {
                 }
             }
             if (now - this.lastActionTime >= this.cooldownMs) {
-                if (this.apiEndpoint && this.sessionKey) {
-                    this.lastActionTime = now;
-                    const actionMap = {
-                        "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
-                        "Self-Embodiment of Perfection": "domain_self_embodiment", "Authentic Mutual Love": "domain_authentic_love",
-                        "Idle Death Gamble": "domain_idle_death_gamble", "Yuji Itadori": "domain_yuji_itadori",
-                        "Chimera Shadow Garden": "domain_chimera_shadow_garden", "Time Cell Moon Palace": "domain_time_cell_moon_palace",
-                        "Lapse Blue": "lapse_blue", "Reversal Red": "reversal_red", "Hollow Purple": "hollow_purple"
-                    };
-                    this.triggerRobotAction(this.savedRobotId, actionMap[stableDomain]);
-                }
+                this.lastActionTime = now;
             } else {
                 const wait = Math.ceil((this.cooldownMs - (now - this.lastActionTime)) / 1000);
                 this.domainDisplay.textContent = `${displayName} (Cooldown ${wait}s)`;
@@ -1259,15 +1274,7 @@ class HandTracker {
         }
 
         // Final broadcast of result state
-        if (this.battleSync) {
-            this.battleSync.sendState({
-                domain: null,
-                score: this.gameScore,
-                timer: 0,
-                isGameActive: false,
-                totalActions: 0
-            });
-        }
+        this.syncBattleState();
 
         this.gameTarget = null;
     }
@@ -1353,6 +1360,19 @@ class HandTracker {
                 this.nextGameAction(); // Move to next even if failed
             }
         }, 1000);
+    }
+
+    syncBattleState(stableDomain = null) {
+        if (!this.battleSync) return;
+        const displayName = stableDomain ? (this.domainGame.displayNames[stableDomain] || stableDomain) : 
+                           (this.gameTarget ? (this.domainGame.displayNames[this.gameTarget] || this.gameTarget) : null);
+        this.battleSync.sendState({
+            domain: displayName,
+            score: this.gameScore,
+            timer: this.gameTimeLeft,
+            isGameActive: this.isGameActive,
+            totalActions: this.gameActionList ? (this.gameActionList.length + (this.gameTarget ? 1 : 0)) : 0
+        });
     }
 
     nextGameAction() {
@@ -1444,6 +1464,46 @@ class HandTracker {
         } catch (err) { 
             console.error('❌ API failed:', err); 
             if (this.lastResp) this.lastResp.textContent = 'NET ERR';
+        }
+    }
+
+    // --- Online Multiplayer Helpers ---
+    toggleOnlineUI() {
+        if (!this.battleNetModeSelect) return;
+        this.battleNetMode = this.battleNetModeSelect.value;
+        localStorage.setItem('battle_net_mode', this.battleNetMode);
+        
+        if (this.battleNetMode === 'online') {
+            if (this.onlineRoomContainer) this.onlineRoomContainer.classList.remove('hidden');
+        } else {
+            if (this.onlineRoomContainer) this.onlineRoomContainer.classList.add('hidden');
+            if (this.onlineStatus) this.onlineStatus.textContent = 'Disconnected';
+        }
+    }
+
+    setupOnlineListeners() {
+        if (this.battleNetModeSelect) {
+            this.battleNetModeSelect.addEventListener('change', () => {
+                this.toggleOnlineUI();
+                this.updateBattleSync();
+            });
+        }
+
+        if (this.connectOnlineBtn) {
+            this.connectOnlineBtn.addEventListener('click', () => {
+                const code = this.onlineRoomCodeInput.value.trim().toUpperCase();
+                if (code.length !== 4) {
+                    alert('Please enter a 4-character Room Code.');
+                    return;
+                }
+                this.onlineRoomCode = code;
+                localStorage.setItem('online_room_code', code);
+                this.updateBattleSync();
+                if (this.onlineStatus) {
+                    this.onlineStatus.textContent = `Joined: ${code}`;
+                    this.onlineStatus.style.color = '#4CAF50';
+                }
+            });
         }
     }
 }

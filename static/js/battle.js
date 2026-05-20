@@ -1,10 +1,47 @@
-const sync = new BattleModeSync('viewer');
+let sync = null;
 const p1Video = document.getElementById('p1-video'), p2Video = document.getElementById('p2-video'), p1Waiting = document.getElementById('p1-waiting'), p2Waiting = document.getElementById('p2-waiting');
 const p1Score = document.getElementById('p1-score'), p2Score = document.getElementById('p2-score'), p1Domain = document.getElementById('p1-domain'), p2Domain = document.getElementById('p2-domain');
 const timerDisplay = document.getElementById('timer-display'), p1TimerSub = document.getElementById('p1-timer-sub'), p2TimerSub = document.getElementById('p2-timer-sub'), startBtn = document.getElementById('start-battle-btn'), audioHint = document.getElementById('audio-status-hint');
 const p1Cinema = document.getElementById('p1-cinema'), p2Cinema = document.getElementById('p2-cinema'), resultCinema = document.getElementById('result-cinema'), emergencyUnmute = document.getElementById('emergency-unmute');
 const resultOverlay = document.getElementById('match-result-overlay'), winnerText = document.getElementById('winner-text'), winnerSubtext = document.getElementById('winner-subtext'), resScoreP1 = document.getElementById('res-score-p1'), resScoreP2 = document.getElementById('res-score-p2'), closeResultBtn = document.getElementById('close-result-btn'), skipResultBtn = document.getElementById('skip-result-btn');
 const winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8-gate.mp4', 'escanor.mp4', 'onepunch.mp4', 'onepunch2.mp4'], loseVideos = Array.from({length: 9}, (_, i) => `shiba${i+1}.mp4`);
+
+// Network Config
+const netModeSelect = document.getElementById('cfg-net-mode'), valNetMode = document.getElementById('val-net-mode');
+const roomCodeDisplay = document.getElementById('room-code-display'), roomCodeVal = document.getElementById('room-code-val');
+
+const urlParams = new URLSearchParams(window.location.search);
+let currentNetMode = urlParams.get('net_mode') || 'local';
+let currentRoomCode = urlParams.get('room') || 'BTL1';
+
+function generateRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No O, 0, 1, I to avoid confusion
+    let res = '';
+    for (let i = 0; i < 4; i++) res += chars.charAt(Math.floor(Math.random() * chars.length));
+    return res;
+}
+
+function updateSyncMode() {
+    if (sync) sync.close();
+    
+    if (netModeSelect) {
+        currentNetMode = netModeSelect.value;
+    }
+    
+    if (valNetMode) valNetMode.textContent = currentNetMode.toUpperCase();
+    
+    if (currentNetMode === 'online') {
+        if (roomCodeVal) roomCodeVal.textContent = currentRoomCode;
+        if (roomCodeDisplay) roomCodeDisplay.style.display = 'block';
+    } else {
+        if (roomCodeDisplay) roomCodeDisplay.style.display = 'none';
+    }
+
+    sync = new BattleModeSync('viewer', currentNetMode, currentRoomCode);
+    setupSyncCallbacks();
+}
+
+if (netModeSelect) netModeSelect.addEventListener('change', updateSyncMode);
 
 // Video Durations in milliseconds based on provided table
 const VIDEO_DURATIONS = {
@@ -98,6 +135,7 @@ function resetViewerState() {
 }
 
 async function startMatch() {
+    if (!sync) return;
     sync.broadcast('CLOSE_OVERLAYS', null);
     await masterAudioUnlock(); resetViewerState();
     const countdownVal = parseInt(inCountdown.value) || 0;
@@ -111,65 +149,6 @@ async function startMatch() {
     setTimeout(() => { startBtn.style.background = '#FF5252'; startBtn.textContent = 'START BATTLE'; }, 3000);
 }
 startBtn.addEventListener('click', startMatch);
-
-sync.onStreamReceived = (playerID, stream) => {
-    console.log(`[Battle] Stream received for ${playerID}`, stream);
-    if (playerID === 'player1') { 
-        p1Video.srcObject = stream; 
-        p1Waiting.style.display = 'none'; 
-        p1Video.play().catch(e => console.warn("[Battle] P1 video play failed:", e));
-    }
-    else if (playerID === 'player2') { 
-        p2Video.srcObject = stream; 
-        p2Waiting.style.display = 'none'; 
-        p2Video.play().catch(e => console.warn("[Battle] P2 video play failed:", e));
-    }
-};
-
-sync.onPlayVideoSync = (playerID, videoSrc) => {
-    if (isMatchOver) return;
-    console.log(`[Battle] playing cinematic for ${playerID}: ${videoSrc}`);
-    
-    // Increment active count
-    activeCinematicsCount++;
-    
-    // Broadcast global match pause (Safe to call multiple times)
-    sync.broadcast('MATCH_PAUSE', null);
-    addTickerMsg(`MATCH PAUSED FOR CINEMATIC`, '');
-
-    const cinema = (playerID === 'player1') ? p1Cinema : p2Cinema;
-    cinema.src = videoSrc; cinema.style.display = 'block'; cinema.load();
-
-    // Safety Fallback based on Table Durations
-    const videoFile = videoSrc.split('/').pop();
-    const duration = VIDEO_DURATIONS[videoFile] || 15000;
-    let hasEnded = false;
-
-    const endLogic = () => {
-        if (hasEnded) return;
-        hasEnded = true;
-        if(!inQuadMode.checked) cinema.style.display = 'none';
-        
-        // Decrement active count
-        activeCinematicsCount--;
-        
-        // Only resume if all cinematics finished
-        if (activeCinematicsCount <= 0) {
-            activeCinematicsCount = 0; // Guard
-            console.log('[Battle] All cinematics ended, resuming match');
-            sync.broadcast('MATCH_RESUME', null);
-            addTickerMsg(`MATCH RESUMED`, '');
-        }
-    };
-
-    cinema.oncanplay = () => {
-        cinema.muted = false;
-        cinema.volume = 1.0;
-        cinema.play().catch(() => { cinema.muted = true; cinema.play(); });
-    };
-    cinema.onended = endLogic;
-    setTimeout(endLogic, duration + 1000); // 1s extra buffer
-};
 
 function playGlobalResultVideo(isWin) {
     console.log(`[Battle] playGlobalResultVideo(isWin=${isWin})`);
@@ -239,7 +218,7 @@ function showWinner() {
     }
     
     // Tell players the match is over immediately
-    sync.broadcast('MATCH_OVER', null);
+    if (sync) sync.broadcast('MATCH_OVER', null);
 
     // Stop all player-specific cinematics
     [p1Cinema, p2Cinema].forEach(c => { 
@@ -280,77 +259,150 @@ function showWinner() {
     playGlobalResultVideo(isWin);
 }
 
-sync.onStateReceived = (playerID, state) => {
-    if (isWinnerLogicActive) {
-        // Match is definitely over, just update display
-        const { score } = state;
-        if (playerID === 'player1') { p1ScoreVal = score; p1Score.textContent = score; }
-        else { p2ScoreVal = score; p2Score.textContent = score; }
-        return;
-    }
-    
-    const { domain, score, timer, isGameActive, totalActions } = state;
-    
-    if (playerID === 'player1') {
-        const wasActive = p1Active; p1Active = isGameActive;
-        if (totalActions !== undefined) p1TotalActions = totalActions;
-        
-        if (score > p1ScoreVal) { addTickerMsg(`P1 SCORED: ${domain || 'Technique'}`, 'ticker-p1'); triggerHitEffect('player2'); updatePowerBar(); }
-        p1ScoreVal = score; p1Score.textContent = score; p1Time = isGameActive ? timer : 0;
-        if (domain) { p1Domain.textContent = domain; p1Domain.classList.add('active'); } else { p1Domain.classList.remove('active'); }
-        if (isGameActive) p1TimerSub.textContent = `(${timer}s)`;
-        else { 
-            p1TimerSub.textContent = ''; 
-            if (wasActive) {
-                addTickerMsg(`P1 FINISHED: ${score}/${p1TotalActions}`, 'ticker-p1');
-                console.log(`[Battle] P1 Finished with ${score}`);
-            }
-        }
-    } else if (playerID === 'player2') {
-        const wasActive = p2Active; p2Active = isGameActive;
-        if (totalActions !== undefined) p2TotalActions = totalActions;
-        
-        if (score > p2ScoreVal) { addTickerMsg(`P2 SCORED: ${domain || 'Technique'}`, 'ticker-p2'); triggerHitEffect('player1'); updatePowerBar(); }
-        p2ScoreVal = score; p2Score.textContent = score; p2Time = isGameActive ? timer : 0;
-        if (domain) { p2Domain.textContent = domain; p2Domain.classList.add('active'); } else { p2Domain.classList.remove('active'); }
-        if (isGameActive) p2TimerSub.textContent = `(${timer}s)`;
-        else { 
-            p2TimerSub.textContent = ''; 
-            if (wasActive) {
-                addTickerMsg(`P2 FINISHED: ${score}/${p2TotalActions}`, 'ticker-p2');
-                console.log(`[Battle] P2 Finished with ${score}`);
-            }
-        }
-    }
+function setupSyncCallbacks() {
+    if (!sync) return;
 
-    // WINNER LOGIC: 
-    if (!isWinnerLogicActive) {
-        // Condition 1: Both finished
-        if (!p1Active && !p2Active && (p1ScoreVal > 0 || p2ScoreVal > 0)) {
-            console.log('[Battle] Trigger Condition: Both players inactive');
-            if (!winnerTimeoutHandle) winnerTimeoutHandle = setTimeout(showWinner, 500);
+    sync.onStreamReceived = (playerID, stream) => {
+        console.log(`[Battle] Stream received for ${playerID}`, stream);
+        if (playerID === 'player1') { 
+            p1Video.srcObject = stream; 
+            p1Waiting.style.display = 'none'; 
+            p1Video.play().catch(e => console.warn("[Battle] P1 video play failed:", e));
         }
-        // Condition 2: One finished, and the other has NO chance to win/draw (Score Gap > Remaining targets)
-        else if (!p1Active && p2Active && p2TotalActions > 0) {
-            if (p1ScoreVal > (p2ScoreVal + p2TotalActions)) { 
-                console.log(`[Battle] Trigger Condition: P1 Won Early (${p1ScoreVal} vs P2 max ${p2ScoreVal + p2TotalActions})`);
+        else if (playerID === 'player2') { 
+            p2Video.srcObject = stream; 
+            p2Waiting.style.display = 'none'; 
+            p2Video.play().catch(e => console.warn("[Battle] P2 video play failed:", e));
+        }
+    };
+
+    sync.onPlayVideoSync = (playerID, videoSrc) => {
+        if (isMatchOver) return;
+        console.log(`[Battle] playing cinematic for ${playerID}: ${videoSrc}`);
+        
+        // Increment active count
+        activeCinematicsCount++;
+        
+        // Broadcast global match pause (Safe to call multiple times)
+        sync.broadcast('MATCH_PAUSE', null);
+        addTickerMsg(`MATCH PAUSED FOR CINEMATIC`, '');
+
+        const cinema = (playerID === 'player1') ? p1Cinema : p2Cinema;
+        cinema.src = videoSrc; cinema.style.display = 'block'; cinema.load();
+
+        // Safety Fallback based on Table Durations
+        const videoFile = videoSrc.split('/').pop();
+        const duration = VIDEO_DURATIONS[videoFile] || 15000;
+        let hasEnded = false;
+
+        const endLogic = () => {
+            if (hasEnded) return;
+            hasEnded = true;
+            if(!inQuadMode.checked) cinema.style.display = 'none';
+            
+            // Decrement active count
+            activeCinematicsCount--;
+            
+            // Only resume if all cinematics finished
+            if (activeCinematicsCount <= 0) {
+                activeCinematicsCount = 0; // Guard
+                console.log('[Battle] All cinematics ended, resuming match');
+                sync.broadcast('MATCH_RESUME', null);
+                addTickerMsg(`MATCH RESUMED`, '');
+            }
+        };
+
+        cinema.oncanplay = () => {
+            cinema.muted = false;
+            cinema.volume = 1.0;
+            cinema.play().catch(() => { cinema.muted = true; cinema.play(); });
+        };
+        cinema.onended = endLogic;
+        setTimeout(endLogic, duration + 1000); // 1s extra buffer
+    };
+
+    sync.onStateReceived = (playerID, state) => {
+        const { domain, score, timer, isGameActive, totalActions } = state;
+
+        // --- ALWAYS update raw values to ensure accuracy ---
+        if (playerID === 'player1') {
+            p1ScoreVal = score;
+            p1Score.textContent = score;
+            if (resScoreP1) resScoreP1.textContent = score; // Update Result Screen dynamically
+            p1Time = isGameActive ? timer : 0;
+            if (totalActions !== undefined) p1TotalActions = totalActions;
+            
+            if (domain) { p1Domain.textContent = domain; p1Domain.classList.add('active'); } else { p1Domain.classList.remove('active'); }
+            if (isGameActive) p1TimerSub.textContent = `(${timer}s)`;
+            else { 
+                p1TimerSub.textContent = ''; 
+                if (p1Active) { // wasActive check
+                    addTickerMsg(`P1 FINISHED: ${score}/${p1TotalActions}`, 'ticker-p1');
+                    console.log(`[Battle] P1 Finished with ${score}`);
+                }
+            }
+            p1Active = isGameActive;
+        } else if (playerID === 'player2') {
+            p2ScoreVal = score;
+            p2Score.textContent = score;
+            if (resScoreP2) resScoreP2.textContent = score; // Update Result Screen dynamically
+            p2Time = isGameActive ? timer : 0;
+            if (totalActions !== undefined) p2TotalActions = totalActions;
+            
+            if (domain) { p2Domain.textContent = domain; p2Domain.classList.add('active'); } else { p2Domain.classList.remove('active'); }
+            if (isGameActive) p2TimerSub.textContent = `(${timer}s)`;
+            else { 
+                p2TimerSub.textContent = ''; 
+                if (p2Active) { // wasActive check
+                    addTickerMsg(`P2 FINISHED: ${score}/${p2TotalActions}`, 'ticker-p2');
+                    console.log(`[Battle] P2 Finished with ${score}`);
+                }
+            }
+            p2Active = isGameActive;
+        }
+
+        // Handle hit effects/power bar only if match not over
+        if (!isWinnerLogicActive) {
+            updatePowerBar();
+            // Note: Hit effects are handled by score comparison in single browser, 
+            // but for online we should trigger on every score update if score increased.
+            // (Current logic uses p1ScoreVal comparison which is fine since we update it above)
+        }
+
+        // WINNER LOGIC: 
+        if (!isWinnerLogicActive) {
+            // Condition 1: Both finished
+            if (!p1Active && !p2Active && (p1ScoreVal > 0 || p2ScoreVal > 0)) {
+                console.log('[Battle] Trigger Condition: Both players inactive');
                 if (!winnerTimeoutHandle) winnerTimeoutHandle = setTimeout(showWinner, 500);
             }
-        }
-        else if (!p2Active && p1Active && p1TotalActions > 0) {
-            if (p2ScoreVal > (p1ScoreVal + p1TotalActions)) {
-                console.log(`[Battle] Trigger Condition: P2 Won Early (${p2ScoreVal} vs P1 max ${p1ScoreVal + p1TotalActions})`);
-                if (!winnerTimeoutHandle) winnerTimeoutHandle = setTimeout(showWinner, 500);
+            // Condition 2: One finished, and the other has NO chance to win/draw
+            else if (!p1Active && p2Active && p2TotalActions > 0) {
+                if (p1ScoreVal > (p2ScoreVal + p2TotalActions)) { 
+                    console.log(`[Battle] Trigger Condition: P1 Won Early`);
+                    if (!winnerTimeoutHandle) winnerTimeoutHandle = setTimeout(showWinner, 500);
+                }
+            }
+            else if (!p2Active && p1Active && p1TotalActions > 0) {
+                if (p2ScoreVal > (p1ScoreVal + p1TotalActions)) {
+                    console.log(`[Battle] Trigger Condition: P2 Won Early`);
+                    if (!winnerTimeoutHandle) winnerTimeoutHandle = setTimeout(showWinner, 500);
+                }
             }
         }
-    }
 
-    const activeTime = Math.max(p1Time, p2Time);
-    if (p1Active || p2Active) timerDisplay.textContent = activeTime + 's';
-    else if (!isWinnerLogicActive) timerDisplay.textContent = '00:00';
-};
+        const activeTime = Math.max(p1Time, p2Time);
+        if (p1Active || p2Active) timerDisplay.textContent = activeTime + 's';
+        else if (!isWinnerLogicActive) timerDisplay.textContent = '00:00';
+    };
+}
+
 closeResultBtn.addEventListener('click', () => { 
     console.log('[Battle] Returning to lobby');
     resetViewerState();
-    sync.broadcast('CLOSE_OVERLAYS', null);
+    if (sync) sync.broadcast('CLOSE_OVERLAYS', null);
 });
+
+// Initial Init
+if (netModeSelect) netModeSelect.value = currentNetMode;
+updateSyncMode();
