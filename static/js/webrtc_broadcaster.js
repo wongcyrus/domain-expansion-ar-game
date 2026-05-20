@@ -12,6 +12,13 @@ class BattleModeSync {
         
         this.onStreamReceived = null; // Callback for viewer
         this.onStateReceived = null;  // Callback for viewer
+        this.onStartBattle = null;    // Callback for player
+        this.onCloseOverlays = null;  // Callback for player
+        this.onMatchOver = null;      // Callback for player
+        this.onMatchPause = null;     // Callback for player
+        this.onMatchResume = null;    // Callback for player
+        this.onPlayVideoSync = null;  // Callback for viewer
+        this.onViewerJoin = null;     // Callback for player
         
         this.init();
     }
@@ -30,7 +37,10 @@ class BattleModeSync {
 
             switch (type) {
                 case 'VIEWER_JOIN':
-                    if (this.isPlayer()) this.handleViewerJoin(from);
+                    if (this.isPlayer()) {
+                        this.handleViewerJoin(from);
+                        if (this.onViewerJoin) this.onViewerJoin(from);
+                    }
                     break;
                 case 'PLAYER_READY':
                     if (this.role === 'viewer') {
@@ -60,6 +70,12 @@ class BattleModeSync {
                 case 'CLOSE_OVERLAYS':
                     if (this.isPlayer() && this.onCloseOverlays) {
                         this.onCloseOverlays();
+                    }
+                    break;
+                case 'MATCH_OVER':
+                    console.log('[BattleSync] Match over signal received');
+                    if (this.isPlayer() && this.onMatchOver) {
+                        this.onMatchOver();
                     }
                     break;
                 case 'MATCH_PAUSE':

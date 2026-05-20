@@ -1,0 +1,389 @@
+body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #000;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
+    user-select: none;
+}
+
+.container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#webcam {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+}
+
+.overlay {
+    position: absolute;
+    z-index: 50;
+}
+
+.header {
+    top: 20px;
+    text-align: center;
+    width: 100%;
+    pointer-events: none;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+}
+.header h1 { margin: 0; font-size: 2rem; }
+.header p { margin: 0; font-size: 1rem; opacity: 0.8; }
+
+.logo-hkiit {
+    top: 25px;
+    left: 25px;
+    pointer-events: none;
+}
+.logo-hkiit img { height: 160px; width: auto; }
+
+.top-right-stack {
+    top: 25px;
+    right: 25px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 20px;
+    pointer-events: none;
+    z-index: 50;
+}
+.logo-it114115 img { height: 160px; width: auto; }
+
+#settings-toggle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #4A90E2;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    pointer-events: auto;
+}
+
+.status-panel {
+    bottom: 25px;
+    left: 25px;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 15px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 16px;
+    pointer-events: auto;
+    cursor: pointer;
+}
+.status-item { display: flex; align-items: center; gap: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: #666; }
+.dot.active { background: #4CAF50; box-shadow: 0 0 10px #4CAF50; }
+
+.instructions {
+    bottom: 25px;
+    right: 25px;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 20px;
+    border-radius: 12px;
+    font-size: 18px;
+    text-align: right;
+    pointer-events: auto;
+    position: absolute;
+}
+
+.right-panel-hide {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    width: 24px;
+    height: 24px;
+    background: #FF5252;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    border: 2px solid white;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    z-index: 10;
+}
+
+.instructions div {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.settings-panel {
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    padding: 0;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 100;
+}
+.settings-panel.hidden {
+    transform: translateX(350px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.hidden { display: none !important; }
+
+.settings-header {
+    padding: 15px;
+    background: rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.settings-header h3 { margin: 0; font-size: 14px; color: #4A90E2; }
+.settings-header button { background: none; border: none; color: white; cursor: pointer; font-size: 18px; }
+
+.settings-content { padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+.settings-panel label { font-size: 11px; display: block; margin-bottom: 4px; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.5px; }
+.settings-panel input, .settings-panel select { width: 100%; background: #222; color: white; border: 1px solid rgba(255,255,255,0.2); padding: 8px; border-radius: 6px; box-sizing: border-box; font-size: 13px; }
+.settings-panel select option { background: #222; color: white; }
+.settings-panel button#save-settings { width: 100%; background: #4A90E2; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 5px; transition: background 0.2s; }
+.settings-panel button#save-settings:active { background: #357ABD; }
+
+/* VFX Styles */
+#atmosphere-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+    background: transparent;
+    transition: background 0.5s ease;
+}
+
+/* Integrated Player Style */
+#integrated-player-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 70%;
+    max-width: 480px;
+    aspect-ratio: 16/9;
+    z-index: 400; /* High z-index to stay above everything when needed */
+    background: rgba(0,0,0,0.4);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(74, 144, 226, 0.4);
+    box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+    display: flex;
+}
+#integrated-player-container.hidden { display: none; }
+#integrated-player { width: 100%; height: 100%; object-fit: contain; }
+
+#output-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    transform: scaleX(-1);
+    z-index: 40; /* Skeleton on top of EVERYTHING */
+}
+
+#vfx-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    transform: scaleX(-1);
+    z-index: 10; /* Between Camera and Video */
+    opacity: 0.9;
+}
+
+/* Start Overlay - Massive Z-Index for clickability */
+#start-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.9);
+    z-index: 200; /* Absolute Top for interaction */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow-y: auto; /* Handle small screens */
+}
+
+.shake {
+    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+    transform: translate3d(0, 0, 0);
+}
+
+@keyframes shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+    40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+@media (max-width: 768px) {
+    .header { top: 10px; width: 100%; left: 0; padding: 8px 0; z-index: 60; }
+    .header h1 { font-size: 0.9rem; }
+    .header p { font-size: 0.5rem; }
+    #domain-display { font-size: 1.2rem !important; }
+
+    .settings-panel { 
+        width: 100%; 
+        right: 0; 
+        top: 10% !important; 
+        bottom: 0; 
+        height: 90% !important;
+        border-radius: 20px 20px 0 0;
+        padding-bottom: 20px;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 150;
+        display: flex;
+        flex-direction: column;
+    }
+    .settings-content {
+        overflow-y: auto;
+        flex: 1;
+    }
+    #close-settings {
+        padding: 10px;
+        font-size: 24px;
+    }
+    
+    .logo-hkiit { top: 10px; left: 10px; }
+    .logo-hkiit img { height: 70px; }
+    
+    .top-right-stack { top: 10px; right: 10px; gap: 8px; z-index: 90; }
+    .logo-it114115 img { height: 70px; }
+    
+    #settings-toggle, #game-toggle-btn { 
+        width: 36px !important; 
+        height: 36px !important; 
+        font-size: 18px !important; 
+    }
+
+    .instructions { 
+        width: 90%; 
+        right: 5%; 
+        bottom: 80px; 
+        padding: 10px; 
+        font-size: 12px;
+        z-index: 100;
+    }
+    #right-panel-restore-btn {
+        bottom: 25px !important;
+        right: 15px !important;
+    }
+
+    .status-panel { 
+        bottom: 25px; 
+        top: auto; 
+        left: 15px; 
+        padding: 8px; 
+        font-size: 10px; 
+        z-index: 30;
+    }
+
+    .qr-container {
+        bottom: 25px !important;
+        left: 15px !important;
+        padding: 4px !important;
+    }
+    .qr-container img {
+        width: 60px !important;
+        height: 60px !important;
+    }
+    #qr-label {
+        font-size: 8px !important;
+    }
+
+    #game-over-title {
+        font-size: 2.5rem !important;
+    }
+    #final-score-val {
+        font-size: 2.5rem !important;
+    }
+    #label-final-score {
+        font-size: 1.5rem !important;
+    }
+    #restart-game-btn {
+        padding: 15px !important;
+        font-size: 1.2rem !important;
+    }
+}
+
+/* Landscape Mobile Optimization */
+@media (max-width: 1024px) and (orientation: landscape) {
+    .header { top: 5px; width: 100%; left: 0; padding: 5px 0; }
+    .header h1 { font-size: 0.8rem; }
+    .header p { display: none; }
+    #domain-display { font-size: 1rem !important; margin-top: 5px; }
+
+    .logo-hkiit { top: 5px; left: 10px; }
+    .logo-hkiit img { height: 50px; }
+    .logo-it114115 img { height: 50px; }
+    #settings-toggle, #game-toggle-btn { 
+        width: 36px !important; 
+        height: 36px !important; 
+        font-size: 18px !important; 
+    }
+
+    .instructions { 
+        width: 60%; 
+        right: 5px; 
+        bottom: 50px; 
+        padding: 8px; 
+        font-size: 11px; 
+    }
+    #right-panel-restore-btn {
+        bottom: 10px !important;
+        right: 10px !important;
+    }
+    .status-panel { bottom: 10px; left: 10px; padding: 5px; font-size: 9px; flex-direction: row; gap: 10px; }
+    
+    .settings-panel { width: 300px; height: 100vh; right: 0; top: 0; border-radius: 0; z-index: 150; }
+}
+
+@keyframes success-pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1); opacity: 0; }
+}

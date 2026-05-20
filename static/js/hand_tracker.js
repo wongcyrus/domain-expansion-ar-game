@@ -647,7 +647,27 @@ class HandTracker {
 
             this.battleSync.onCloseOverlays = () => {
                 console.log('[Battle] Remote close overlays received!');
+                this.isGameActive = false;
+                this.gameScore = 0;
+                this.gameTarget = null;
                 this.hideOverlays();
+                
+                // Signal viewer that we are clean
+                this.battleSync.sendState({
+                    domain: null,
+                    score: 0,
+                    timer: 0,
+                    isGameActive: false,
+                    totalActions: 0
+                });
+            };
+
+            this.battleSync.onMatchOver = () => {
+                console.log('[Battle] Match OVER signal received');
+                this.isPaused = false; // Ensure unpaused
+                if (this.isGameActive) {
+                    this.stopMiniGame('Match Ended', false);
+                }
             };
 
             this.battleSync.onMatchPause = () => {
@@ -671,6 +691,17 @@ class HandTracker {
                         this.startGameTimer();
                     }
                 }
+            };
+
+            this.battleSync.onViewerJoin = () => {
+                console.log('[Battle] Viewer joined, syncing current state');
+                this.battleSync.sendState({
+                    domain: this.gameTarget ? (this.domainGame.displayNames[this.gameTarget] || this.gameTarget) : null,
+                    score: this.gameScore,
+                    timer: this.gameTimeLeft,
+                    isGameActive: this.isGameActive,
+                    totalActions: this.gameActionList ? (this.gameActionList.length + (this.gameTarget ? 1 : 0)) : 0
+                });
             };
 
             // Ensure players ignore each other's game states/technique events
@@ -910,7 +941,8 @@ class HandTracker {
                     domain: displayName,
                     score: this.gameScore,
                     timer: this.gameTimeLeft,
-                    isGameActive: this.isGameActive
+                    isGameActive: this.isGameActive,
+                    totalActions: this.gameActionList ? (this.gameActionList.length + (this.gameTarget ? 1 : 0)) : 0
                 });
             }
 
@@ -1226,6 +1258,17 @@ class HandTracker {
             this.gameToggleBtn.style.color = '#000';
         }
 
+        // Final broadcast of result state
+        if (this.battleSync) {
+            this.battleSync.sendState({
+                domain: null,
+                score: this.gameScore,
+                timer: 0,
+                isGameActive: false,
+                totalActions: 0
+            });
+        }
+
         this.gameTarget = null;
     }
 
@@ -1239,6 +1282,7 @@ class HandTracker {
             if (this.resultVideoPlayer) {
                 this.resultVideoPlayer.pause();
                 this.resultVideoPlayer.src = "";
+                try { this.resultVideoPlayer.load(); } catch(e) {}
             }
         }
     }
