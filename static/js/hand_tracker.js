@@ -1217,30 +1217,8 @@ class HandTracker {
             this.gameToggleBtn.style.color = '#FFF';
         }
 
-        // --- Optimization: Preload Result Videos ---
-        this.preloadResultVideos();
-
         this.updateGameHUD();
         this.nextGameAction();
-    }
-
-    preloadResultVideos() {
-        // Preload one win and two lose videos randomly
-        const folder = window.location.pathname.replace(/\/[^\/]*$/, '');
-        const toPreload = [
-            `static/video/win/${this.winVideos[Math.floor(Math.random() * this.winVideos.length)]}`,
-            `static/video/lose/${this.loseVideos[Math.floor(Math.random() * this.loseVideos.length)]}`,
-            `static/video/lose/${this.loseVideos[Math.floor(Math.random() * this.loseVideos.length)]}`
-        ];
-
-        toPreload.forEach(path => {
-            const link = document.createElement('link');
-            link.rel = 'preload';
-            link.as = 'video';
-            link.href = `${window.location.origin}${folder}/${path}`;
-            document.head.appendChild(link);
-            console.log(`[Game] Preloading: ${path}`);
-        });
     }
 
     stopMiniGame(reason = 'Game Over', manualStop = false) {

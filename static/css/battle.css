@@ -21,6 +21,39 @@ video { width: 100%; height: 100%; object-fit: cover; }
 .p1-color { color: #4A90E2; } .p2-color { color: #FFFF00; }
 .p1-border { border-color: #4A90E2; } .p2-border { border-color: #FFFF00; }
 
+/* --- Base Layouts --- */
+body.vertical-stack {
+    flex-direction: column;
+}
+body.vertical-stack .player-view {
+    width: 100%;
+    height: 50vh;
+}
+
+/* --- Overlay Mode (1 Video active) --- */
+body.overlay-mode .p1-cinema, body.overlay-mode .p2-cinema {
+    position: fixed !important;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    max-width: 1200px;
+    height: auto !important;
+    aspect-ratio: 16/9;
+    z-index: 500;
+    border: 5px solid #FFFF00;
+    border-radius: 24px;
+    box-shadow: 0 0 100px rgba(0,0,0,0.9);
+    display: block !important;
+    background: #000;
+}
+
+/* Hide the inactive cinema in overlay mode just in case */
+body.overlay-mode .p1-cinema:not([src*=".mp4"]), 
+body.overlay-mode .p2-cinema:not([src*=".mp4"]) {
+    display: none !important;
+}
+
 /* --- Quad View Mode (2x2) --- */
 body.quad-mode { flex-wrap: wrap; }
 body.quad-mode .player-view { display: grid; grid-template-rows: 1fr 1fr; height: 100vh; border-bottom: 2px solid #222; }
