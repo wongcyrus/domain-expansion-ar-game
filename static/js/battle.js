@@ -19,7 +19,7 @@ const countdownOverlay = document.getElementById('countdown-overlay'), countdown
 const urlParams = new URLSearchParams(window.location.search);
 let currentNetMode = urlParams.get('net_mode') || 'local';
 let currentRoomCode = urlParams.get('room') || 'BTL1';
-let p1Time = 0, p2Time = 0, p1Active = false, p2Active = false, p1ScoreVal = 0, p2ScoreVal = 0, isMatchOver = false, winnerTimeoutHandle = null;
+let p1Time = 0, p2Time = 0, p1Active = false, p2Active = false, p1ScoreVal = 0, p2ScoreVal = 0, isMatchOver = false, winnerTimeoutHandle = null, hasMatchStarted = false;
 let p1TotalActions = 11, p2TotalActions = 11;
 let activeCinematicsCount = 0;
 let resultTimeoutHandle = null;
@@ -125,7 +125,7 @@ function resetViewerState() {
     console.log('[Battle] resetViewerState');
     if (winnerTimeoutHandle) clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = null;
     if (resultTimeoutHandle) clearTimeout(resultTimeoutHandle); resultTimeoutHandle = null;
-    isMatchOver = false; isWinnerLogicActive = false;
+    isMatchOver = false; isWinnerLogicActive = false; hasMatchStarted = false;
     p1Active = false; p2Active = false; p1ScoreVal = 0; p2ScoreVal = 0;
     activeCinematicsCount = 0;
     resultOverlay.style.display = 'none'; emergencyUnmute.style.display = 'none';
@@ -149,6 +149,7 @@ async function startMatch() {
         countdownText.textContent = "GO!"; await new Promise(r => setTimeout(r, 500)); countdownOverlay.style.display = 'none';
     }
     sync.broadcast('START_BATTLE', { difficulty: parseInt(inDifficulty.value), count: parseInt(inCount.value) });
+    hasMatchStarted = true;
     startBtn.style.background = '#4CAF50'; startBtn.textContent = 'GAME RUNNING';
     setTimeout(() => { startBtn.style.background = '#FF5252'; startBtn.textContent = 'START BATTLE'; }, 3000);
 }
@@ -191,7 +192,7 @@ function playGlobalResultVideo(isWin) {
 
 function showWinner() {
     if (isWinnerLogicActive) return;
-    isWinnerLogicActive = true; isMatchOver = true;
+    isWinnerLogicActive = true; isMatchOver = true; hasMatchStarted = false;
     if (winnerTimeoutHandle) { clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = null; }
     if (sync) sync.broadcast('MATCH_OVER', null);
     [p1Cinema, p2Cinema].forEach(c => { c.pause(); c.src = ""; c.style.display = 'none'; });
@@ -237,6 +238,9 @@ function setupSyncCallbacks() {
     };
     sync.onStateReceived = (playerID, state) => {
         const { domain, score, timer, isGameActive, totalActions } = state;
+        if (isGameActive) {
+            hasMatchStarted = true;
+        }
         if (playerID === 'player1') {
             p1ScoreVal = score; p1Score.textContent = score; if (resScoreP1) resScoreP1.textContent = score;
             p1Time = isGameActive ? timer : 0; if (totalActions !== undefined) p1TotalActions = totalActions;
@@ -252,7 +256,7 @@ function setupSyncCallbacks() {
             else { p2TimerSub.textContent = ''; if (p2Active) addTickerMsg(`P2 FINISHED: ${score}/${p2TotalActions}`, 'ticker-p2'); }
             p2Active = isGameActive;
         }
-        if (!isWinnerLogicActive) {
+        if (!isWinnerLogicActive && hasMatchStarted) {
             updatePowerBar();
             if (!p1Active && !p2Active && (p1ScoreVal > 0 || p2ScoreVal > 0)) { if (!winnerTimeoutHandle) winnerTimeoutHandle = setTimeout(showWinner, 500); }
             else if (!p1Active && p2Active && p2TotalActions > 0 && p1ScoreVal > (p2ScoreVal + p2TotalActions)) { if (!winnerTimeoutHandle) winnerTimeoutHandle = setTimeout(showWinner, 500); }
