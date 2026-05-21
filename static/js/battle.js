@@ -33,8 +33,6 @@ function updateLayout() {
 
     if (inQuadMode && inQuadMode.checked) {
         document.body.classList.add('quad-mode');
-        p1Cinema.style.display = 'block'; p2Cinema.style.display = 'block';
-        return;
     }
 
     if (baseLayoutSelect && baseLayoutSelect.value === 'vertical-stack') {
@@ -49,7 +47,10 @@ function updateLayout() {
         }
     }
 
-    if (!document.body.classList.contains('quad-mode')) {
+    if (document.body.classList.contains('quad-mode')) {
+        p1Cinema.style.display = 'block';
+        p2Cinema.style.display = 'block';
+    } else {
         p1Cinema.style.display = p1Cinema.src.includes('.mp4') ? 'block' : 'none';
         p2Cinema.style.display = p2Cinema.src.includes('.mp4') ? 'block' : 'none';
     }
@@ -265,3 +266,4 @@ function setupSyncCallbacks() {
 closeResultBtn.addEventListener('click', () => { resetViewerState(); if (sync) sync.broadcast('CLOSE_OVERLAYS', null); });
 if (netModeSelect) netModeSelect.value = currentNetMode;
 updateSyncMode();
+updateLayout();

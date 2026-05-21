@@ -1,6 +1,17 @@
 body { margin: 0; padding: 0; width: 100vw; height: 100vh; background: #000; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; display: flex; }
 .player-view { flex: 1; position: relative; height: 100%; border: 2px solid #222; overflow: hidden; background: #111; display: flex; align-items: center; justify-content: center; }
 video { width: 100%; height: 100%; object-fit: cover; }
+.p1-cinema, .p2-cinema {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 30;
+    object-fit: contain;
+    background: #000;
+    display: none;
+}
 .waiting-msg { position: absolute; z-index: 10; font-size: 1.5rem; color: #666; text-transform: uppercase; letter-spacing: 2px; text-align: center; }
 .hud { position: absolute; bottom: 40px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; z-index: 20; pointer-events: none; }
 .domain-name { font-size: 2.5rem; font-weight: bold; text-shadow: 0 0 20px rgba(255,255,255,0.8); margin-bottom: 10px; opacity: 0; transition: opacity 0.3s; }
@@ -32,33 +43,30 @@ body.vertical-stack .player-view {
 
 /* --- Overlay Mode (1 Video active) --- */
 body.overlay-mode .p1-cinema, body.overlay-mode .p2-cinema {
-    position: fixed !important;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     width: 80%;
     max-width: 1200px;
-    height: auto !important;
+    height: auto;
     aspect-ratio: 16/9;
     z-index: 500;
     border: 5px solid #FFFF00;
     border-radius: 24px;
     box-shadow: 0 0 100px rgba(0,0,0,0.9);
-    display: block !important;
     background: #000;
-}
-
-/* Hide the inactive cinema in overlay mode just in case */
-body.overlay-mode .p1-cinema:not([src*=".mp4"]), 
-body.overlay-mode .p2-cinema:not([src*=".mp4"]) {
-    display: none !important;
 }
 
 /* --- Quad View Mode (2x2) --- */
 body.quad-mode { flex-wrap: wrap; }
 body.quad-mode .player-view { display: grid; grid-template-rows: 1fr 1fr; height: 100vh; border-bottom: 2px solid #222; }
 body.quad-mode .player-view video { position: relative; width: 100%; height: 100%; object-fit: cover; border-bottom: 1px solid #333; }
-body.quad-mode .player-view .p1-cinema, body.quad-mode .player-view .p2-cinema { position: relative !important; display: block !important; z-index: 10; background: #000; }
+body.quad-mode .player-view .p1-cinema, body.quad-mode .player-view .p2-cinema {
+    position: relative;
+    z-index: 10;
+    background: #000;
+}
 body.quad-mode .hud { bottom: calc(50% + 40px); }
 body.quad-mode .waiting-msg { top: 25%; }
 
