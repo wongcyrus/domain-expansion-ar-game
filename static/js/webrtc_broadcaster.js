@@ -28,6 +28,7 @@ class BattleModeSync {
         this.onMatchResume = null;    // Callback for player
         this.onPlayVideoSync = null;  // Callback for viewer
         this.onViewerJoin = null;     // Callback for player
+        this.onCaptureWebcamFrame = null; // Callback for player to take a snapshot
         
         this.init();
     }
@@ -153,6 +154,11 @@ class BattleModeSync {
             case 'START_BATTLE':
                 if (this.isPlayer() && this.onStartBattle) {
                     this.onStartBattle(data);
+                }
+                break;
+            case 'CAPTURE_WEBCAM_FRAME':
+                if (this.isPlayer() && this.onCaptureWebcamFrame) {
+                    this.onCaptureWebcamFrame(data);
                 }
                 break;
             case 'CLOSE_OVERLAYS':

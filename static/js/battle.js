@@ -174,74 +174,91 @@ function getActionNameFromVideo(videoSrc) {
 
 function displayCommentary(text) {
     const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
-    if (!isCommentatorEnabled) return;
+    if (!isCommentatorEnabled) return Promise.resolve();
 
     const bubble = document.getElementById('commentator-bubble');
     const txtNode = document.getElementById('commentator-text');
-    if (!bubble || !txtNode) return;
+    if (!bubble || !txtNode) return Promise.resolve();
 
     txtNode.textContent = text;
     bubble.style.display = 'block';
 
     if (commentaryHideTimeout) clearTimeout(commentaryHideTimeout);
     
-    speakCommentary(text);
+    const p = speakCommentary(text);
 
     commentaryHideTimeout = setTimeout(() => {
         bubble.style.display = 'none';
     }, 8000); // Premium visual duration of 8 seconds
+    
+    return p;
 }
 
 function speakCommentary(text) {
     const canSpeakTTS = document.getElementById('cfg-commentator-speak')?.checked !== false;
-    if (!canSpeakTTS) return;
-    if (!window.speechSynthesis) return;
-    try {
-        window.speechSynthesis.cancel();
-        
-        // Safety sanitization: remove formatting characters and emojis client-side before speaking
-        let sanitizedText = text || "";
-        sanitizedText = sanitizedText.replace(/[\*_`~]/g, "");
+    if (!canSpeakTTS) return Promise.resolve();
+    if (!window.speechSynthesis) return Promise.resolve();
+    return new Promise((resolve) => {
         try {
-            sanitizedText = sanitizedText.replace(/\p{Extended_Pictographic}/gu, "");
-        } catch (err) {}
-        sanitizedText = sanitizedText.replace(/\s+/g, " ").trim();
-        if (!sanitizedText) return;
+            window.speechSynthesis.cancel();
+            
+            // Safety sanitization: remove formatting characters and emojis client-side before speaking
+            let sanitizedText = text || "";
+            sanitizedText = sanitizedText.replace(/[\*_`~]/g, "");
+            try {
+                sanitizedText = sanitizedText.replace(/\p{Extended_Pictographic}/gu, "");
+            } catch (err) {}
+            sanitizedText = sanitizedText.replace(/\s+/g, " ").trim();
+            if (!sanitizedText) {
+                resolve();
+                return;
+            }
 
-        const utterance = new SpeechSynthesisUtterance(sanitizedText);
-        const voices = window.speechSynthesis.getVoices();
-        
-        // Read commentary language config from the spectator screen
-        const targetLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
-        let selectedVoice = null;
-        
-        if (targetLang === 'zh-HK') {
-            selectedVoice = voices.find(v => v.lang.includes('zh-HK')) || 
-                            voices.find(v => v.lang.includes('zh-TW')) || 
-                            voices.find(v => v.lang.startsWith('zh')) || 
-                            voices[0];
-        } else if (targetLang === 'zh-TW') {
-            selectedVoice = voices.find(v => v.lang.includes('zh-TW')) || 
-                            voices.find(v => v.lang.includes('zh-HK')) || 
-                            voices.find(v => v.lang.startsWith('zh')) || 
-                            voices[0];
-        } else if (targetLang === 'ja') {
-            selectedVoice = voices.find(v => v.lang.startsWith('ja')) || voices[0];
-        } else {
-            selectedVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+            const utterance = new SpeechSynthesisUtterance(sanitizedText);
+            
+            utterance.onend = () => {
+                resolve();
+            };
+            utterance.onerror = (e) => {
+                console.warn("[TTS] Speech synthesis error event:", e);
+                resolve();
+            };
+
+            const voices = window.speechSynthesis.getVoices();
+            
+            // Read commentary language config from the spectator screen
+            const targetLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+            let selectedVoice = null;
+            
+            if (targetLang === 'zh-HK') {
+                selectedVoice = voices.find(v => v.lang.includes('zh-HK')) || 
+                                voices.find(v => v.lang.includes('zh-TW')) || 
+                                voices.find(v => v.lang.startsWith('zh')) || 
+                                voices[0];
+            } else if (targetLang === 'zh-TW') {
+                selectedVoice = voices.find(v => v.lang.includes('zh-TW')) || 
+                                voices.find(v => v.lang.includes('zh-HK')) || 
+                                voices.find(v => v.lang.startsWith('zh')) || 
+                                voices[0];
+            } else if (targetLang === 'ja') {
+                selectedVoice = voices.find(v => v.lang.startsWith('ja')) || voices[0];
+            } else {
+                selectedVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+            }
+            
+            if (selectedVoice) {
+                utterance.voice = selectedVoice;
+                utterance.lang = selectedVoice.lang;
+            }
+            
+            utterance.rate = 1.1; // Energy rate boost
+            utterance.pitch = 1.0;
+            window.speechSynthesis.speak(utterance);
+        } catch (e) {
+            console.warn("[TTS] Speech synthesis failed:", e);
+            resolve();
         }
-        
-        if (selectedVoice) {
-            utterance.voice = selectedVoice;
-            utterance.lang = selectedVoice.lang;
-        }
-        
-        utterance.rate = 1.1; // Energy rate boost
-        utterance.pitch = 1.0;
-        window.speechSynthesis.speak(utterance);
-    } catch (e) {
-        console.warn("[TTS] Speech synthesis failed:", e);
-    }
+    });
 }
 
 function addTickerMsg(msg, playerClass) { const el = document.createElement('div'); el.className = `ticker-msg ${playerClass}`; el.textContent = `> ${msg}`; ticker.appendChild(el); ticker.scrollTop = ticker.scrollHeight; if (ticker.children.length > 5) ticker.removeChild(ticker.firstChild); }
@@ -318,6 +335,15 @@ async function startMatch() {
         // Reset OpenClaw session and prime with the selected system rules once
         const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
         if (isCommentatorEnabled) {
+            const isWebcamEnabled = document.getElementById('cfg-commentator-webcam')?.checked !== false;
+            if (isWebcamEnabled && sync) {
+                // 1. Trigger single-shot start frame webcam capture from Player View
+                sync.broadcast('CAPTURE_WEBCAM_FRAME', { phase: 'START', sessionId: dynamicSessionId });
+                
+                // 2. Wait for player device to capture and upload the image (1000ms delay)
+                await new Promise(r => setTimeout(r, 1000));
+            }
+
             const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
             const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
             const resp = await callBridge('/api/live-status', {
@@ -329,7 +355,8 @@ async function startMatch() {
                 foulLanguage: isFoulEnabled
             });
             if (resp && resp.welcomeMessage) {
-                displayCommentary(resp.welcomeMessage);
+                // 3. Wait for the entire welcoming hype commentary to be spoken before countdown
+                await displayCommentary(resp.welcomeMessage);
             }
         }
 
@@ -397,7 +424,7 @@ function playGlobalResultVideo(isWin) {
     resultTimeoutHandle = setTimeout(endResult, duration + 1000);
 }
 
-function showWinner() {
+async function showWinner() {
     if (isWinnerLogicActive) return;
     isWinnerLogicActive = true; isMatchOver = true; hasMatchStarted = false;
     if (winnerTimeoutHandle) { clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = null; }
@@ -420,6 +447,16 @@ function showWinner() {
     // Trigger final match comments from the OpenClaw agent
     const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
     if (isCommentatorEnabled) {
+        const isWebcamEnabled = document.getElementById('cfg-commentator-webcam')?.checked !== false;
+        if (isWebcamEnabled && sync) {
+            // 1. Trigger single-shot end frame webcam capture from Player View
+            const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+            sync.broadcast('CAPTURE_WEBCAM_FRAME', { phase: 'END', sessionId: openclawSessionId });
+            
+            // 2. Wait for player device to capture and upload the image (1000ms delay)
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
         const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
         const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
         const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;

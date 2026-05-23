@@ -76,9 +76,9 @@
             <div>
                 <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">COMMENTARY LANGUAGE</label>
                 <select id="cfg-commentary-lang" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
-                    <option value="zh-HK">🇭🇰 廣東話 (Cantonese)</option>
+                    <option value="zh-HK" selected>🇭🇰 廣東話 (Cantonese)</option>
                     <option value="zh-TW">🇹🇼 繁體中文 (Traditional Chinese)</option>
-                    <option value="en" selected>🇺🇸 English</option>
+                    <option value="en">🇺🇸 English</option>
                     <option value="ja">🇯🇵 日本語</option>
                 </select>
             </div>
@@ -93,6 +93,10 @@
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
                 <input type="checkbox" id="cfg-commentator-speak" style="width: 16px; height: 16px; cursor: pointer;" checked>
                 <label for="cfg-commentator-speak" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">🔊 <b>COMMENTATOR SPEAK (TTS)</b></label>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
+                <input type="checkbox" id="cfg-commentator-webcam" style="width: 16px; height: 16px; cursor: pointer;" checked>
+                <label for="cfg-commentator-webcam" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">📷 <b>CAPTURE WEBCAM SNAPSHOTS</b></label>
             </div>
         </div>
 
@@ -149,6 +153,6 @@
         <div id="commentator-text">Waiting for sorcery battle...</div>
     </div>
 
-    <script src="static/js/battle.js"></script>
+    <script src="static/js/battle.js?v=2.1"></script>
 </body>
 </html>

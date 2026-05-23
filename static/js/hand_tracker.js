@@ -528,7 +528,6 @@ class HandTracker {
             
             this.isCameraRunning = true;
             this.requestCameraFrame();
-            this.startWebcamUploadInterval();
             
             console.log('[Game] Camera stream successfully attached and playing.');
         } catch (err) {
@@ -543,7 +542,6 @@ class HandTracker {
 
     stopCamera() {
         this.isCameraRunning = false;
-        this.stopWebcamUploadInterval();
         if (this.frameRequestHandle) {
             cancelAnimationFrame(this.frameRequestHandle);
             this.frameRequestHandle = null;
@@ -558,57 +556,60 @@ class HandTracker {
         }
     }
 
-    startWebcamUploadInterval() {
-        if (this.webcamUploadIntervalHandle) {
-            clearInterval(this.webcamUploadIntervalHandle);
-        }
-        
-        // Setup tiny detached canvas for lightweight image capturing
-        const capCanvas = document.createElement('canvas');
-        capCanvas.width = 320;
-        capCanvas.height = 240;
-        const capCtx = capCanvas.getContext('2d');
-        
-        this.webcamUploadIntervalHandle = setInterval(async () => {
-            if (!this.isCameraRunning || !this.video || this.video.paused) return;
-            if (this.disableApi || !this.apiEndpoint) return;
-            
-            try {
-                // Draw current video frame onto detached canvas
-                capCtx.drawImage(this.video, 0, 0, capCanvas.width, capCanvas.height);
-                // Compress to JPEG with 0.6 quality for ultra efficiency (~15KB)
-                const dataUrl = capCanvas.toDataURL('image/jpeg', 0.6);
-                const base64Str = dataUrl.split('base64,')[1];
-                
-                // Read OpenClaw session key or default to main
-                const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
-                
-                // Upload frame to bridge
-                let uploadEndpoint = this.apiEndpoint || '';
-                if (!uploadEndpoint || uploadEndpoint.includes('3002')) {
-                    uploadEndpoint = window.location.origin;
-                }
-                await fetch(`${uploadEndpoint.replace(/\/$/, '')}/api/webcam-upload`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        sessionId: openclawSessionId,
-                        image: base64Str
-                    })
-                });
-            } catch (err) {
-                // Fail silently to avoid interrupting hand tracking or gameplay
-                console.warn('[Webcam] Failed to upload snapshot:', err);
-            }
-        }, 2000); // 2 seconds interval
+    async remoteLog(level, message) {
+        try {
+            await fetch(`${window.location.origin}/api/log`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ level, message })
+            });
+        } catch(e) {}
     }
 
-    stopWebcamUploadInterval() {
-        if (this.webcamUploadIntervalHandle) {
-            clearInterval(this.webcamUploadIntervalHandle);
-            this.webcamUploadIntervalHandle = null;
+    async captureSingleWebcamFrameAndUpload(sessionIdOverride) {
+        if (!this.isCameraRunning || !this.video || this.video.paused) {
+            console.warn('[Webcam] Skipping capture: Camera not running');
+            return;
+        }
+        
+        try {
+            const capCanvas = document.createElement('canvas');
+            capCanvas.width = 320;
+            capCanvas.height = 240;
+            const capCtx = capCanvas.getContext('2d');
+            capCtx.drawImage(this.video, 0, 0, capCanvas.width, capCanvas.height);
+            
+            const dataUrl = capCanvas.toDataURL('image/jpeg', 0.6);
+            const base64Str = dataUrl.split('base64,')[1];
+            
+            const openclawSessionId = sessionIdOverride || localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+            if (sessionIdOverride) {
+                localStorage.setItem('openclawActiveSessionId', sessionIdOverride);
+            }
+            
+            this.remoteLog('INFO', `[Single-Shot] Capturing & uploading webcam frame for session=${openclawSessionId}`);
+            
+            const uploadEndpoint = window.location.origin;
+            const resp = await fetch(`${uploadEndpoint}/api/webcam-upload`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId: openclawSessionId,
+                    role: this.battleRole,
+                    image: base64Str
+                })
+            });
+            if (resp.ok) {
+                const respJson = await resp.json();
+                this.remoteLog('INFO', `[Single-Shot] Successfully uploaded webcam frame. Response: ${JSON.stringify(respJson)}`);
+            } else {
+                this.remoteLog('ERROR', `[Single-Shot] Webcam upload failed with HTTP status ${resp.status}`);
+            }
+        } catch (err) {
+            this.remoteLog('ERROR', `[Single-Shot] Webcam capture catch block: ${err.message || err}`);
+            console.warn('[Webcam] Single-shot upload failed:', err);
         }
     }
 
@@ -738,6 +739,11 @@ class HandTracker {
                     localStorage.setItem('openclawActiveSessionId', config.openclawSessionId);
                 }
                 this.startMiniGame(config);
+            };
+
+            this.battleSync.onCaptureWebcamFrame = (data) => {
+                console.log('[Battle] Remote capture webcam frame request received:', data);
+                this.captureSingleWebcamFrameAndUpload(data?.sessionId);
             };
 
             this.battleSync.onCloseOverlays = () => {
@@ -1649,4 +1655,11 @@ class HandTracker {
     }
 }
 
-window.addEventListener('DOMContentLoaded', () => { window.handTracker = new HandTracker(); });
+window.addEventListener('DOMContentLoaded', () => { 
+    window.handTracker = new HandTracker(); 
+    fetch(`${window.location.origin}/api/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: 'INFO', message: 'HandTracker DOMContentLoaded successfully initialized!' })
+    }).catch(e => console.warn('Remote ping failed:', e));
+});
