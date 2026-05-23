@@ -75,6 +75,25 @@ The game supports two types of multi-monitor setup for professional battles:
 
 ---
 
+## 🟢 Native Node.js Setup | 本地 Node.js 啟動
+
+If you do not wish to use Docker, you can run the game server directly using Node.js. In this mode, the server dynamically reads your credentials directly from `~/.openclaw/openclaw.json` natively.
+
+若您不想使用 Docker，也可以直接使用 Node.js 運行遊戲伺服器。在此模式下，伺服器會自動從本地的 `~/.openclaw/openclaw.json` 中動態讀取憑證與埠號。
+
+1. **Install Dependencies | 安裝依賴套件**:
+   ```bash
+   npm install
+   ```
+2. **Start the Server | 啟動伺服器**:
+   ```bash
+   node server.js
+   ```
+   - The server will dynamically load your OpenClaw configuration and start in HTTPS mode if SSL certificates (`key.pem` and `cert.pem`) are present, or fallback to HTTP.
+   - 伺服器會自動載入 OpenClaw 配置，且若本地存在 SSL 憑證 (`key.pem` 與 `cert.pem`)，將自動以 HTTPS 模式啟動，否則將自動降級至 HTTP 啟動。
+
+---
+
 ## 🐳 Docker Setup | Docker 設定
 
 To enable Online Multiplayer, you can easily run the signaling server using Docker:
@@ -135,6 +154,25 @@ If you encounter a **403 Forbidden** error after deployment, you must manually g
 - **SSL Termination**: Cloud Run handles HTTPS automatically at the edge. The container is configured to switch to HTTP internally when deployed there.
 - **Session Affinity**: The `--session-affinity` flag is **required** for Socket.io to maintain stable connections between your device and the signaling server.
 - **Port**: The application respects the `$PORT` environment variable (defaulting to 8080 on Cloud Run).
+
+
+---
+
+## 🎙️ JJK AI Commentator & OpenClaw Integration | 咒術 AI 旁白與 OpenClaw 整合
+
+The game supports a **direct, push-based JJK AI Commentator** integrated natively with your local **OpenClaw Gateway**.
+
+遊戲支援與本地 **OpenClaw 網關** 整合的 **直接、基於推送之咒術 AI 旁白** 技術。
+
+- **Event-Driven Commentary**: Fired instantly on techniques (`/api/live-status`) or end match (`/api/battle-result`) with zero polling.
+- **事件驅動旁白**: 在施展術式或對戰結束時即時觸發，完全無須輪詢。
+- **Multimodal AI Vision**: Player client asynchronously uploads compressed camera snapshots every 2s, giving the agent sight of your physical workspace context.
+- **多模態 AI 視覺**: 玩家端每 2 秒非同步上傳壓縮相機快照，使 AI 代理能夠見到實體對戰環境。
+- **Interactive Battle Controls**: The OpenClaw agent can trigger a battle automatically by outputting a custom `[start_battle]` tag.
+- **互動對戰控制**: OpenClaw 代理可以透過在對話中輸出 `[start_battle]` 標籤，自動為玩家發起對戰。
+
+👉 **For deep architectural and technical design details, please refer to [docs/openclaw_integration.md](docs/openclaw_integration.md).**
+👉 **若需查看完整的系統架構與深度的技術設計細節，請參閱 [docs/openclaw_integration.md](docs/openclaw_integration.md)。**
 
 ---
 

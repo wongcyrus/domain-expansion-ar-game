@@ -5,6 +5,11 @@ services:
       - "3443:3443"
     environment:
       - PORT=3443
+      - OPENCLAW_HOST=host.docker.internal
+      - OPENCLAW_AGENT_ID=${OPENCLAW_AGENT_ID:-main}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - .:/app
       - /app/node_modules
+      - ~/.openclaw:/root/.openclaw:ro

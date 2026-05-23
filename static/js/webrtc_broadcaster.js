@@ -70,6 +70,7 @@ class BattleModeSync {
             ? 'https://localhost:3443' 
             : window.location.origin;
 
+        this.signalingUrl = serverUrl;
         console.log(`[BattleSync] Connecting to server: ${serverUrl}`);
         
         const socketOptions = {

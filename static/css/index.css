@@ -141,6 +141,7 @@ body {
     display: flex;
     flex-direction: column;
     width: 300px;
+    max-height: calc(100vh - 40px);
     border: 1px solid rgba(255,255,255,0.1);
     backdrop-filter: blur(10px);
     transition: transform 0.3s ease, opacity 0.3s ease;
@@ -167,7 +168,29 @@ body {
 .settings-header h3 { margin: 0; font-size: 14px; color: #4A90E2; }
 .settings-header button { background: none; border: none; color: white; cursor: pointer; font-size: 18px; }
 
-.settings-content { padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+.settings-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.settings-content::-webkit-scrollbar {
+    width: 6px;
+}
+.settings-content::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+}
+.settings-content::-webkit-scrollbar-thumb {
+    background: rgba(74, 144, 226, 0.6);
+    border-radius: 8px;
+}
+.settings-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(74, 144, 226, 0.9);
+}
 .settings-panel label { font-size: 11px; display: block; margin-bottom: 4px; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.5px; }
 .settings-panel input, .settings-panel select { width: 100%; background: #222; color: white; border: 1px solid rgba(255,255,255,0.2); padding: 8px; border-radius: 6px; box-sizing: border-box; font-size: 13px; }
 .settings-panel select option { background: #222; color: white; }

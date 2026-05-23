@@ -9,7 +9,7 @@ const winVideos = ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8
 // --- UI CONFIGURATION ---
 const netModeSelect = document.getElementById('cfg-net-mode'), valNetMode = document.getElementById('val-net-mode');
 const roomCodeDisplay = document.getElementById('room-code-display'), roomCodeVal = document.getElementById('room-code-val');
-const baseLayoutSelect = document.getElementById('cfg-base-layout'), inQuadMode = document.getElementById('cfg-quad-mode'), inDynamicView = document.getElementById('cfg-dynamic-view');
+const baseLayoutSelect = document.getElementById('cfg-base-layout'), inQuadMode = { checked: false }, inDynamicView = document.getElementById('cfg-dynamic-view');
 const powerP1 = document.getElementById('power-p1'), powerP2 = document.getElementById('power-p2'), ticker = document.getElementById('battle-ticker'), viewP1 = document.getElementById('p1-view'), viewP2 = document.getElementById('p2-view');
 const settingsToggle = document.getElementById('battle-settings-toggle'), settingsPanel = document.getElementById('battle-settings-panel'), saveCfgBtn = document.getElementById('save-battle-cfg');
 const inCountdown = document.getElementById('cfg-countdown'), inDifficulty = document.getElementById('cfg-difficulty'), inCount = document.getElementById('cfg-count');
@@ -19,11 +19,17 @@ const countdownOverlay = document.getElementById('countdown-overlay'), countdown
 const urlParams = new URLSearchParams(window.location.search);
 let currentNetMode = urlParams.get('net_mode') || 'local';
 let currentRoomCode = urlParams.get('room') || 'BTL1';
-let p1Time = 0, p2Time = 0, p1Active = false, p2Active = false, p1ScoreVal = 0, p2ScoreVal = 0, isMatchOver = false, winnerTimeoutHandle = null, hasMatchStarted = false;
+let p1Time = 0, p2Time = 0, p1Active = false, p2Active = false, p1ScoreVal = 0, p2ScoreVal = 0, isMatchOver = false, winnerTimeoutHandle = null, hasMatchStarted = false, prevMatchActive = false;
 let p1TotalActions = 11, p2TotalActions = 11;
 let activeCinematicsCount = 0;
 let resultTimeoutHandle = null;
 let isWinnerLogicActive = false;
+
+// --- DYNAMIC AI COMMENTARY STATE TRACKING ---
+let lastP1ScoreVal = 0;
+let lastP2ScoreVal = 0;
+let spokenTimeTimemarks = new Set();
+let lastCustomCommentaryTime = 0;
 
 // --- LAYOUT ENGINE ---
 function updateLayout() {
@@ -76,12 +82,20 @@ function updateSyncMode() {
     }
     sync = new BattleModeSync('viewer', currentNetMode, currentRoomCode);
     setupSyncCallbacks();
+
+    // Register active room details with OpenClaw bridge
+    const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+    const signalingUrl = sync.signalingUrl || window.location.origin;
+    callBridge('/api/register-room', {
+        sessionId: openclawSessionId,
+        roomCode: currentRoomCode,
+        signalingUrl: signalingUrl
+    });
 }
 
 // --- EVENT LISTENERS ---
 if (netModeSelect) netModeSelect.addEventListener('change', updateSyncMode);
-if (inQuadMode) inQuadMode.addEventListener('change', () => { if (inQuadMode.checked) inDynamicView.checked = false; updateLayout(); });
-if (inDynamicView) inDynamicView.addEventListener('change', () => { if (inDynamicView.checked) inQuadMode.checked = false; updateLayout(); });
+if (inDynamicView) inDynamicView.addEventListener('change', () => { updateLayout(); });
 if (baseLayoutSelect) baseLayoutSelect.addEventListener('change', updateLayout);
 
 settingsToggle.addEventListener('click', () => { settingsPanel.style.display = (settingsPanel.style.display === 'flex' ? 'none' : 'flex'); });
@@ -103,6 +117,133 @@ const VIDEO_DURATIONS = {
 };
 
 // --- CORE MATCH LOGIC ---
+// --- CORE MATCH LOGIC & COMMENTATOR BRIDGE ---
+let lastPeriodicCommentaryTime = 0;
+let commentaryHideTimeout = null;
+
+async function callBridge(endpoint, body) {
+    let apiEndpoint = localStorage.getItem('robotApiEndpoint') || '';
+    if (!apiEndpoint || apiEndpoint.includes('3002')) {
+        apiEndpoint = window.location.origin;
+    }
+    const disableApi = localStorage.getItem('disableRobotApi') === 'true';
+    if (disableApi) return null;
+    
+    // Auto-inject preferred user language
+    if (body && typeof body === 'object' && !body.lang) {
+        body.lang = localStorage.getItem('user_language') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
+    }
+    
+    try {
+        const response = await fetch(`${apiEndpoint.replace(/\/$/, '')}${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (err) {
+        console.warn(`[Bridge] Failed to call bridge endpoint ${endpoint}:`, err);
+    }
+    return null;
+}
+
+function getActionNameFromVideo(videoSrc) {
+    if (!videoSrc) return "Unknown Technique";
+    const filename = videoSrc.split('/').pop().toLowerCase();
+    
+    if (filename.includes("chimera_shadow_garden")) return "Chimera Shadow Garden";
+    if (filename.includes("authentic_love")) return "Authentic Love";
+    if (filename.includes("self_embodiment")) return "Self-Embodiment of Perfection";
+    if (filename.includes("yuji_itadori")) return "Yuji Itadori's Domain";
+    if (filename.includes("malevolent_shrine")) return "Malevolent Shrine";
+    if (filename.includes("idle_death_gamble")) return "Idle Death Gamble";
+    if (filename.includes("unlimited_void")) return "Unlimited Void";
+    if (filename.includes("time_cell_moon_palace")) return "Time Cell Moon Palace";
+    if (filename.includes("hollow_purple")) return "Hollow Purple";
+    if (filename.includes("reversal_red")) return "Reversal Red";
+    if (filename.includes("lapse_blue")) return "Lapse Blue";
+    
+    // Fallback parsing
+    let name = filename.replace(".mp4", "").replace("domain_", "").replace("technique_", "").replace(/_/g, " ");
+    return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function displayCommentary(text) {
+    const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
+    if (!isCommentatorEnabled) return;
+
+    const bubble = document.getElementById('commentator-bubble');
+    const txtNode = document.getElementById('commentator-text');
+    if (!bubble || !txtNode) return;
+
+    txtNode.textContent = text;
+    bubble.style.display = 'block';
+
+    if (commentaryHideTimeout) clearTimeout(commentaryHideTimeout);
+    
+    speakCommentary(text);
+
+    commentaryHideTimeout = setTimeout(() => {
+        bubble.style.display = 'none';
+    }, 8000); // Premium visual duration of 8 seconds
+}
+
+function speakCommentary(text) {
+    const canSpeakTTS = document.getElementById('cfg-commentator-speak')?.checked !== false;
+    if (!canSpeakTTS) return;
+    if (!window.speechSynthesis) return;
+    try {
+        window.speechSynthesis.cancel();
+        
+        // Safety sanitization: remove formatting characters and emojis client-side before speaking
+        let sanitizedText = text || "";
+        sanitizedText = sanitizedText.replace(/[\*_`~]/g, "");
+        try {
+            sanitizedText = sanitizedText.replace(/\p{Extended_Pictographic}/gu, "");
+        } catch (err) {}
+        sanitizedText = sanitizedText.replace(/\s+/g, " ").trim();
+        if (!sanitizedText) return;
+
+        const utterance = new SpeechSynthesisUtterance(sanitizedText);
+        const voices = window.speechSynthesis.getVoices();
+        
+        // Read commentary language config from the spectator screen
+        const targetLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+        let selectedVoice = null;
+        
+        if (targetLang === 'zh-HK') {
+            selectedVoice = voices.find(v => v.lang.includes('zh-HK')) || 
+                            voices.find(v => v.lang.includes('zh-TW')) || 
+                            voices.find(v => v.lang.startsWith('zh')) || 
+                            voices[0];
+        } else if (targetLang === 'zh-TW') {
+            selectedVoice = voices.find(v => v.lang.includes('zh-TW')) || 
+                            voices.find(v => v.lang.includes('zh-HK')) || 
+                            voices.find(v => v.lang.startsWith('zh')) || 
+                            voices[0];
+        } else if (targetLang === 'ja') {
+            selectedVoice = voices.find(v => v.lang.startsWith('ja')) || voices[0];
+        } else {
+            selectedVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+        }
+        
+        if (selectedVoice) {
+            utterance.voice = selectedVoice;
+            utterance.lang = selectedVoice.lang;
+        }
+        
+        utterance.rate = 1.1; // Energy rate boost
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+    } catch (e) {
+        console.warn("[TTS] Speech synthesis failed:", e);
+    }
+}
+
 function addTickerMsg(msg, playerClass) { const el = document.createElement('div'); el.className = `ticker-msg ${playerClass}`; el.textContent = `> ${msg}`; ticker.appendChild(el); ticker.scrollTop = ticker.scrollHeight; if (ticker.children.length > 5) ticker.removeChild(ticker.firstChild); }
 function triggerHitEffect(victimID) { const view = (victimID === 'player1') ? viewP1 : viewP2; view.classList.add('hit-shake'); const flash = document.createElement('div'); flash.className = 'hit-flash'; view.appendChild(flash); setTimeout(() => { view.classList.remove('hit-shake'); if (flash.parentNode) view.removeChild(flash); }, 400); }
 function updatePowerBar() { const total = p1ScoreVal + p2ScoreVal; if (total === 0) powerP1.style.width = '50%'; else powerP1.style.width = `${(p1ScoreVal / total) * 100}%`; }
@@ -127,6 +268,9 @@ function resetViewerState() {
     if (resultTimeoutHandle) clearTimeout(resultTimeoutHandle); resultTimeoutHandle = null;
     isMatchOver = false; isWinnerLogicActive = false; hasMatchStarted = false;
     p1Active = false; p2Active = false; p1ScoreVal = 0; p2ScoreVal = 0;
+    lastP1ScoreVal = 0; lastP2ScoreVal = 0;
+    spokenTimeTimemarks.clear();
+    lastCustomCommentaryTime = 0; lastPeriodicCommentaryTime = 0; prevMatchActive = false;
     activeCinematicsCount = 0;
     resultOverlay.style.display = 'none'; emergencyUnmute.style.display = 'none';
     if (skipResultBtn) skipResultBtn.style.display = 'none';
@@ -139,19 +283,82 @@ function resetViewerState() {
 }
 
 async function startMatch() {
-    if (!sync) return;
-    sync.broadcast('CLOSE_OVERLAYS', null);
-    await masterAudioUnlock(); resetViewerState();
-    const countdownVal = parseInt(inCountdown.value) || 0;
-    if (countdownVal > 0) {
-        countdownOverlay.style.display = 'flex';
-        for (let i = countdownVal; i > 0; i--) { countdownText.textContent = i; countdownText.style.animation = 'none'; void countdownText.offsetWidth; countdownText.style.animation = 'winner-pop 0.5s'; await new Promise(r => setTimeout(r, 1000)); }
-        countdownText.textContent = "GO!"; await new Promise(r => setTimeout(r, 500)); countdownOverlay.style.display = 'none';
+    if (startBtn.disabled) return;
+    startBtn.disabled = true;
+    const originalText = startBtn.textContent;
+    const originalBg = startBtn.style.background;
+    startBtn.textContent = '⚙️ INITIALIZING...';
+    startBtn.style.background = '#555';
+    startBtn.style.cursor = 'not-allowed';
+
+    try {
+        if (!sync) {
+            startBtn.disabled = false;
+            startBtn.textContent = originalText;
+            startBtn.style.background = originalBg;
+            startBtn.style.cursor = 'pointer';
+            return;
+        }
+        sync.broadcast('CLOSE_OVERLAYS', null);
+        await masterAudioUnlock(); resetViewerState();
+
+        // Generate a clean, unique active session ID for this match
+        const baseSessionId = localStorage.getItem('openclawSessionId') || 'main';
+        const dynamicSessionId = `${baseSessionId}_${Date.now()}`;
+        localStorage.setItem('openclawActiveSessionId', dynamicSessionId);
+
+        // Register the new dynamic room session ID with OpenClaw bridge
+        const signalingUrl = sync.signalingUrl || window.location.origin;
+        await callBridge('/api/register-room', {
+            sessionId: dynamicSessionId,
+            roomCode: currentRoomCode,
+            signalingUrl: signalingUrl
+        });
+
+        // Reset OpenClaw session and prime with the selected system rules once
+        const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
+        if (isCommentatorEnabled) {
+            const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+            const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
+            const resp = await callBridge('/api/live-status', {
+                sessionId: dynamicSessionId,
+                eventType: 'RESET',
+                p1Score: 0,
+                p2Score: 0,
+                lang: commentaryLang,
+                foulLanguage: isFoulEnabled
+            });
+            if (resp && resp.welcomeMessage) {
+                displayCommentary(resp.welcomeMessage);
+            }
+        }
+
+        const countdownVal = parseInt(inCountdown.value) || 0;
+        if (countdownVal > 0) {
+            countdownOverlay.style.display = 'flex';
+            for (let i = countdownVal; i > 0; i--) { countdownText.textContent = i; countdownText.style.animation = 'none'; void countdownText.offsetWidth; countdownText.style.animation = 'winner-pop 0.5s'; await new Promise(r => setTimeout(r, 1000)); }
+            countdownText.textContent = "GO!"; await new Promise(r => setTimeout(r, 500)); countdownOverlay.style.display = 'none';
+        }
+        sync.broadcast('START_BATTLE', { 
+            difficulty: parseInt(inDifficulty.value), 
+            count: parseInt(inCount.value),
+            openclawSessionId: dynamicSessionId
+        });
+        hasMatchStarted = true;
+        startBtn.style.background = '#4CAF50'; startBtn.textContent = 'GAME RUNNING';
+        setTimeout(() => { 
+            startBtn.disabled = false;
+            startBtn.style.background = '#FF5252'; 
+            startBtn.textContent = 'START BATTLE'; 
+            startBtn.style.cursor = 'pointer';
+        }, 3000);
+    } catch (err) {
+        console.error('[Battle] Failed to start match:', err);
+        startBtn.disabled = false;
+        startBtn.textContent = 'START BATTLE (FAILED)';
+        startBtn.style.background = '#FF5252';
+        startBtn.style.cursor = 'pointer';
     }
-    sync.broadcast('START_BATTLE', { difficulty: parseInt(inDifficulty.value), count: parseInt(inCount.value) });
-    hasMatchStarted = true;
-    startBtn.style.background = '#4CAF50'; startBtn.textContent = 'GAME RUNNING';
-    setTimeout(() => { startBtn.style.background = '#FF5252'; startBtn.textContent = 'START BATTLE'; }, 3000);
 }
 startBtn.addEventListener('click', startMatch);
 
@@ -200,12 +407,37 @@ function showWinner() {
     const maxPossible = Math.max(p1TotalActions, p2TotalActions, 11);
     const PASS_MARK = Math.ceil(maxPossible / 2);
     const winnerScore = Math.max(p1ScoreVal, p2ScoreVal);
+    
+    let winnerName = 'DRAW';
     if (p1ScoreVal === p2ScoreVal) { winnerText.textContent = 'DRAW MATCH'; winnerSubtext.textContent = 'EQUAL POWER'; winnerText.style.color = '#FFF'; }
-    else if (p1ScoreVal > p2ScoreVal) { winnerText.textContent = 'PLAYER 1 WINS'; winnerText.style.color = '#4A90E2'; winnerSubtext.textContent = (p1ScoreVal >= p1TotalActions) ? 'PERFECT VICTORY' : 'VICTORY'; }
-    else { winnerText.textContent = 'PLAYER 2 WINS'; winnerText.style.color = '#FFFF00'; winnerSubtext.textContent = (p2ScoreVal >= p2TotalActions) ? 'PERFECT VICTORY' : 'VICTORY'; }
+    else if (p1ScoreVal > p2ScoreVal) { winnerName = 'PLAYER 1'; winnerText.textContent = 'PLAYER 1 WINS'; winnerText.style.color = '#4A90E2'; winnerSubtext.textContent = (p1ScoreVal >= p1TotalActions) ? 'PERFECT VICTORY' : 'VICTORY'; }
+    else { winnerName = 'PLAYER 2'; winnerText.textContent = 'PLAYER 2 WINS'; winnerText.style.color = '#FFFF00'; winnerSubtext.textContent = (p2ScoreVal >= p2TotalActions) ? 'PERFECT VICTORY' : 'VICTORY'; }
+    
     resultOverlay.style.display = 'flex';
     playGlobalResultVideo(winnerScore >= PASS_MARK);
     updateLayout();
+
+    // Trigger final match comments from the OpenClaw agent
+    const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
+    if (isCommentatorEnabled) {
+        const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+        const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+        const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
+        callBridge('/api/battle-result', {
+            sessionId: openclawSessionId,
+            winner: winnerName,
+            p1Score: p1ScoreVal,
+            p2Score: p2ScoreVal,
+            p1Total: p1TotalActions,
+            p2Total: p2TotalActions,
+            lang: commentaryLang,
+            foulLanguage: isFoulEnabled
+        }).then(res => {
+            if (res && res.commentary) {
+                displayCommentary(res.commentary);
+            }
+        });
+    }
 }
 
 function setupSyncCallbacks() {
@@ -218,12 +450,43 @@ function setupSyncCallbacks() {
         if (isMatchOver) return;
         activeCinematicsCount++;
         sync.broadcast('MATCH_PAUSE', null);
-        addTickerMsg(`MATCH PAUSED FOR CINEMATIC`, '');
+        
+        // Premium dynamic ticker update for cast actions
+        const actionName = getActionNameFromVideo(videoSrc);
+        addTickerMsg(`${playerID === 'player1' ? 'PLAYER 1' : 'PLAYER 2'} ACTIVATED ${actionName.toUpperCase()}`, playerID === 'player1' ? 'ticker-p1' : 'ticker-p2');
+
         const cinema = (playerID === 'player1') ? p1Cinema : p2Cinema;
         cinema.src = videoSrc; cinema.style.display = 'block'; cinema.load();
         updateLayout();
         const videoFile = videoSrc.split('/').pop();
         const duration = VIDEO_DURATIONS[videoFile] || 15000;
+        
+        // Report cast event to OpenClaw bridge
+        lastCustomCommentaryTime = Date.now();
+        lastPeriodicCommentaryTime = Date.now();
+        const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
+        if (isCommentatorEnabled) {
+            const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+            const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+            const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
+            callBridge('/api/live-status', {
+                sessionId: openclawSessionId,
+                eventType: 'CAST',
+                detail: `${playerID === 'player1' ? 'Player 1' : 'Player 2'} successfully activated ${actionName}`,
+                p1Score: p1ScoreVal,
+                p2Score: p2ScoreVal,
+                p1Total: p1TotalActions,
+                p2Total: p2TotalActions,
+                timeLeft: Math.max(p1Time, p2Time),
+                lang: commentaryLang,
+                foulLanguage: isFoulEnabled
+            }).then(res => {
+                if (res && res.commentary) {
+                    displayCommentary(res.commentary);
+                }
+            });
+        }
+
         let hasEnded = false;
         const endLogic = () => {
             if (hasEnded) return; hasEnded = true;
@@ -241,6 +504,7 @@ function setupSyncCallbacks() {
         if (isGameActive) {
             hasMatchStarted = true;
         }
+
         if (playerID === 'player1') {
             p1ScoreVal = score; p1Score.textContent = score; if (resScoreP1) resScoreP1.textContent = score;
             p1Time = isGameActive ? timer : 0; if (totalActions !== undefined) p1TotalActions = totalActions;
@@ -265,9 +529,116 @@ function setupSyncCallbacks() {
         const activeTime = Math.max(p1Time, p2Time);
         if (p1Active || p2Active) timerDisplay.textContent = activeTime + 's';
         else if (!isWinnerLogicActive) timerDisplay.textContent = '00:00';
+
+        const isMatchActive = p1Active || p2Active;
+        const now = Date.now();
+        
+        // Initialize commentator timers when the match round actually goes active
+        // to prevent immediate, repetitive fallback commentary trigger
+        if (isMatchActive && !prevMatchActive) {
+            lastCustomCommentaryTime = now;
+            lastPeriodicCommentaryTime = now;
+        }
+        prevMatchActive = isMatchActive;
+
+        const minInterphraseDuration = 4500; // Cooling buffer to allow current speech to finish
+        const canSpeak = (now - lastCustomCommentaryTime > minInterphraseDuration);
+
+        let triggerTimeCritical = false;
+        let eventTypeToSend = 'PERIODIC';
+        let detailToSend = '';
+
+        // Handle critical final timemark alerts
+        if (isMatchActive && (activeTime === 10 || activeTime === 5 || activeTime === 3) && !spokenTimeTimemarks.has(activeTime)) {
+            spokenTimeTimemarks.add(activeTime);
+            eventTypeToSend = 'TIME_CRITICAL';
+            detailToSend = `Only ${activeTime} seconds remaining in the match! The battle is near its end!`;
+            triggerTimeCritical = true;
+        }
+
+        // Trigger dynamic, reactive commentary (Lead Changes, Scores, Ties, Timemarks)
+        const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
+        if (isMatchActive && triggerTimeCritical && canSpeak && isCommentatorEnabled) {
+            lastCustomCommentaryTime = now;
+            lastPeriodicCommentaryTime = now;
+            const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+            const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+            const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
+            callBridge('/api/live-status', {
+                sessionId: openclawSessionId,
+                eventType: eventTypeToSend,
+                detail: detailToSend,
+                p1Score: p1ScoreVal,
+                p2Score: p2ScoreVal,
+                p1Total: p1TotalActions,
+                p2Total: p2TotalActions,
+                timeLeft: activeTime,
+                lang: commentaryLang,
+                foulLanguage: isFoulEnabled
+            }).then(res => {
+                if (res && res.commentary) {
+                    displayCommentary(res.commentary);
+                }
+            });
+        }
+        // Fallback periodic commentary if nothing exciting has happened for 35 seconds
+        else if (isMatchActive && (now - lastPeriodicCommentaryTime > 35000) && canSpeak && isCommentatorEnabled) {
+            lastPeriodicCommentaryTime = now;
+            lastCustomCommentaryTime = now;
+            const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+            const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+            const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
+            callBridge('/api/live-status', {
+                sessionId: openclawSessionId,
+                eventType: 'PERIODIC',
+                p1Score: p1ScoreVal,
+                p2Score: p2ScoreVal,
+                p1Total: p1TotalActions,
+                p2Total: p2TotalActions,
+                timeLeft: activeTime,
+                lang: commentaryLang,
+                foulLanguage: isFoulEnabled
+            }).then(res => {
+                if (res && res.commentary) {
+                    displayCommentary(res.commentary);
+                }
+            });
+        }
     };
 }
 closeResultBtn.addEventListener('click', () => { resetViewerState(); if (sync) sync.broadcast('CLOSE_OVERLAYS', null); });
 if (netModeSelect) netModeSelect.value = currentNetMode;
 updateSyncMode();
 updateLayout();
+
+// Hook up Commentator UI toggle settings and localStorage persistence
+const enableCommentatorCheckbox = document.getElementById('cfg-enable-commentator');
+const commentatorSpeakCheckbox = document.getElementById('cfg-commentator-speak');
+
+if (enableCommentatorCheckbox) {
+    const saved = localStorage.getItem('cfg-enable-commentator');
+    if (saved !== null) {
+        enableCommentatorCheckbox.checked = saved === 'true';
+    }
+    enableCommentatorCheckbox.addEventListener('change', () => {
+        localStorage.setItem('cfg-enable-commentator', enableCommentatorCheckbox.checked);
+        if (!enableCommentatorCheckbox.checked) {
+            const bubble = document.getElementById('commentator-bubble');
+            if (bubble) bubble.style.display = 'none';
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+        }
+    });
+}
+
+if (commentatorSpeakCheckbox) {
+    const saved = localStorage.getItem('cfg-commentator-speak');
+    if (saved !== null) {
+        commentatorSpeakCheckbox.checked = saved === 'true';
+    }
+    commentatorSpeakCheckbox.addEventListener('change', () => {
+        localStorage.setItem('cfg-commentator-speak', commentatorSpeakCheckbox.checked);
+        if (!commentatorSpeakCheckbox.checked) {
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+        }
+    });
+}

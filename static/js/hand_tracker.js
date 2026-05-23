@@ -40,6 +40,7 @@ class HandTracker {
         this.streamCanvas = document.getElementById('stream-canvas');
         this.streamCtx = this.streamCanvas ? this.streamCanvas.getContext('2d') : null;
         this.battleSync = null;
+        this.webcamUploadIntervalHandle = null;
 
         // Mini-Game UI
         this.gameHud = document.getElementById('game-hud');
@@ -105,7 +106,9 @@ class HandTracker {
         if (this.endpointInput) this.endpointInput.value = this.apiEndpoint;
         if (this.sessionKeyInput) this.sessionKeyInput.value = this.sessionKey;
         if (this.languageSelect) this.languageSelect.value = this.userLang;
-        if (this.robotIdSelect) this.robotIdSelect.value = this.savedRobotId;
+        if (this.robotIdSelect) {
+            this.updateRobotIdSelectOptions();
+        }
         if (this.videoModeSelect) this.videoModeSelect.value = this.videoMode;
         if (this.autoOpenPopupCheck) this.autoOpenPopupCheck.checked = this.autoOpen;
         if (this.disableApiCheck) this.disableApiCheck.checked = this.disableApi;
@@ -236,6 +239,7 @@ class HandTracker {
                 this.battleRole = this.battleRoleSelect.value;
                 this.selectedCameraId = this.cameraSelect.value;
                 this.updateBattleSync();
+                this.updateRobotIdSelectOptions();
                 
                 this.updateAPIStatus();
                 alert('Settings saved locally!');
@@ -247,6 +251,7 @@ class HandTracker {
                 this.battleRole = this.battleRoleSelect.value;
                 localStorage.setItem('battle_role', this.battleRole);
                 this.updateBattleSync();
+                this.updateRobotIdSelectOptions();
             });
         }
 
@@ -523,6 +528,7 @@ class HandTracker {
             
             this.isCameraRunning = true;
             this.requestCameraFrame();
+            this.startWebcamUploadInterval();
             
             console.log('[Game] Camera stream successfully attached and playing.');
         } catch (err) {
@@ -537,6 +543,7 @@ class HandTracker {
 
     stopCamera() {
         this.isCameraRunning = false;
+        this.stopWebcamUploadInterval();
         if (this.frameRequestHandle) {
             cancelAnimationFrame(this.frameRequestHandle);
             this.frameRequestHandle = null;
@@ -548,6 +555,60 @@ class HandTracker {
         if (this.camera) {
             try { this.camera.stop(); } catch(e) {}
             this.camera = null;
+        }
+    }
+
+    startWebcamUploadInterval() {
+        if (this.webcamUploadIntervalHandle) {
+            clearInterval(this.webcamUploadIntervalHandle);
+        }
+        
+        // Setup tiny detached canvas for lightweight image capturing
+        const capCanvas = document.createElement('canvas');
+        capCanvas.width = 320;
+        capCanvas.height = 240;
+        const capCtx = capCanvas.getContext('2d');
+        
+        this.webcamUploadIntervalHandle = setInterval(async () => {
+            if (!this.isCameraRunning || !this.video || this.video.paused) return;
+            if (this.disableApi || !this.apiEndpoint) return;
+            
+            try {
+                // Draw current video frame onto detached canvas
+                capCtx.drawImage(this.video, 0, 0, capCanvas.width, capCanvas.height);
+                // Compress to JPEG with 0.6 quality for ultra efficiency (~15KB)
+                const dataUrl = capCanvas.toDataURL('image/jpeg', 0.6);
+                const base64Str = dataUrl.split('base64,')[1];
+                
+                // Read OpenClaw session key or default to main
+                const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+                
+                // Upload frame to bridge
+                let uploadEndpoint = this.apiEndpoint || '';
+                if (!uploadEndpoint || uploadEndpoint.includes('3002')) {
+                    uploadEndpoint = window.location.origin;
+                }
+                await fetch(`${uploadEndpoint.replace(/\/$/, '')}/api/webcam-upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sessionId: openclawSessionId,
+                        image: base64Str
+                    })
+                });
+            } catch (err) {
+                // Fail silently to avoid interrupting hand tracking or gameplay
+                console.warn('[Webcam] Failed to upload snapshot:', err);
+            }
+        }, 2000); // 2 seconds interval
+    }
+
+    stopWebcamUploadInterval() {
+        if (this.webcamUploadIntervalHandle) {
+            clearInterval(this.webcamUploadIntervalHandle);
+            this.webcamUploadIntervalHandle = null;
         }
     }
 
@@ -673,6 +734,9 @@ class HandTracker {
             
             this.battleSync.onStartBattle = (config) => {
                 console.log('[Battle] Remote start received!', config);
+                if (config && config.openclawSessionId) {
+                    localStorage.setItem('openclawActiveSessionId', config.openclawSessionId);
+                }
                 this.startMiniGame(config);
             };
 
@@ -748,6 +812,70 @@ class HandTracker {
                 }
             }
         }
+    }
+
+    updateRobotIdSelectOptions() {
+        if (!this.robotIdSelect) return;
+        
+        // Save current selection to restore if possible
+        const prevValue = this.savedRobotId;
+        
+        // Clear all options
+        this.robotIdSelect.innerHTML = "";
+        
+        // Check language mode
+        const isZh = (this.userLang && (this.userLang.startsWith('zh') || this.userLang === 'auto'));
+        
+        if (this.battleRole === 'player1') {
+            // Player 1 options (Robots 1-3)
+            const allText = isZh ? "🤖 所有 P1 機器人 (1-3)" : "🤖 All P1 Robots (1-3)";
+            const r1Text = isZh ? "🤖 機器人 1" : "🤖 Robot 1";
+            const r2Text = isZh ? "🤖 機器人 2" : "🤖 Robot 2";
+            const r3Text = isZh ? "🤖 機器人 3" : "🤖 Robot 3";
+            
+            this.robotIdSelect.appendChild(new Option(allText, "all"));
+            this.robotIdSelect.appendChild(new Option(r1Text, "robot_1"));
+            this.robotIdSelect.appendChild(new Option(r2Text, "robot_2"));
+            this.robotIdSelect.appendChild(new Option(r3Text, "robot_3"));
+            
+            // Validate previous value or reset to 'all'
+            if (['all', 'robot_1', 'robot_2', 'robot_3'].includes(prevValue)) {
+                this.robotIdSelect.value = prevValue;
+            } else {
+                this.robotIdSelect.value = 'all';
+                this.savedRobotId = 'all';
+            }
+        } else if (this.battleRole === 'player2') {
+            // Player 2 options (Robots 4-6)
+            const allText = isZh ? "🤖 所有 P2 機器人 (4-6)" : "🤖 All P2 Robots (4-6)";
+            const r4Text = isZh ? "🤖 機器人 4" : "🤖 Robot 4";
+            const r5Text = isZh ? "🤖 機器人 5" : "🤖 Robot 5";
+            const r6Text = isZh ? "🤖 機器人 6" : "🤖 Robot 6";
+            
+            this.robotIdSelect.appendChild(new Option(allText, "all"));
+            this.robotIdSelect.appendChild(new Option(r4Text, "robot_4"));
+            this.robotIdSelect.appendChild(new Option(r5Text, "robot_5"));
+            this.robotIdSelect.appendChild(new Option(r6Text, "robot_6"));
+            
+            // Validate previous value or reset to 'all'
+            if (['all', 'robot_4', 'robot_5', 'robot_6'].includes(prevValue)) {
+                this.robotIdSelect.value = prevValue;
+            } else {
+                this.robotIdSelect.value = 'all';
+                this.savedRobotId = 'all';
+            }
+        } else {
+            // No role: show all options (Robots 1-6)
+            const allText = isZh ? "🤖 所有機器人 (1-6)" : "🤖 All Robots (1-6)";
+            this.robotIdSelect.appendChild(new Option(allText, "all"));
+            for (let i = 1; i <= 6; i++) {
+                const rText = isZh ? `🤖 機器人 ${i}` : `🤖 Robot ${i}`;
+                this.robotIdSelect.appendChild(new Option(rText, `robot_${i}`));
+            }
+            this.robotIdSelect.value = prevValue;
+        }
+        
+        localStorage.setItem('robot_id', this.robotIdSelect.value);
     }
 
     setElText(id, text) {
@@ -866,6 +994,7 @@ class HandTracker {
             this.setElText('mode-display', defaultMode);
             document.title = finalTitle;
             this.updateInstructions(); 
+            this.updateRobotIdSelectOptions();
         } catch (e) { console.error('[Game] Localization failed:', e); }
     }
     
@@ -1431,6 +1560,27 @@ class HandTracker {
             if (this.lastResp) this.lastResp.textContent = 'DISABLED';
             return;
         }
+
+        // Dynamic Player-to-Robot mapping:
+        // When robotId is "all", split actions to player-specific target robot groups
+        if (robotId === "all") {
+            if (this.battleRole === "player1") {
+                console.log("[API] Role is Player 1: Concurrently triggering Robots 1, 2, and 3");
+                return Promise.all([
+                    this.triggerRobotAction("robot_1", action),
+                    this.triggerRobotAction("robot_2", action),
+                    this.triggerRobotAction("robot_3", action)
+                ]);
+            } else if (this.battleRole === "player2") {
+                console.log("[API] Role is Player 2: Concurrently triggering Robots 4, 5, and 6");
+                return Promise.all([
+                    this.triggerRobotAction("robot_4", action),
+                    this.triggerRobotAction("robot_5", action),
+                    this.triggerRobotAction("robot_6", action)
+                ]);
+            }
+        }
+
         try {
             let url = this.apiEndpoint.trim();
             const parts = url.split('?');
