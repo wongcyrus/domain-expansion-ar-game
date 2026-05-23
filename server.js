@@ -15,20 +15,38 @@ app.use(express.json({ limit: '10mb' }));
 const gameSessions = new Map();
 
 function loadOpenClawConfig() {
+    let port = 18789;
+    let token = '';
+    let agentId = process.env.OPENCLAW_AGENT_ID || '';
+
     try {
         const home = os.homedir();
         const configPath = path.join(home, '.openclaw', 'openclaw.json');
         if (fs.existsSync(configPath)) {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            const port = config.gateway?.port || 18789;
-            const token = config.gateway?.auth?.token || '';
-            console.log(`[OpenClaw Config] Loaded successfully. Port: ${port}, Token found: ${!!token}`);
-            return { port, token };
+            port = config.gateway?.port || 18789;
+            token = config.gateway?.auth?.token || '';
+            
+            // Read agent ID if not already provided via environment variables
+            if (!agentId) {
+                if (config.agentId) agentId = config.agentId;
+                if (config.agent_id) agentId = config.agent_id;
+                if (config.gateway?.agentId) agentId = config.gateway.agentId;
+                if (config.gateway?.agent_id) agentId = config.gateway.agent_id;
+                if (config.agents?.defaults?.agentId) agentId = config.agents.defaults.agentId;
+                if (config.agents?.defaults?.agent_id) agentId = config.agents.defaults.agent_id;
+            }
+            console.log(`[OpenClaw Config] Loaded successfully. Port: ${port}, Token found: ${!!token}, AgentID: ${agentId || 'default to main'}`);
         }
     } catch (err) {
-        console.warn(`[OpenClaw Config] Failed to load configuration:`, err.message);
+        console.warn(`[OpenClaw Config] Failed to load ~/.openclaw/openclaw.json:`, err.message);
     }
-    return { port: 18789, token: '' };
+
+    if (!agentId) {
+        agentId = "main";
+    }
+
+    return { port, token, agentId };
 }
 
 function registerRoom(sessionId, roomCode, signalingUrl) {
@@ -277,7 +295,7 @@ Core reply rules (Please remember them permanently):
 app.post('/api/live-status', async (req, res) => {
     const { sessionId, eventType, detail, p1Score, p2Score, p1Total, p2Total, lang, foulLanguage } = req.body;
     const resolvedSessionId = sessionId || "main";
-    const agentId = process.env.OPENCLAW_AGENT_ID || "main";
+    const { agentId } = loadOpenClawConfig();
     const isZh = lang && lang.toLowerCase().startsWith('zh');
 
     // 1. Handle New Game Session RESET event
@@ -322,8 +340,8 @@ app.post('/api/live-status', async (req, res) => {
 app.post('/api/battle-result', async (req, res) => {
     const { sessionId, winner, p1Score, p2Score, lang, foulLanguage } = req.body;
     const resolvedSessionId = sessionId || "main";
-    const agentId = process.env.OPENCLAW_AGENT_ID || "main";
-
+    const { agentId } = loadOpenClawConfig();
+    
     let promptText = "";
     const isZh = lang && lang.toLowerCase().startsWith('zh');
 

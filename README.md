@@ -32,21 +32,17 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 
 ## 🧪 Local Testing & Mobile Development | 本地測試與行動端開發
 
-To test the AR Game on a mobile device via a local network, you must use **HTTPS** for camera access. We provide a convenient script for this:
-若要在本地網絡透過行動裝置測試 AR 遊戲，必須使用 **HTTPS** 才能啟用相機。我們提供了一個便捷的腳本：
+To test the AR Game on a mobile device via a local network, you must use **HTTPS** for camera access. The unified Node.js server (`server.js`) natively serves the static web pages and handles WebRTC signaling out-of-the-box on port **`3443`**!
+若要在本地網絡透過行動裝置測試 AR 遊戲，必須使用 **HTTPS** 才能啟用相機。一體化的 Node.js 伺服器 (`server.js`) 已原生在埠 **`3443`** 上以 HTTPS 模式託管所有網頁與信令服務，無須再手動使用額外腳本！
 
-1. **Start HTTPS Server | 啟動 HTTPS 伺服器**:
-   ```bash
-   python3 serve_https.py
-   ```
-2. **Access on Phone | 行動端存取**:
+1. **Access on Phone | 行動端存取**:
    - Find your PC's local IP (e.g., `192.168.1.x`).
-   - Open **`https://<YOUR_IP>:8443`** on your phone.
+   - Open **`https://<YOUR_IP>:3443`** on your phone.
    - Click "Advanced" -> "Proceed" to bypass the self-signed certificate warning.
-   - 在手機上開啟 **`https://<您的IP>:8443`**。
+   - 在手機上開啟 **`https://<您的IP>:3443`**。
    - 點擊「進階」->「繼續前往」以跳過自我簽署憑證警告。
 
-3. 在網覽器中開啟 `index.html`。
+2. 在網頁瀏覽器中開啟遊戲。
 4. 在設置面板中輸入您的機器人 API 端點。
 5. 輸入您的加密會話密鑰 (Session Key)。
 6. 點擊「保存設置」(Save Settings)。
@@ -166,8 +162,8 @@ The game supports a **direct, push-based JJK AI Commentator** integrated nativel
 
 - **Event-Driven Commentary**: Fired instantly on techniques (`/api/live-status`) or end match (`/api/battle-result`) with zero polling.
 - **事件驅動旁白**: 在施展術式或對戰結束時即時觸發，完全無須輪詢。
-- **Multimodal AI Vision**: Player client asynchronously uploads compressed camera snapshots every 2s, giving the agent sight of your physical workspace context.
-- **多模態 AI 視覺**: 玩家端每 2 秒非同步上傳壓縮相機快照，使 AI 代理能夠見到實體對戰環境。
+- **Multimodal AI Vision**: Player clients upload compressed camera snapshots on-demand at key checkpoints (match start/end), giving the commentator concurrent visual context of both P1 and P2 synchronously while saving resources.
+- **多模態 AI 視覺**: 玩家端在關鍵對局節點（開局與結算）按需上傳壓縮相機快照，讓解說員能同時擁有 P1 與 P2 的現場視覺畫面，同時極大節省運行效能與頻寬。
 - **Interactive Battle Controls**: The OpenClaw agent can trigger a battle automatically by outputting a custom `[start_battle]` tag.
 - **互動對戰控制**: OpenClaw 代理可以透過在對話中輸出 `[start_battle]` 標籤，自動為玩家發起對戰。
 

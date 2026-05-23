@@ -33,6 +33,52 @@ sequenceDiagram
 
 ---
 
+## 🔄 Commentary Conversation Flow | 旁白對話流程
+
+To achieve the best user experience with zero repetitive confirmation chatter and minimal API token costs, the system implements a streamlined, stateful conversation flow across the battle lifecycle:
+
+為了解決大模型常見的「重複確認人設」與「明白/收到」之類的囉唆話，並將 API Token 成本與延遲降到最低，本系統在對戰生命週期中實作了一體化的狀態化對話流：
+
+### 1. Match Start / Initialization | 對戰開始與初始化
+- **Trigger (RESET event)**: Fired when the viewer starts a new match.
+- **Backend Flow**:
+  1. Sends a standalone `/reset` message turn to OpenClaw to clear any previous conversation history.
+  2. Immediately following the reset success, the backend compiles the full system prompt (commentator persona, Cantonese and formatting constraints) along with the opening welcome directive.
+  3. **Attaches both Player 1 (P1) and Player 2 (P2) webcam snapshots** to the content payload.
+- **AI Response**: The AI commentator immediately acts as a hype caster, greeting the audience and humorously roasting the facial expressions, attire, or rooms of both P1 and P2 based on the images (with **zero** "Received/Understood" confirmation chatter).
+- **觸發（RESET 事件）**：當觀眾端啟動新對戰時觸發。
+- **後端流程**：
+  1. 向 OpenClaw 發送獨立的 `/reset` 訊息以清除先前的對答歷史。
+  2. 重設成功後，後端隨即將完整的系統提示詞（解說員人設、香港廣東話與格式限制）與開局歡迎指令整合。
+  3. **同時夾帶 Player 1 (P1) 與 Player 2 (P2) 的 Webcam 開局快照**。
+- **AI 響應**：AI 旁白立即進入角色發表熱血澎湃的開場致詞，並根據照片生動吐槽 P1 與 P2 的神情、服裝或背景（**絕對不說**任何「收到/明白人設」等確認廢話）。
+
+### 2. Live Gameplay Action | 戰鬥進行中
+- **Trigger (CAST event)**: Fired every time a player successfully triggers a gesture technique.
+- **Backend Flow**:
+  - Compiles a lightweight, pure-text prompt representing the active event and current standing (e.g., `P1 finished 1 time, P2 finished 0 times. P2 casted "Hollow Purple"`).
+  - **No images are attached** during this phase to maximize performance, save network bandwidth, and reduce input token charges.
+- **AI Response**: Delivers an ultra-short, high-energy 1-2 sentence real-time commentary reaction.
+- **觸發（CAST 事件）**：每當玩家成功施展手勢術式時觸發。
+- **後端流程**：
+  - 組裝輕量級的純文字 Prompt，僅傳遞當前術式事件與雙方分數（例如：`P1 完成了 1 次，P2 完成了 0 次。P2 施放了「茈」`）。
+  - **此階段不夾帶任何圖片**，以最大化語音生成速度、節省網路頻寬並極大地降低 API 費用。
+- **AI 響應**：輸出極其簡短、高能量的 1-2 句實時熱血解說。
+
+### 3. Match Conclusion | 對局結束結算
+- **Trigger (battle-result event)**: Fired upon match completion.
+- **Backend Flow**:
+  - Formats the grand finale prompt stating the winner and final score.
+  - **Re-attaches both Player 1 (P1) and Player 2 (P2) ending webcam snapshots** to the payload.
+- **AI Response**: Delivers a spectacular and dramatic Cantonese final remark, celebrating the winner (or draw) while commenting on the final physical expressions of the contestants.
+- **觸發（battle-result 事件）**：對戰分出勝負或時間到結束時觸發。
+- **後端流程**：
+  - 格式化宣佈獲勝者與最終比分的結算 Prompt。
+  - **重新夾帶雙方玩家在終局時的最新 Webcam 快照**。
+- **AI 響應**：發表極具動漫配音震撼感的香港廣東話結算致詞，為贏家喝采，並對雙方玩家終局時精疲力竭或生龍活虎的 Webcam 神態進行趣味性總結。
+
+---
+
 ## 🌟 Key Technical Features | 關鍵技術特點
 
 ### 1. Direct Gateway Connection | 直接網關連接
@@ -44,8 +90,10 @@ sequenceDiagram
 ### 2. High-Performance Multimodal Vision | 高效能多模態視覺
 - **MediaPipe Friendly**: Snapshotting is decoupled from the main rendering loop. A low-resolution canvas (`320x240` at `0.6` JPEG quality) is used to compress images to around ~15KB.
 - **MediaPipe 友善**: 快照擷取與主渲染循環解耦。使用低解析度畫布（`320x240` 及 `0.6` JPEG 品質）將影像壓縮至約 ~15KB。
-- **Periodic Snapshot Upload**: Uploads snapshots to the game server every **2 seconds** asynchronously. The server maintains a single-frame cache for active sessions and attaches it as an inline image to the next AI comment request, giving the JJK agent "vision" at any time.
-- **定期快照上傳**: 每 **2 秒**非同步將快照上傳至遊戲伺服器。伺服器為活動會話保留單影格快照快取，並將其作為內聯圖像附加至下一次 AI 旁白請求，使咒術代理隨時擁有「視覺」。
+- **On-Demand (Single-Shot) Snapshot Upload**: Instead of uploading images continuously every 2 seconds, snapshots are triggered on-demand at key game checkpoints (battle start and battle end) via the `CAPTURE_WEBCAM_FRAME` broadcast event. This significantly reduces CPU, webcam, and battery usage on players' devices.
+- **按需（單次）快照上傳**: 取代每 2 秒無間斷地上傳影像，系統在關鍵遊戲節點（對戰開始與結束）時，透過 `CAPTURE_WEBCAM_FRAME` 廣播事件按需觸發單次快照。這極大地降低了玩家設備的 CPU、相機與電池消耗。
+- **Multi-Player Webcam Support**: Stopted image overwriting by saving separate slots for P1 and P2 based on player role (`latestWebcamFrameP1` and `latestWebcamFrameP2`). Both images are attached to the model simultaneously, enabling the commentator to roast both players synchronously while keeping intermediate game updates pure text for optimal cost-saving.
+- **多玩家鏡頭支援**: 系統透過依玩家角色分開儲存的插槽（`latestWebcamFrameP1` 與 `latestWebcamFrameP2`）防止圖片覆蓋。這兩張圖片將被同時傳送給模型，讓解說員能在開局與結算時同時吐槽雙方玩家，同時將中期的戰況更新保持在純文字狀態，達到最省錢與快速的高效能平衡。
 
 ### 3. Real-Time Status & Results Tracking | 即時狀態與結果追蹤
 - **Cast Events (`/api/live-status`)**: Whenever a player successfully triggers a technique, an instant payload is pushed. The agent receives the technique's details and immediately delivers high-energy JJK-style live commentary.
@@ -93,8 +141,8 @@ Our direct connection uses advanced headers and parameters matching OpenClaw’s
 我們的直接連接使用符合 OpenClaw 內部上下文解析架構的高級標頭與參數，以實現動態代理對戰路由與對答記憶保留。
 
 ### 1. Dynamic Agent Selection | 動態代理選擇
-- **Configuration**: The target agent ID is read from the `OPENCLAW_AGENT_ID` environment variable (default: `main`).
-- **配置**: 目標代理 ID 從 `OPENCLAW_AGENT_ID` 環境變數（預設值為 `main`）讀取。
+- **Configuration**: The target agent ID is resolved from the `OPENCLAW_AGENT_ID` environment variable first. If empty, the server dynamically reads it from the host's loaded `~/.openclaw/openclaw.json` file (looking for keys such as `gateway.agentId`, `gateway.agent_id`, `agents.defaults.agentId`, or `agents.defaults.agent_id`). If not found in either, it fallback-defaults to `"main"`.
+- **配置**: 目標代理 ID 首選自 `OPENCLAW_AGENT_ID` 環境變數。若無該環境變數，則從掛載的主機端 `~/.openclaw/openclaw.json` 文件中動態讀取（支持鍵名如 `gateway.agentId`、`gateway.agent_id` 或 `agents.defaults.agentId`），若皆無設定則安全降級默認為 `"main"`。
 - **Resolution**: The server maps this to the model query string parameter as `"openclaw/<agentId>"` (e.g., `openclaw/main`). This aligns with OpenClaw's strict model-visibility policies.
 - **解析**: 伺服器將其映射到模型查詢字串參數為 `"openclaw/<agentId>"`（例如：`openclaw/main`）。這符合 OpenClaw 嚴格的模型可見性政策。
 

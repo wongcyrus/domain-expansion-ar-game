@@ -195,25 +195,43 @@ function displayCommentary(text) {
 }
 
 function speakCommentary(text) {
-    const canSpeakTTS = document.getElementById('cfg-commentator-speak')?.checked !== false;
-    if (!canSpeakTTS) return Promise.resolve();
+    const volumeSlider = document.getElementById('cfg-commentator-volume');
+    const ttsVolume = volumeSlider ? parseInt(volumeSlider.value) : 100; // 0 to 100
+    
+    // Safety sanitization: remove formatting characters and emojis client-side before speaking
+    let sanitizedText = text || "";
+    sanitizedText = sanitizedText.replace(/[\*_`~]/g, "");
+    try {
+        sanitizedText = sanitizedText.replace(/\p{Extended_Pictographic}/gu, "");
+    } catch (err) {}
+    sanitizedText = sanitizedText.replace(/\s+/g, " ").trim();
+
+    if (!sanitizedText) {
+        return Promise.resolve();
+    }
+
+    if (ttsVolume === 0) {
+        // Local audio is muted, but we must simulate the speaking delay to keep the waiting times and sync with other devices!
+        const isChinese = /[\u4e00-\u9fa5]/.test(sanitizedText);
+        let estimateMs;
+        if (isChinese) {
+            // 250ms per character (4 chars/sec) + 500ms lead-in buffer
+            estimateMs = Math.max(2000, (sanitizedText.length * 250) + 500);
+        } else {
+            // 80ms per character (12 chars/sec) + 800ms lead-in buffer
+            estimateMs = Math.max(2000, (sanitizedText.length * 80) + 800);
+        }
+        estimateMs = Math.min(10000, estimateMs); // Cap at 10 seconds max
+
+        console.log(`[TTS] Local audio is muted (Volume 0%). Simulating speaking delay of ${estimateMs}ms for physical device sync.`);
+        return new Promise((resolve) => setTimeout(resolve, estimateMs));
+    }
+
     if (!window.speechSynthesis) return Promise.resolve();
     return new Promise((resolve) => {
         try {
             window.speechSynthesis.cancel();
             
-            // Safety sanitization: remove formatting characters and emojis client-side before speaking
-            let sanitizedText = text || "";
-            sanitizedText = sanitizedText.replace(/[\*_`~]/g, "");
-            try {
-                sanitizedText = sanitizedText.replace(/\p{Extended_Pictographic}/gu, "");
-            } catch (err) {}
-            sanitizedText = sanitizedText.replace(/\s+/g, " ").trim();
-            if (!sanitizedText) {
-                resolve();
-                return;
-            }
-
             const utterance = new SpeechSynthesisUtterance(sanitizedText);
             
             utterance.onend = () => {
@@ -253,6 +271,8 @@ function speakCommentary(text) {
             
             utterance.rate = 1.1; // Energy rate boost
             utterance.pitch = 1.0;
+            utterance.volume = ttsVolume / 100.0; // Apply the slider volume value (between 0.0 and 1.0)
+            
             window.speechSynthesis.speak(utterance);
         } catch (e) {
             console.warn("[TTS] Speech synthesis failed:", e);
@@ -397,13 +417,26 @@ function getVideoUrl(subPath) {
     return isLocal ? `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, '')}/static/video/${subPath}` : `${GITHUB_PAGES_BASE}static/video/${subPath}`;
 }
 
-function playGlobalResultVideo(isWin) {
+function playGlobalResultVideo(isWin, winnerName) {
     const folder = isWin ? 'win' : 'lose';
     const video = (isWin ? winVideos : loseVideos)[Math.floor(Math.random() * (isWin ? winVideos : loseVideos).length)];
     const absSrc = getVideoUrl(`${folder}/${video}`);
     closeResultBtn.style.display = 'none';
     if (skipResultBtn) skipResultBtn.style.display = 'block';
     const duration = VIDEO_DURATIONS[video] || 15000;
+    
+    // Dynamic boundary border-color and neon-glow based on the winner!
+    if (winnerName === 'PLAYER 1') {
+        resultCinema.style.borderColor = '#4A90E2'; // P1 Blue
+        resultCinema.style.boxShadow = '0 0 60px rgba(74, 144, 226, 0.8)';
+    } else if (winnerName === 'PLAYER 2') {
+        resultCinema.style.borderColor = '#FFFF00'; // P2 Yellow
+        resultCinema.style.boxShadow = '0 0 60px rgba(255, 255, 0, 0.8)';
+    } else {
+        resultCinema.style.borderColor = '#FF5252'; // Draw Red
+        resultCinema.style.boxShadow = '0 0 60px rgba(255, 82, 82, 0.8)';
+    }
+
     resultCinema.pause(); resultCinema.src = absSrc; resultCinema.style.display = 'block'; resultCinema.load();
     const onCanPlay = () => {
         resultCinema.muted = false; resultCinema.volume = 1.0;
@@ -441,7 +474,7 @@ async function showWinner() {
     else { winnerName = 'PLAYER 2'; winnerText.textContent = 'PLAYER 2 WINS'; winnerText.style.color = '#FFFF00'; winnerSubtext.textContent = (p2ScoreVal >= p2TotalActions) ? 'PERFECT VICTORY' : 'VICTORY'; }
     
     resultOverlay.style.display = 'flex';
-    playGlobalResultVideo(winnerScore >= PASS_MARK);
+    playGlobalResultVideo(winnerScore >= PASS_MARK, winnerName);
     updateLayout();
 
     // Trigger final match comments from the OpenClaw agent
@@ -650,7 +683,59 @@ updateLayout();
 
 // Hook up Commentator UI toggle settings and localStorage persistence
 const enableCommentatorCheckbox = document.getElementById('cfg-enable-commentator');
-const commentatorSpeakCheckbox = document.getElementById('cfg-commentator-speak');
+const commentatorVolumeSlider = document.getElementById('cfg-commentator-volume');
+const commentatorVolumeVal = document.getElementById('val-commentator-volume');
+
+// Always accessible quick controls & inline commentator bubble controls
+const quickVolumeSlider = document.getElementById('quick-volume-slider');
+const quickVolumeVal = document.getElementById('quick-volume-val');
+const quickMuteBtn = document.getElementById('quick-mute-btn');
+
+const bubbleVolumeSlider = document.getElementById('bubble-volume-slider');
+const bubbleVolumeVal = document.getElementById('bubble-volume-val');
+const bubbleMuteBtn = document.getElementById('bubble-mute-btn');
+
+let preMuteVolume = '100'; // Keep track of previous volume level before mute
+
+function updateAllVolumeControls(val) {
+    const intVal = parseInt(val) || 0;
+    
+    // 1. Update Sidebar Controls
+    if (commentatorVolumeSlider) {
+        commentatorVolumeSlider.value = val;
+    }
+    if (commentatorVolumeVal) {
+        commentatorVolumeVal.textContent = val + '%';
+    }
+    
+    // 2. Update Always-Visible Quick Controls
+    if (quickVolumeSlider) {
+        quickVolumeSlider.value = val;
+    }
+    if (quickVolumeVal) {
+        quickVolumeVal.textContent = val + '%';
+    }
+    if (quickMuteBtn) {
+        quickMuteBtn.textContent = intVal === 0 ? '🔇' : '🔊';
+    }
+    
+    // 3. Update Inline Commentator Bubble Controls
+    if (bubbleVolumeSlider) {
+        bubbleVolumeSlider.value = val;
+    }
+    if (bubbleVolumeVal) {
+        bubbleVolumeVal.textContent = val + '%';
+    }
+    if (bubbleMuteBtn) {
+        bubbleMuteBtn.textContent = intVal === 0 ? '🔇' : '🔊';
+    }
+    
+    localStorage.setItem('cfg-commentator-volume', val);
+    
+    if (intVal === 0) {
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+    }
+}
 
 if (enableCommentatorCheckbox) {
     const saved = localStorage.getItem('cfg-enable-commentator');
@@ -667,15 +752,51 @@ if (enableCommentatorCheckbox) {
     });
 }
 
-if (commentatorSpeakCheckbox) {
-    const saved = localStorage.getItem('cfg-commentator-speak');
-    if (saved !== null) {
-        commentatorSpeakCheckbox.checked = saved === 'true';
-    }
-    commentatorSpeakCheckbox.addEventListener('change', () => {
-        localStorage.setItem('cfg-commentator-speak', commentatorSpeakCheckbox.checked);
-        if (!commentatorSpeakCheckbox.checked) {
-            if (window.speechSynthesis) window.speechSynthesis.cancel();
+// Initial Volume State Load
+const savedVolume = localStorage.getItem('cfg-commentator-volume') || '100';
+updateAllVolumeControls(savedVolume);
+
+// Attach Inputs & Change listeners for perfect synchronization in real time
+if (commentatorVolumeSlider) {
+    commentatorVolumeSlider.addEventListener('input', () => {
+        updateAllVolumeControls(commentatorVolumeSlider.value);
+    });
+}
+
+if (quickVolumeSlider) {
+    quickVolumeSlider.addEventListener('input', () => {
+        updateAllVolumeControls(quickVolumeSlider.value);
+    });
+}
+
+if (quickMuteBtn) {
+    quickMuteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currentVal = parseInt(localStorage.getItem('cfg-commentator-volume') || '100');
+        if (currentVal > 0) {
+            preMuteVolume = String(currentVal);
+            updateAllVolumeControls('0');
+        } else {
+            updateAllVolumeControls(preMuteVolume || '100');
+        }
+    });
+}
+
+if (bubbleVolumeSlider) {
+    bubbleVolumeSlider.addEventListener('input', () => {
+        updateAllVolumeControls(bubbleVolumeSlider.value);
+    });
+}
+
+if (bubbleMuteBtn) {
+    bubbleMuteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currentVal = parseInt(localStorage.getItem('cfg-commentator-volume') || '100');
+        if (currentVal > 0) {
+            preMuteVolume = String(currentVal);
+            updateAllVolumeControls('0');
+        } else {
+            updateAllVolumeControls(preMuteVolume || '100');
         }
     });
 }

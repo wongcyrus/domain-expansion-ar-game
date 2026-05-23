@@ -29,8 +29,16 @@
     <div class="branding-left"><img src="static/img/hkiit-logo.png" alt="HKIIT Logo"></div>
     <div class="branding-right">
         <img src="static/img/it114115-logo.png" alt="IT114115 Logo">
-        <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
+        <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);">
             <button id="start-battle-btn">START BATTLE</button>
+            
+            <!-- Quick Volume slider always accessible on the main screen during gameplay -->
+            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                <span id="quick-mute-btn" style="cursor: pointer; font-size: 14px;" title="Mute/Unmute Browser TTS">🔊</span>
+                <input type="range" id="quick-volume-slider" value="100" min="0" max="100" style="width: 80px; height: 4px; cursor: pointer; accent-color: #FFFF00; outline: none; margin: 0; padding: 0;" title="Adjust Browser TTS Volume">
+                <span id="quick-volume-val" style="font-size: 10px; font-weight: bold; color: #FFFF00; font-family: monospace; min-width: 28px; text-align: right;">100%</span>
+            </div>
+            
             <div id="battle-settings-toggle" style="font-size: 0.8rem; cursor: pointer; color: #AAA; text-decoration: underline;">⚙️ Match Settings</div>
         </div>
     </div>
@@ -90,9 +98,12 @@
                 <input type="checkbox" id="cfg-enable-commentator" style="width: 16px; height: 16px; cursor: pointer;" checked>
                 <label for="cfg-enable-commentator" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">📺 <b>ENABLE COMMENTATOR</b></label>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
-                <input type="checkbox" id="cfg-commentator-speak" style="width: 16px; height: 16px; cursor: pointer;" checked>
-                <label for="cfg-commentator-speak" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">🔊 <b>COMMENTATOR SPEAK (TTS)</b></label>
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label for="cfg-commentator-volume" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">🔊 <b>COMMENTATOR TTS VOLUME</b></label>
+                    <span id="val-commentator-volume" style="font-size: 11px; font-weight: bold; color: #FFFF00;">100%</span>
+                </div>
+                <input type="range" id="cfg-commentator-volume" value="100" min="0" max="100" style="width: 100%; cursor: pointer;">
             </div>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
                 <input type="checkbox" id="cfg-commentator-webcam" style="width: 16px; height: 16px; cursor: pointer;" checked>
@@ -146,6 +157,13 @@
     
     <!-- Premium Live AI Commentator Overlay -->
     <div id="commentator-bubble">
+        <!-- Inline Volume Controller directly on the Bubble for real-time adjustment -->
+        <div style="position: absolute; top: 12px; right: 15px; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.15); z-index: 10; pointer-events: auto;">
+            <button id="bubble-mute-btn" style="background: none; border: none; color: #FFF; font-size: 14px; cursor: pointer; padding: 0; outline: none; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; pointer-events: auto;" title="Mute/Unmute Browser TTS">🔊</button>
+            <input type="range" id="bubble-volume-slider" value="100" min="0" max="100" style="width: 60px; height: 4px; cursor: pointer; accent-color: #FFFF00; outline: none; margin: 0; padding: 0; pointer-events: auto;" title="Adjust Browser TTS Volume">
+            <span id="bubble-volume-val" style="font-size: 9px; font-weight: bold; color: #FFFF00; font-family: monospace; min-width: 24px; text-align: right;">100%</span>
+        </div>
+
         <div class="commentator-header" style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 10px;">
             <img src="static/img/commentator_avatar.png" alt="Commentator Avatar" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #FF5252; box-shadow: 0 0 10px rgba(255, 82, 82, 0.5);">
             <div class="commentator-avatar" style="margin-bottom: 0;">🎙️ LIVE COMMENTATOR</div>
@@ -153,6 +171,6 @@
         <div id="commentator-text">Waiting for sorcery battle...</div>
     </div>
 
-    <script src="static/js/battle.js?v=2.1"></script>
+    <script src="static/js/battle.js?v=2.4"></script>
 </body>
 </html>
