@@ -17,7 +17,8 @@ const gameSessions = new Map();
 function loadOpenClawConfig() {
     let port = 18789;
     let token = '';
-    let agentId = process.env.OPENCLAW_AGENT_ID || '';
+    // Game-specific dedicated agent defaults strictly to 'domain-commentator'
+    let agentId = process.env.OPENCLAW_AGENT_ID || 'domain-commentator';
 
     try {
         const home = os.homedir();
@@ -27,23 +28,10 @@ function loadOpenClawConfig() {
             port = config.gateway?.port || 18789;
             token = config.gateway?.auth?.token || '';
             
-            // Read agent ID if not already provided via environment variables
-            if (!agentId) {
-                if (config.agentId) agentId = config.agentId;
-                if (config.agent_id) agentId = config.agent_id;
-                if (config.gateway?.agentId) agentId = config.gateway.agentId;
-                if (config.gateway?.agent_id) agentId = config.gateway.agent_id;
-                if (config.agents?.defaults?.agentId) agentId = config.agents.defaults.agentId;
-                if (config.agents?.defaults?.agent_id) agentId = config.agents.defaults.agent_id;
-            }
-            console.log(`[OpenClaw Config] Loaded successfully. Port: ${port}, Token found: ${!!token}, AgentID: ${agentId || 'default to main'}`);
+            console.log(`[OpenClaw Config] Loaded successfully. Port: ${port}, Token found: ${!!token}, AgentID: ${agentId}`);
         }
     } catch (err) {
         console.warn(`[OpenClaw Config] Failed to load ~/.openclaw/openclaw.json:`, err.message);
-    }
-
-    if (!agentId) {
-        agentId = "main";
     }
 
     return { port, token, agentId };
@@ -166,7 +154,7 @@ async function callOpenClawGateway(sessionId, agentId, promptText, attachImages 
 
     const headers = {
         'Content-Type': 'application/json',
-        'x-openclaw-session-key': `agent:${agentId}:jjk-sorcerer:${sessionId}`
+        'x-openclaw-session-key': `agent:${agentId}:domain-expansion-ar-game:${sessionId}`
     };
     
     if (token) {
@@ -264,31 +252,21 @@ app.get('/api/last-image', (req, res) => {
 
 function getSystemPrompt(isZh, foulLanguage) {
     if (isZh) {
-        let systemPrompt = `你係一位極之熱血、宏大嘅《咒術迴戰》現場專業廣東話解說員（主播）！
-核心回覆規則（請永久記住）：
-1. 必須使用香港廣東話（完全口語，聽起來像極度熱血高能量的日本動畫粵語配音、主播，充滿張力，多用粵語口語字如：喇、咗、緊、唔、係、嘢、嚟等）。
-2. 必須以「P1」和「P2」稱呼兩位玩家，保持在地遊戲氛圍。
-3. 請絕對不要使用 markdown 語法（例如 **粗體**、*斜體*、\`代碼\`、# 標題等），亦不要使用任何表情符號（emoji）。
-4. 旁白必須簡短、高能量且充滿張力（通常只有 1 到 2 個短句），唔好長篇大論。
-5. 在任何情況下都絕對不要提及 any 具體的秒數、倒數 or 剩餘時間。
-6. 實時視覺觀察（極致趣味要求）：你每次都會收到一張來自玩家鏡頭（Webcam）的即時照片。請你務必要「用對眼」去仔細觀察圖片中 P1 或 P2 的表情（如：緊張、偷笑、好亢奮、呆滯）、面部特徵、手勢姿勢（如：準唔標準、手震）、服裝打扮（如：戴眼鏡、著咩色衫）或背景環境（如：房間好亂、光線黑暗），並把這些極度爆笑或生動的真實細節融入你的熱血解說中（例如：「我見到 P1 你戴住副眼鏡、個樣緊張到抽筋，但出招竟然咁準！」或「P2 笑得咁奸，手勢又咁標準，今次真係勝券在握喇！」）。
-7. 視覺容錯：如果訊息中沒有附帶圖片，或者圖片是一片漆黑、無法看清，請像往常一樣進行高能文字解說，絕對不要提及「我睇唔到圖片」之類的話，保持解說員的專業風範。`;
-
+        let systemPrompt = `你係釘崎野薔薇，特級咒術解說！請遵循你在 IDENTITY.md 與 SOUL.md 中設定的所有核心解說員人設與限制（無 Markdown、無表情符號、口語廣東話）。`;
         if (foulLanguage) {
-            systemPrompt += `\n8. 特別注意（核心要求）：由於玩家開啟了「粗口垃圾話」模式，請在旁白中加入適量香港廣東話粗口/Swearing或極度不禮貌的街頭垃圾話（例如「仆街」、「屌你」、「頂你個肺」、「好戇尻」、「廢柴」、「屎樣」等，但不要過於極端），令其聽起來極度搞笑、熱血，且具有街頭咒術師互相問候挑釁的風味！`;
+            systemPrompt += `\n【核心附加指令：粗口垃圾話模式已開啟！】請在解說中加入適量香港廣東話粗口/Swearing或垃圾話（例如「仆街」、「屌你」、「頂你個肺」、「好戇尻」、「廢柴」），令其聽起來極度生動挑釁！`;
         } else {
-            systemPrompt += `\n8. 特別注意：請保持旁白用詞文明、熱血、健康，絕對不可包含任何粗口、髒話或人身攻擊字眼，適合全年齡觀眾。`;
+            systemPrompt += `\n【核心附加指令：粗口關閉】請保持用語文明、健康，絕對不可包含任何粗口、髒話。`;
         }
         return systemPrompt;
     } else {
-        return `You are a professional, high-energy JJK (Jujutsu Kaisen) live battle commentator!
-Core reply rules (Please remember them permanently):
-1. Act as an intense JJK live commentary voice. Speak 1 or 2 extremely short, intense, and spectacular comments. Be quick and high energy!
-2. Refer to players as P1 and P2.
-3. Do not use markdown syntax, and do not use emojis under any circumstances.
-4. Do not mention any seconds, timing, countdowns, or remaining time under any circumstances.
-5. Real-Time Webcam Observation (Ultra-Fun Requirement): You will receive a real-time snapshot from the player's webcam. You must actively inspect the active player's facial expressions (e.g. looking terrified, laughing, extremely focused, spacey), appearance (e.g. wearing glasses, cap, clothing color), or background environment (e.g. messy room, dark room), and roast or integrate these funny real-world details directly into your hype commentary! (e.g., "I see P1 looking absolutely petrified behind those glasses, but that Malevolent Shrine is flawless!" or "P2, standard hand sign, but that messy bedroom is a real distraction!").
-6. Image Fallback: If no image is attached, or if it is pitch black, just generate the commentary naturally. Do not break character or mention that you cannot see the image.`;
+        let systemPrompt = `You are Nobara Kugisaki, the supreme commentator! Keep your identity and rules defined in IDENTITY.md and SOUL.md.`;
+        if (foulLanguage) {
+            systemPrompt += `\n[CRITICAL DIRECTIVE: Swearing / Trash-talk mode is active!] Add appropriate street-style roasts or light trash-talk (e.g., "pathetic", "idiot", "trash") to provoke and amuse the players!`;
+        } else {
+            systemPrompt += `\n[CRITICAL DIRECTIVE: Swearing OFF] Keep your wording polite, wholesomely intense, and PG-rated. No foul language.`;
+        }
+        return systemPrompt;
     }
 }
 
@@ -304,12 +282,11 @@ app.post('/api/live-status', async (req, res) => {
         
         const systemPrompt = getSystemPrompt(isZh, foulLanguage);
         
-        // Combine systemPrompt together with a starting user instruction to get a real Opening Hype commentary without losing any rules!
         let openingInstruction = "";
         if (isZh) {
-            openingInstruction = `【重要系統指示：請直接以解說員角色，對兩位玩家 P1、P2 發表你最震撼、最熱血嘅開局廣東話解說旁白（1至2句），歡迎佢哋嚟到呢個現場大賽！如果系統有附帶即時照片（Webcam），請立刻用你雙眼觀察照片中玩家的表情、服裝、手勢或背景，並將這些極度生動爆笑的現實細節，直接融入你的開局震撼解說之中！請絕對不要複述、確認、總結規則，亦不要說任何「收到」、「明白」或「我已記住人設」之類的字眼，直接進入開局角色解說！】\n\n【解說員核心規則系統】：\n${systemPrompt}`;
+            openingInstruction = `【重要系統指示：請直接以你的「釘崎野薔薇（Kugisaki Nobara）」人設，對玩家 P1、P2 發表最傲嬌、最震撼嘅開局廣東話解說旁白（1至2句）！你必須在第一句明確介紹自己（例如說出「本大小姐係釘崎野薔薇！」或「我係釘崎野薔薇」），否則沒有人知道是你！直接進入角色解說，不要複述或確認本指令！】\n\n【附加指令】：\n${systemPrompt}`;
         } else {
-            openingInstruction = `[IMPORTANT DIRECTIVE: Please act immediately as the commentator to deliver your most spectacular and high-energy opening welcome commentary (1-2 sentences) to players P1 and P2! If a real-time webcam snapshot is attached, you must actively inspect the player's facial expressions, clothing, posture, or environment, and integrate these funny real-world details directly into your opening welcome commentary! Do NOT acknowledge, rephrase, or summarize these rules, and do NOT say "Received" or "Understood" under any circumstances. Speak only in character!]\n\n[COMMENTATOR CORE RULES]:\n${systemPrompt}`;
+            openingInstruction = `[IMPORTANT DIRECTIVE: Please act immediately in your Kugisaki Nobara persona to deliver an epic, sassy opening welcome commentary (1-2 sentences) to players P1 and P2! You MUST explicitly introduce yourself in the first sentence by name (e.g. "I am Nobara Kugisaki!" or "It's me, Nobara Kugisaki!") so that players know who is talking. Speak only in character!]\n\n[CURRENT MATCH INSTRUCTION]:\n${systemPrompt}`;
         }
         const welcomeMessage = await callOpenClawGateway(resolvedSessionId, agentId, openingInstruction, true);
         return res.json({ ok: true, welcomeMessage });
@@ -318,16 +295,22 @@ app.post('/api/live-status', async (req, res) => {
     // 2. Handle subsequent live status game updates
     let promptText = "";
     if (isZh) {
+        const toneDirective = foulLanguage 
+            ? "（粗口垃圾話模式已開啟！請使用廣東話粗口/挑釁詞調侃玩家）" 
+            : "（請保持文明，不可使用粗口髒話）";
         if (eventType === "CAST" && detail) {
-            promptText = `[對戰更新] ${translateDetail(detail)}。目前完成進度：P1 完成了 ${p1Score} 次，P2 完成了 ${p2Score} 次。請立刻提供下一句熱血簡短的廣東話解說旁白！`;
+            promptText = `[對戰更新] ${translateDetail(detail)}。目前完成進度：P1 完成了 ${p1Score} 次，P2 完成了 ${p2Score} 次。${toneDirective} 請立刻提供下一句極簡短的廣東話解說旁白！`;
         } else {
-            promptText = `[對戰更新] 目前完成進度：P1 完成了 ${p1Score} 次，P2 完成了 ${p2Score} 次。請立刻提供下一句熱血簡短的廣東話解說旁白！`;
+            promptText = `[對戰更新] 目前完成進度：P1 完成了 ${p1Score} 次，P2 完成了 ${p2Score} 次。${toneDirective} 請立刻提供下一句極簡短的廣東話解說旁白！`;
         }
     } else {
+        const toneDirective = foulLanguage 
+            ? "(Trash-talk mode is active! Feel free to lightly roast the players)" 
+            : "(Swearing is OFF. Keep commentary intense but clean)";
         if (eventType === "CAST" && detail) {
-            promptText = `[GAME UPDATE] ${detail}. Current Standing: P1 Score = ${p1Score}, P2 Score = ${p2Score}. Please provide your next short, high-energy commentary!`;
+            promptText = `[GAME UPDATE] ${detail}. Current Standing: P1 Score = ${p1Score}, P2 Score = ${p2Score}. ${toneDirective} Please provide your next short, high-energy commentary!`;
         } else {
-            promptText = `[GAME UPDATE] Current Standing: P1 Score = ${p1Score}, P2 Score = ${p2Score}. Please provide your next short, high-energy commentary!`;
+            promptText = `[GAME UPDATE] Current Standing: P1 Score = ${p1Score}, P2 Score = ${p2Score}. ${toneDirective} Please provide your next short, high-energy commentary!`;
         }
     }
 

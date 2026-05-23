@@ -1,56 +1,45 @@
-# 🎙️ JJK AI Commentator & OpenClaw Integration | 咒術 AI 旁白與 OpenClaw 整合
+# 🔮 Jujutsu Kaisen Special Agent Setup Guide | 咒術迴戰專屬旁白代理設置指南
 
-This document explains the system design and architecture of the direct, push-based **OpenClaw AI Commentator** integration in the **Domain Expansion AR Game**, featuring our specialized **Kugisaki Nobara (釘崎野薔薇)** custom agent.
+This guide outlines the complete plan and step-by-step instructions to create, configure, and deploy a **Special JJK Arena Commentator Agent** in OpenClaw, specifically optimized for our Domain Expansion AR game.
 
-本文檔說明了「領域展開 AR 遊戲」中直接、基於推送（Push-based）的 **OpenClaw AI 旁白** 整合系統設計與架構，並以專屬的 **釘崎野薔薇 (Kugisaki Nobara)** 自訂代理人為核心人設。
+本指南將引導你一步步在 OpenClaw 中創建並配置一個**咒術領域專屬旁白/裁判代理人（Special JJK Arena Commentator Agent）**，為遊戲注入極致還原的動漫靈魂！
 
 ---
 
-## 📐 System Design & Decoupled Architecture | 系統設計與解耦架構
+## 🎯 1. The Design Plan | 代理人設計規劃
 
-Our JJK AI Commentator uses a fully **event-driven, push-based pipeline** integrated with OpenClaw's decoupled workspace.
+| Attribute | Specification | Detail |
+| :--- | :--- | :--- |
+| **Agent ID** | `domain-commentator` | Unique identifier used in session routing & API calls. |
+| **Name** | `領域對決裁判・釘崎野薔薇` (or Nobara Kugisaki) | Character name displayed in dashboards and terminal. |
+| **Model** | `litellm/gemini-3.5-flash` | Ultra-fast reasoning model with high context window, perfect for live game feedback. |
+| **Workspace** | `~/.openclaw/workspace/domain-commentator` | Isolated environment directory to hold the agent's identity and JJK knowledge files. |
+| **Persona** | High-energy, sassy JJK Arena Commentator | Speeches are mixed with Cantonese, English, and dramatic JJK Jujutsu concepts. |
 
-我們的咒術 AI 旁白採用完全**事件驅動、基於推送**的流水線，並與 OpenClaw 的解耦工作空間（Workspace）整合。
+---
 
-### 1. Rule & Soul Separation (職責分離與解耦)
-To maximize performance, readability, and modularity, the system decouples common commentator rules and JJK lore from the game backend code:
+## 🛠️ 2. Step-by-Step Implementation | 步驟指引
 
-為了解決大代碼庫維護難題，我們將通用解說規則與咒術背景從遊戲伺服端程式碼中徹底剥離，全部轉移給 OpenClaw 的 Agent 專屬文件來接管：
+### Step 2.1: Create the Workspace Directory | 創建工作空間
 
-- **OpenClaw Agent Workspace**: Stores all static persona rules, formatting constraints, language tones, and physical webcam observations.
-  - **OpenClaw 代理工作空間**：掌管所有靜態人設、格式限制、語言風格、以及 Webcam 實時視覺觀察。
-- **Game Server Backend (`server.js`)**: Focuses purely on state tracking, real-time match events (Reset, Cast, Battle Result), scores, and dynamic features (e.g. Swearing mode ON/OFF).
-  - **遊戲服務端**：僅專注於對戰狀態追蹤、實時對戰事件（重置、施放、結算）、比分傳遞、以及「粗口垃圾話」動態開關。
+Run the following command on your host terminal to create the dedicated workspace folder:
 
-### Real-Time Flow Diagram | 即時流程圖
+在主機終端執行以下指令，為該 Agent 建立專屬的工作目錄：
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant P as Game Frontend (Browser)
-    participant S as Game Server (Docker Container)
-    participant O as OpenClaw Gateway (Host Machine)
-
-    Note over P,O: Real-Time Event Triggered (e.g., Player Casts Technique)
-    P->>S: POST /api/live-status (eventType="CAST", Scores, TimeLeft) [PUSH]
-    Note over S: Compiles event state & delegates rules to Agent IDENTITY/SOUL
-    S->>O: POST /v1/chat/completions (Prompt with Vision Snapshot) [PUSH]
-    Note over O: Runs LLM with IDENTITY.md & SOUL.md context instantly
-    O-->>S: Returns AI Commentary Response (Nobara Voice)
-    S-->>P: JSON Response (Commentary Text)
-    Note over P: Displays and speaks commentary via browser SpeechSynthesis
+```bash
+mkdir -p ~/.openclaw/workspace/domain-commentator
 ```
 
 ---
 
-## 📂 Agent Workspace Files | 專屬代理人配置檔案
+### Step 2.2: Write the Character Files | 灌注「靈魂」與「身份」
 
-The commentator's soul and traits are stored natively in the host's `~/.openclaw/workspace/domain-commentator/` folder. Below are the configurations for our active agent, **Nobara Kugisaki (釘崎野薔薇)**:
+In OpenClaw, an agent's knowledge and persona are defined by Markdown files in its workspace. Create the following files under `~/.openclaw/workspace/domain-commentator/`:
 
-解說員的靈魂與行為完全儲存於主機的 `~/.openclaw/workspace/domain-commentator/` 目錄下。以下為目前運行的「釘崎野薔薇」專屬配置檔案：
+在 OpenClaw 中，Agent 的性格、知識與說話風格完全由其工作空間中的 Markdown 檔案決定。請在 `~/.openclaw/workspace/domain-commentator/` 目錄下建立以下三個核心檔案：
 
-### 1. IDENTITY.md (角色性格與人設憲法)
-Path: `~/.openclaw/workspace/domain-commentator/IDENTITY.md`
+#### 📝 File 1: `IDENTITY.md` (身份設定)
+This defines who the agent is and how they talk.
 ```markdown
 # 🎭 Character Identity: Nobara Kugisaki (釘崎野薔薇) - The Spicy & Sassy Arena Referee
 
@@ -94,8 +83,8 @@ Integrate the spirit of her most famous lines naturally when commentating:
   - EN: "It hurts? But so what!"
 ```
 
-### 2. SOUL.md (戰鬥招式與動作解說指引)
-Path: `~/.openclaw/workspace/domain-commentator/SOUL.md`
+#### 📝 File 2: `SOUL.md` (領域與戰鬥規則知識)
+This injects game mechanics and lore details so the AI commentates accurately based on game events.
 ```markdown
 # 🔮 Soul of Jujutsu Arena: Nobara's Techniques & Combat Lore
 
@@ -142,98 +131,83 @@ When commentating on specific techniques, express her personal, sassy opinion ab
 
 ---
 
-## 🔄 Commentary Conversation Flow | 旁白對話流程
+### Step 2.3: Register the Agent in `openclaw.json` | 註冊代理人
 
-To achieve the best user experience with zero repetitive confirmation chatter and minimal API token costs, the system implements a streamlined, stateful conversation flow across the battle lifecycle:
+Open your global config file `~/.openclaw/openclaw.json` and append the new agent configuration to the `agents.list` array:
 
-為了解決大模型常見的「重複確認人設」與「明白/收到」之類的囉唆話，並將 API Token 成本與延遲降到最低，本系統在對戰生命週期中實作了一體化的狀態化對話流：
+打開 `~/.openclaw/openclaw.json` 設定檔，並將以下配置追加到 `agents.list` 陣列中：
 
-### 1. Match Start / Initialization | 對戰開始與初始化
-- **Trigger (RESET event)**: Fired when the viewer starts a new match.
-- **Backend Flow**:
-  1. Sends a standalone `/reset` message turn to OpenClaw to clear any previous conversation history.
-  2. Immediately following the reset success, the backend compiles the welcome directive.
-  3. **Attaches both Player 1 (P1) and Player 2 (P2) webcam snapshots** to the content payload.
-  4. Enforces the self-introduction requirement:
-     - ZH: *"你必須在第一句明確介紹自己（例如說出「本大小姐係釘崎野薔薇！」或「我係釘崎野薔薇」），否則沒有人知道是你！"*
-     - EN: *"You MUST explicitly introduce yourself in the first sentence by name (e.g. 'I am Nobara Kugisaki!') so that players know who is talking."*
-- **AI Response**: Nobara introduces herself loudly and proudly, greets the audience, and humorously roasts the facial expressions, attire, or rooms of both P1 and P2 based on the images (with **zero** "Received/Understood" confirmation chatter).
+```json
+{
+  "id": "domain-commentator",
+  "name": "Domain Arena Commentator",
+  "workspace": "/home/developer/.openclaw/workspace/domain-commentator",
+  "model": "litellm/gemini-3.5-flash",
+  "tools": {
+    "profile": "full",
+    "deny": [
+      "browser",
+      "web_search",
+      "web_fetch",
+      "subagents"
+    ],
+    "elevated": {
+      "enabled": true,
+      "allowFrom": {
+        "webchat": ["*"],
+        "direct": ["*"],
+        "gateway": ["*"]
+      }
+    }
+  }
+}
+```
 
-### 2. Live Gameplay Action | 戰鬥進行中
-- **Trigger (CAST event)**: Fired every time a player successfully triggers a gesture technique.
-- **Backend Flow**:
-  - Compiles a lightweight, pure-text prompt representing the active event and current standing (e.g., `P1 finished 1 time, P2 finished 0 times. P2 casted "Hollow Purple"`).
-  - **No images are attached** during this phase to maximize performance, save network bandwidth, and reduce input token charges.
-- **AI Response**: Delivers an ultra-short, sassy 1-2 sentence real-time commentary reaction reflecting her attitude.
-
-### 3. Match Conclusion | 對局結束結算
-- **Trigger (battle-result event)**: Fired upon match completion.
-- **Backend Flow**:
-  - Formats the grand finale prompt stating the winner and final score.
-  - **Re-attaches both Player 1 (P1) and Player 2 (P2) ending webcam snapshots** to the payload.
-- **AI Response**: Delivers a spectacular and dramatic Cantonese final remark, celebrating the winner while stating she expects her celebratory shopping spree!
+> [!TIP]
+> Ensure you put a comma `,` before pasting this block if it follows an existing agent object in the list.
 
 ---
 
-## 🛠️ Configuration & Deployment | 配置與部署
+### Step 2.4: Update Game Server Config | 更新遊戲服務端設置
 
-### Volume Mount Configuration | 磁碟卷掛載配置
+To tell the game to route all requests to this new agent, update the `OPENCLAW_AGENT_ID` parameter.
 
-In `docker-compose.yml`, the `~/.openclaw` folder is mounted as read-only, allowing the container to dynamically read credentials and configurations. The `OPENCLAW_AGENT_ID` environment variable fallback is configured to point directly to `domain-commentator`:
+為了讓遊戲自動將所有對戰請求路由給這個新 Agent，請在你的環境變數或宿主端的設定檔中設置 Agent ID：
 
-在 `docker-compose.yml` 中，將 `~/.openclaw` 資料夾掛載為唯讀，使容器可以動態讀取主機配置。`OPENCLAW_AGENT_ID` 環境變數的預設降級（fallback）已被硬配置指向 `domain-commentator`：
+* **Option 1**: Set it as an environment variable when launching the game server:
+  ```bash
+  export OPENCLAW_AGENT_ID=domain-commentator
+  ```
+* **Option 2** (Recommended): Set it inside the global OpenClaw configuration file (`~/.openclaw/openclaw.json`), which our game's `server.js` parses automatically:
+  Ensure `config.gateway.agentId` or `config.agentId` is set to `"domain-commentator"`.
 
-```yaml
-services:
-  game-server:
-    ports:
-      - "3443:3443"
-    environment:
-      - PORT=3443
-      - OPENCLAW_HOST=host.docker.internal
-      - OPENCLAW_AGENT_ID=${OPENCLAW_AGENT_ID:-domain-commentator}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - ~/.openclaw:/root/.openclaw:ro
+---
+
+### Step 2.5: Restart OpenClaw | 重啟 OpenClaw 生效
+
+To let OpenClaw load the new agent, restart the OpenClaw service or Docker container:
+
+重啟 OpenClaw 服務或容器，加載新的 Agent 實體與工作目錄檔案：
+
+```bash
+# If running on host:
+openclaw restart
+
+# Or restart the gateway process/container
 ```
 
 ---
 
-## 🎭 Dynamic Routing & Stateful Session Handling | 動態代理路由與狀態化會話處理
+## 🎬 3. Verification | 驗證與調測
 
-Our direct connection uses advanced headers and parameters matching OpenClaw’s internal context resolution scheme to achieve dynamic agent mapping and conversation memory preservation.
-
-我們的直接連接使用符合 OpenClaw 內部上下文解析架構的高級標頭與參數，以實現動態代理對戰路由與對答記憶保留。
-
-### 1. Dynamic Agent Selection | 動態代理選擇
-- **Configuration**: The target agent ID is resolved from the `OPENCLAW_AGENT_ID` environment variable first. If empty, the server dynamically reads it from the host's loaded `~/.openclaw/openclaw.json` file (looking for keys such as `gateway.agentId`, `gateway.agent_id`, `agents.defaults.agentId`, or `agents.defaults.agent_id`). If not found in either, it fallback-defaults to `"domain-commentator"`.
-- **配置**: 目標代理 ID 首選自 `OPENCLAW_AGENT_ID` 環境變數。若無該環境變數，則從掛載的主機端 `~/.openclaw/openclaw.json` 文件中動態讀取（支持鍵名如 `gateway.agentId`、`gateway.agent_id` 或 `agents.defaults.agentId`），若皆無設定則安全降級默認為 `"domain-commentator"`。
-- **Resolution**: The server maps this to the model query string parameter as `"openclaw/<agentId>"` (e.g., `openclaw/domain-commentator`). This aligns with OpenClaw's strict model-visibility policies.
-- **解析**: 伺服器將其映射到模型查詢字串參數為 `"openclaw/<agentId>"`（例如：`openclaw/domain-commentator`）。這符合 OpenClaw 嚴格的模型可見性政策。
-
-### 2. Conversation Memory & Stateful Sessions | 對話記憶與狀態化會話
-By default, standard stateless HTTP requests generate a new session UUID, causing the commentator to lose all previous context. To preserve conversation history across turns, we pass **both** explicit session headers and user mappings:
-
-預設情況下，標準無狀態 HTTP 請求會產生新的會話 UUID，導致旁白遺失所有先前的上下文。為了在多輪對答中保留對話歷史記錄，我們傳遞了**明確的會話標頭與使用者映射**：
-
-- **Standard Header**:
-  `x-openclaw-session-key: agent:<agentId>:domain-expansion-ar-game:<sessionId>`
-  This tells OpenClaw to bypass dynamic UUID generation and load the persistent session database under a unique, searchable game label (`domain-expansion-ar-game`). This allows users to easily query, manage, or bulk-delete all sessions generated by this game.
-  
-  這告訴 OpenClaw 繞過動態 UUID 產生，並在專屬遊戲標籤下（`domain-expansion-ar-game`）載入持久會話資料庫。這允許用戶輕鬆地查詢、管理或批次刪除該遊戲產生的所有會話。
-  
-- **User Param**:
-  `user: sessionId`
-  Specifies the unique game session ID inside the OpenAI body payload for first-class OpenAI schema compliance.
-  
-  在 OpenAI 本文負載中指定唯一的遊戲會話 ID，以符合一等（first-class）的 OpenAI 結構定義。
+Once restarted, start a new game match!
+* The commentators' replies will now automatically carry Nobara's sassy tone, HK Cantonese style, and incredibly dramatic commentary.
+* It will speak directly to the players as Nobara commentating on Gojo and Sukuna fighting inside their respective domains.
+* Running `./clean_sessions.js` will continue to seamlessly clear out these specialized sessions under the label `domain-expansion-ar-game`!
 
 ---
 
-## 🎙️ Spectator UI Settings & Voice Optimization | 觀戰界面配置與語音優化
+## 🎙️ 4. Spectator UI Settings & Voice Optimization | 旁白界面配置與語音優化
 
 Our Battle Arena features a highly interactive and fully-equipped **AI Commentator Config Panel** on the Spectator Screen (`battle.html`). Below is a complete guide to all available settings and features:
 

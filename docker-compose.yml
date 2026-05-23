@@ -6,7 +6,7 @@ services:
     environment:
       - PORT=3443
       - OPENCLAW_HOST=host.docker.internal
-      - OPENCLAW_AGENT_ID=${OPENCLAW_AGENT_ID:-main}
+      - OPENCLAW_AGENT_ID=${OPENCLAW_AGENT_ID:-domain-commentator}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

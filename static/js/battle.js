@@ -227,14 +227,20 @@ function speakCommentary(text) {
         return new Promise((resolve) => setTimeout(resolve, estimateMs));
     }
 
-    if (!window.speechSynthesis) return Promise.resolve();
+    if (!window.speechSynthesis) {
+        console.warn("[TTS] window.speechSynthesis is not supported in this browser!");
+        return Promise.resolve();
+    }
+    console.log(`[TTS] speakCommentary trigger: "${sanitizedText}" | Current setting volume: ${ttsVolume}%`);
     return new Promise((resolve) => {
         try {
+            console.log("[TTS] Cancelling existing speech queue...");
             window.speechSynthesis.cancel();
             
             const utterance = new SpeechSynthesisUtterance(sanitizedText);
             
             utterance.onend = () => {
+                console.log("[TTS] Speech playback ended successfully.");
                 resolve();
             };
             utterance.onerror = (e) => {
@@ -243,37 +249,102 @@ function speakCommentary(text) {
             };
 
             const voices = window.speechSynthesis.getVoices();
+            console.log(`[TTS] Browser voices loaded: ${voices.length} voices found.`);
             
             // Read commentary language config from the spectator screen
             const targetLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
             let selectedVoice = null;
             
+            // Comprehensive list of known female voice names or tags across macOS, iOS, Windows, Android & Chrome
+            const femaleKeywords = [
+                'sin-ji', 'sinji', 'hiuting', 'hiu-ting', 'szeyin', 'sze-yin', 'tracy', // Cantonese female (Sin-ji, Hiu-ting, Sze-yin, Tracy)
+                'ting-ting', 'tingting', 'mei-jia', 'meijia', 'hanhan', 'yating', 'huihui', // Mandarin female
+                'zira', 'hazel', 'samantha', 'victoria', 'kathy', 'moira', 'fiona', 'tessa', 'karen', // English female
+                'female', 'girl', 'woman', 'siri' // general tags (no single letter 'f' to avoid matching 'Microsoft')
+            ];
+
+            // List of known male voice profiles to explicitly deprioritize
+            const maleKeywords = [
+                'danny', 'kangkang', 'zhiwei', 'george', 'david', 'male', 'man', 'boy', 'guy'
+            ];
+
+            const isFemaleVoice = (v) => {
+                const nameLower = v.name.toLowerCase();
+                return femaleKeywords.some(keyword => nameLower.includes(keyword));
+            };
+
+            const isMaleVoice = (v) => {
+                const nameLower = v.name.toLowerCase();
+                return maleKeywords.some(keyword => nameLower.includes(keyword));
+            };
+
+            let langVoices = [];
             if (targetLang === 'zh-HK') {
-                selectedVoice = voices.find(v => v.lang.includes('zh-HK')) || 
-                                voices.find(v => v.lang.includes('zh-TW')) || 
-                                voices.find(v => v.lang.startsWith('zh')) || 
-                                voices[0];
+                langVoices = voices.filter(v => v.lang.includes('zh-HK'))
+                    .concat(voices.filter(v => v.lang.includes('zh-TW')))
+                    .concat(voices.filter(v => v.lang.startsWith('zh')));
             } else if (targetLang === 'zh-TW') {
-                selectedVoice = voices.find(v => v.lang.includes('zh-TW')) || 
-                                voices.find(v => v.lang.includes('zh-HK')) || 
-                                voices.find(v => v.lang.startsWith('zh')) || 
-                                voices[0];
+                langVoices = voices.filter(v => v.lang.includes('zh-TW'))
+                    .concat(voices.filter(v => v.lang.includes('zh-HK')))
+                    .concat(voices.filter(v => v.lang.startsWith('zh')));
             } else if (targetLang === 'ja') {
-                selectedVoice = voices.find(v => v.lang.startsWith('ja')) || voices[0];
+                langVoices = voices.filter(v => v.lang.startsWith('ja'));
             } else {
-                selectedVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+                langVoices = voices.filter(v => v.lang.startsWith('en'));
+            }
+
+            console.log(`[TTS] Language pool filter for "${targetLang}": found ${langVoices.length} matching voices.`);
+
+            // Check if user has explicitly selected a specific voice from the UI selector dropdown
+            const userSelectedVoiceName = document.getElementById('cfg-commentary-voice')?.value || 'auto';
+            if (userSelectedVoiceName && userSelectedVoiceName !== 'auto') {
+                selectedVoice = voices.find(v => v.name === userSelectedVoiceName);
+                if (selectedVoice) {
+                    console.log(`[TTS] User-selected specific voice overridden: "${selectedVoice.name}"`);
+                }
+            }
+
+            // Prioritize:
+            // 1. Explicitly matched female voice
+            // 2. Gender-neutral or unclassified voice (not explicitly male)
+            // 3. Fallback to the first available language voice, then system default
+            if (!selectedVoice) {
+                selectedVoice = langVoices.find(isFemaleVoice) || 
+                                langVoices.find(v => !isMaleVoice(v)) || 
+                                langVoices[0] || 
+                                voices[0];
+                if (selectedVoice) {
+                    console.log(`[TTS] Selected female/optimized voice: "${selectedVoice.name}" (${selectedVoice.lang})`);
+                }
             }
             
+            // Robust fallback language code if specific voice object was not found or is still pre-loading in Firefox
+            utterance.lang = targetLang;
+
             if (selectedVoice) {
                 utterance.voice = selectedVoice;
                 utterance.lang = selectedVoice.lang;
+            } else {
+                console.log(`[TTS] No matching voice object found. Falling back to default system voice with lang="${utterance.lang}"`);
             }
             
             utterance.rate = 1.1; // Energy rate boost
-            utterance.pitch = 1.0;
+            utterance.pitch = 1.25; // Raised pitch slightly to sound more youthful, energetic, and feminine (girls voice!)
             utterance.volume = ttsVolume / 100.0; // Apply the slider volume value (between 0.0 and 1.0)
             
-            window.speechSynthesis.speak(utterance);
+            console.log(`[TTS] Configured parameters: rate=${utterance.rate}, pitch=${utterance.pitch}, volume=${utterance.volume}`);
+
+            // Firefox asynchronous cancellation bug fix: Wait 100ms after cancel() before speaking to prevent speech queue freezing
+            console.log("[TTS] Preparing asynchronous delayed speak (100ms queue buffer)...");
+            setTimeout(() => {
+                try {
+                    console.log("[TTS] Executing window.speechSynthesis.speak()...");
+                    window.speechSynthesis.speak(utterance);
+                } catch (e) {
+                    console.warn("[TTS] Speech synthesis speak failed:", e);
+                    resolve();
+                }
+            }, 100);
         } catch (e) {
             console.warn("[TTS] Speech synthesis failed:", e);
             resolve();
@@ -799,4 +870,105 @@ if (bubbleMuteBtn) {
             updateAllVolumeControls(preMuteVolume || '100');
         }
     });
+}
+
+// Pre-load and cache SpeechSynthesis voices to guarantee compatibility with Firefox & Chrome
+const commentaryVoiceSelector = document.getElementById('cfg-commentary-voice');
+const commentaryLangSelector = document.getElementById('cfg-commentary-lang');
+
+function updateVoiceSelectorOptions() {
+    if (!commentaryVoiceSelector || !window.speechSynthesis) return;
+    
+    const targetLang = commentaryLangSelector?.value || 'en';
+    const voices = window.speechSynthesis.getVoices();
+    
+    // Filter voices matching the language pool rules
+    let langVoices = [];
+    if (targetLang === 'zh-HK') {
+        langVoices = voices.filter(v => v.lang.includes('zh-HK'))
+            .concat(voices.filter(v => v.lang.includes('zh-TW')))
+            .concat(voices.filter(v => v.lang.startsWith('zh')));
+    } else if (targetLang === 'zh-TW') {
+        langVoices = voices.filter(v => v.lang.includes('zh-TW'))
+            .concat(voices.filter(v => v.lang.includes('zh-HK')))
+            .concat(voices.filter(v => v.lang.startsWith('zh')));
+    } else if (targetLang === 'ja') {
+        langVoices = voices.filter(v => v.lang.startsWith('ja'));
+    } else {
+        langVoices = voices.filter(v => v.lang.startsWith('en'));
+    }
+
+    // Deduplicate voices just in case (by name)
+    const uniqueVoices = [];
+    const seen = new Set();
+    for (const v of langVoices) {
+        if (!seen.has(v.name)) {
+            seen.add(v.name);
+            uniqueVoices.push(v);
+        }
+    }
+
+    // Keep track of currently selected option before we wipe options
+    const previousSelection = commentaryVoiceSelector.value;
+
+    // Clear previous options except the first "Auto-Select" one
+    commentaryVoiceSelector.innerHTML = '<option value="auto">✨ Auto-Select (Optimized Female)</option>';
+
+    uniqueVoices.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.name; // Use voice name as identifier
+        
+        let displayName = v.name;
+        // Add female emoji helper if it is a female profile
+        const isFemale = v.name.toLowerCase().includes('tracy') || 
+                         v.name.toLowerCase().includes('hiuting') || 
+                         v.name.toLowerCase().includes('sin-ji') || 
+                         v.name.toLowerCase().includes('samantha') ||
+                         v.name.toLowerCase().includes('zira') ||
+                         v.name.toLowerCase().includes('victoria');
+        if (isFemale) {
+            displayName = `🙋‍♀️ ${displayName}`;
+        } else if (v.name.toLowerCase().includes('danny') || v.name.toLowerCase().includes('george')) {
+            displayName = `🙋‍♂️ ${displayName}`;
+        }
+        
+        opt.textContent = displayName;
+        commentaryVoiceSelector.appendChild(opt);
+    });
+
+    // Try to restore previous selection, or load from localStorage, otherwise default to "auto"
+    const savedVoice = localStorage.getItem('cfg-commentary-voice') || 'auto';
+    if (uniqueVoices.some(v => v.name === previousSelection)) {
+        commentaryVoiceSelector.value = previousSelection;
+    } else if (uniqueVoices.some(v => v.name === savedVoice)) {
+        commentaryVoiceSelector.value = savedVoice;
+    } else {
+        commentaryVoiceSelector.value = 'auto';
+    }
+}
+
+if (commentaryLangSelector) {
+    commentaryLangSelector.addEventListener('change', () => {
+        updateVoiceSelectorOptions();
+    });
+}
+
+if (commentaryVoiceSelector) {
+    commentaryVoiceSelector.addEventListener('change', () => {
+        localStorage.setItem('cfg-commentary-voice', commentaryVoiceSelector.value);
+    });
+}
+
+if (window.speechSynthesis) {
+    window.speechSynthesis.getVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.getVoices();
+            updateVoiceSelectorOptions();
+        };
+    }
+    // Fire it once on direct DOM ready in case browser loaded voices synchronously
+    setTimeout(() => {
+        updateVoiceSelectorOptions();
+    }, 500);
 }
