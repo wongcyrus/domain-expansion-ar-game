@@ -7,6 +7,25 @@ const path = require('path');
 const cors = require('cors');
 const os = require('os');
 
+// --- AWS API Gateway Endpoint Detection for local testing ---
+let awsApiEndpoint = null;
+try {
+    const outputJsonPath = path.join(__dirname, '../cdk/output.json');
+    if (fs.existsSync(outputJsonPath)) {
+        const outputs = JSON.parse(fs.readFileSync(outputJsonPath, 'utf8'));
+        const cdkStack = outputs.CdkStack;
+        if (cdkStack) {
+            const apiKey = Object.keys(cdkStack).find(key => key.includes("DomainExpansionServerlessConstructDomainExpansionRestApiEndpoint"));
+            if (apiKey) {
+                awsApiEndpoint = cdkStack[apiKey];
+                console.log(`\x1b[32m[AWS Bridge Proxy] Detected AWS API Endpoint: ${awsApiEndpoint}\x1b[0m`);
+            }
+        }
+    }
+} catch (e) {
+    console.warn("[AWS Bridge Proxy] Skipped reading cdk/output.json:", e.message);
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -276,6 +295,39 @@ app.post('/api/live-status', async (req, res) => {
     const { agentId } = loadOpenClawConfig();
     const isZh = lang && lang.toLowerCase().startsWith('zh');
 
+    // --- AWS API Proxy Override ---
+    if (awsApiEndpoint) {
+        try {
+            console.log(`[AWS Bridge Proxy] Forwarding live-status request to AWS REST API...`);
+            const payload = {
+                sessionId: resolvedSessionId,
+                roomCode: req.body.roomCode || "BTL1",
+                p1Score: p1Score || 0,
+                p2Score: p2Score || 0,
+                text: detail || "",
+                isReset: eventType === "RESET"
+            };
+            const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/live-status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (response.ok) {
+                const data = await response.json();
+                console.log(`[AWS Bridge Proxy] Received AWS Commentary: "${data.commentary}"`);
+                if (eventType === "RESET") {
+                    return res.json({ ok: true, welcomeMessage: data.commentary });
+                } else {
+                    return res.json({ ok: true, commentary: data.commentary });
+                }
+            } else {
+                console.error(`[AWS Bridge Proxy Error] Status: ${response.status}`);
+            }
+        } catch (err) {
+            console.error(`[AWS Bridge Proxy Exception]:`, err.message);
+        }
+    }
+
     // 1. Handle New Game Session RESET event
     if (eventType === "RESET") {
         console.log(`[Bridge] Resetting OpenClaw session for sessionId=${resolvedSessionId}`);
@@ -324,6 +376,35 @@ app.post('/api/battle-result', async (req, res) => {
     const { sessionId, winner, p1Score, p2Score, lang, foulLanguage } = req.body;
     const resolvedSessionId = sessionId || "main";
     const { agentId } = loadOpenClawConfig();
+
+    // --- AWS API Proxy Override ---
+    if (awsApiEndpoint) {
+        try {
+            console.log(`[AWS Bridge Proxy] Forwarding battle-result request to AWS REST API...`);
+            const payload = {
+                sessionId: resolvedSessionId,
+                roomCode: req.body.roomCode || "BTL1",
+                p1Score: p1Score || 0,
+                p2Score: p2Score || 0,
+                text: winner || "DRAW",
+                isReset: true
+            };
+            const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/battle-result`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (response.ok) {
+                const data = await response.json();
+                console.log(`[AWS Bridge Proxy] Received AWS Battle Result: "${data.commentary}"`);
+                return res.json({ ok: true, commentary: data.commentary });
+            } else {
+                console.error(`[AWS Bridge Proxy Error] Status: ${response.status}`);
+            }
+        } catch (err) {
+            console.error(`[AWS Bridge Proxy Exception]:`, err.message);
+        }
+    }
     
     let promptText = "";
     const isZh = lang && lang.toLowerCase().startsWith('zh');

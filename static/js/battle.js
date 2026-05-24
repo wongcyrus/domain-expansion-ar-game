@@ -70,7 +70,7 @@ function generateRoomCode() {
     return res;
 }
 
-function updateSyncMode() {
+async function updateSyncMode() {
     if (sync) sync.close();
     currentNetMode = (netModeSelect && netModeSelect.value) || 'local';
     if (valNetMode) valNetMode.textContent = currentNetMode.toUpperCase();
@@ -80,8 +80,27 @@ function updateSyncMode() {
     } else {
         if (roomCodeDisplay) roomCodeDisplay.style.display = 'none';
     }
+    
     sync = new BattleModeSync('viewer', currentNetMode, currentRoomCode);
     setupSyncCallbacks();
+
+    // Load serverless config if present to avoid race conditions
+    try {
+        const response = await fetch('/config.json');
+        if (response.ok) {
+            const config = await response.json();
+            if (config.robotApiEndpoint) {
+                localStorage.setItem('robot_api_endpoint', config.robotApiEndpoint);
+            }
+            if (config.defaultSessionKey) {
+                localStorage.setItem('robot_session_key', config.defaultSessionKey);
+                localStorage.setItem('openclawSessionId', config.defaultSessionKey);
+                localStorage.setItem('openclawActiveSessionId', config.defaultSessionKey);
+            }
+        }
+    } catch (configErr) {
+        console.warn('config.json load skipped or failed in updateSyncMode:', configErr);
+    }
 
     // Register active room details with OpenClaw bridge
     const openclawSessionId = getOpenclawActiveSessionId();

@@ -1721,7 +1721,25 @@ class HandTracker {
     }
 }
 
-window.addEventListener('DOMContentLoaded', () => { 
+window.addEventListener('DOMContentLoaded', async () => { 
+    // Try to load serverless config.json to populate local parameters and avoid race conditions
+    try {
+        const response = await fetch('/config.json');
+        if (response.ok) {
+            const config = await response.json();
+            if (config.robotApiEndpoint) {
+                localStorage.setItem('robot_api_endpoint', config.robotApiEndpoint);
+            }
+            if (config.defaultSessionKey) {
+                localStorage.setItem('robot_session_key', config.defaultSessionKey);
+                localStorage.setItem('openclawSessionId', config.defaultSessionKey);
+                localStorage.setItem('openclawActiveSessionId', config.defaultSessionKey);
+            }
+        }
+    } catch (configErr) {
+        console.warn('config.json load skipped or failed in hand_tracker.js:', configErr);
+    }
+
     window.handTracker = new HandTracker(); 
     fetch(`${window.location.origin}/api/log`, {
         method: 'POST',

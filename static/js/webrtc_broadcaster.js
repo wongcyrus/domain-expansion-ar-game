@@ -4,6 +4,82 @@
  * 1. 'local': Uses BroadcastChannel (Same browser, zero server)
  * 2. 'online': Uses Socket.io (Different devices/networks, requires server)
  */
+
+class ServerlessSocket {
+    constructor(wsUrl) {
+        this.wsUrl = wsUrl;
+        this.listeners = {};
+        this.id = 'client_' + Math.random().toString(36).substring(2, 9);
+        this.connect();
+    }
+
+    connect() {
+        console.log(`[ServerlessSocket] Connecting to native WebSocket at: ${this.wsUrl}`);
+        this.ws = new WebSocket(this.wsUrl);
+
+        this.ws.onopen = () => {
+            console.log(`[ServerlessSocket] WebSocket open, assigned id: ${this.id}`);
+            this.trigger('connect');
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                const { type, data } = message;
+                this.trigger(type, data);
+            } catch (err) {
+                console.warn('[ServerlessSocket] Error parsing message:', err);
+            }
+        };
+
+        this.ws.onclose = () => {
+            console.log('[ServerlessSocket] WebSocket closed');
+            this.trigger('disconnect');
+        };
+
+        this.ws.onerror = (err) => {
+            console.error('[ServerlessSocket] WebSocket error:', err);
+        };
+    }
+
+    on(event, callback) {
+        if (!this.listeners[event]) {
+            this.listeners[event] = [];
+        }
+        this.listeners[event].push(callback);
+    }
+
+    emit(event, data) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            const payload = {
+                action: event,
+                client_id: this.id,
+                ...data
+            };
+            this.ws.send(JSON.stringify(payload));
+        } else {
+            console.warn('[ServerlessSocket] WebSocket is not open, cannot emit event:', event);
+        }
+    }
+
+    trigger(event, data) {
+        const callbacks = this.listeners[event] || [];
+        callbacks.forEach(cb => {
+            try {
+                cb(data);
+            } catch (err) {
+                console.error(`[ServerlessSocket] Error executing listener for event ${event}:`, err);
+            }
+        });
+    }
+
+    disconnect() {
+        if (this.ws) {
+            this.ws.close();
+        }
+    }
+}
+
 class BattleModeSync {
     constructor(role, mode = 'local', roomCode = 'LOCAL') {
         this.role = role; // 'player1', 'player2', or 'viewer'
@@ -48,43 +124,68 @@ class BattleModeSync {
             const { type, from, to, data } = event.data;
             this.handleIncomingMessage(from, to, type, data);
         };
-
         if (this.role === 'viewer') {
             this.broadcast('VIEWER_JOIN', null);
         }
     }
 
-    initOnline() {
+    async initOnline() {
         console.log(`[BattleSync] Initializing ONLINE mode for ${this.role}, Room: ${this.roomCode}`);
         
-        // Ensure io is available (loaded via CDN in HTML)
-        if (typeof io === 'undefined') {
-            console.error('[BattleSync] Socket.io not found! Falling back to LOCAL mode.');
-            this.mode = 'local';
-            this.initLocal();
-            return;
-        }
-
-        // Connect to server
+        let wsUrl = '';
+        let serverUrl = window.location.origin;
         const isLocal = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1');
-        const serverUrl = isLocal 
-            ? 'https://localhost:3443' 
-            : window.location.origin;
-
-        this.signalingUrl = serverUrl;
-        console.log(`[BattleSync] Connecting to server: ${serverUrl}`);
         
-        const socketOptions = {
-            secure: true,
-            rejectUnauthorized: false
-        };
-
-        // If not local, we likely don't need port 3443 and might not need rejectUnauthorized
-        if (!isLocal) {
-            delete socketOptions.rejectUnauthorized;
+        // Try to load serverless config.json
+        try {
+            const response = await fetch('/config.json');
+            if (response.ok) {
+                const config = await response.json();
+                if (config.webSocketUrl) {
+                    wsUrl = config.webSocketUrl;
+                    console.log(`[BattleSync] Loaded serverless WebSocket URL from config.json: ${wsUrl}`);
+                    
+                    // Auto pre-fill localStorage settings if present
+                    if (config.robotApiEndpoint) {
+                        localStorage.setItem('robot_api_endpoint', config.robotApiEndpoint);
+                    }
+                    if (config.defaultSessionKey) {
+                        localStorage.setItem('robot_session_key', config.defaultSessionKey);
+                        localStorage.setItem('openclawSessionId', config.defaultSessionKey);
+                    }
+                }
+            }
+        } catch (configErr) {
+            console.warn('[BattleSync] config.json load skipped or failed, using normal Socket.io:', configErr);
         }
 
-        this.socket = io(serverUrl, socketOptions);
+        if (wsUrl) {
+            this.signalingUrl = serverUrl;
+            this.socket = new ServerlessSocket(wsUrl);
+        } else {
+            // Ensure io is available (loaded via CDN in HTML)
+            if (typeof io === 'undefined') {
+                console.error('[BattleSync] Socket.io not found! Falling back to LOCAL mode.');
+                this.mode = 'local';
+                this.initLocal();
+                return;
+            }
+
+            const ioServerUrl = isLocal ? 'https://localhost:3443' : window.location.origin;
+            this.signalingUrl = ioServerUrl;
+            console.log(`[BattleSync] Connecting to Socket.io server: ${ioServerUrl}`);
+            
+            const socketOptions = {
+                secure: true,
+                rejectUnauthorized: false
+            };
+
+            if (!isLocal) {
+                delete socketOptions.rejectUnauthorized;
+            }
+
+            this.socket = io(ioServerUrl, socketOptions);
+        }
 
         this.socket.on('connect', () => {
             this.socketId = this.socket.id;
@@ -102,7 +203,6 @@ class BattleModeSync {
 
         this.socket.on('user_joined', ({ id, role }) => {
             console.log(`[BattleSync] User joined: ${role} (${id})`);
-            // If a player joins and we are the viewer, request their stream
             if (this.role === 'viewer' && (role === 'player1' || role === 'player2')) {
                 this.broadcast('VIEWER_JOIN', null, id);
             }
