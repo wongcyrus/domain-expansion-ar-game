@@ -143,6 +143,7 @@ class HandTracker {
 
         // 4. Mini-Game State
         this.isGameActive = false;
+        this.isPreparingMatch = false;
         this.gameScore = 0;
         this.gameTimeLeft = 0;
         this.gameDifficulty = 8;
@@ -774,9 +775,10 @@ class HandTracker {
                 this.captureSingleWebcamFrameAndUpload(data?.sessionId);
             };
 
-            this.battleSync.onCloseOverlays = () => {
-                console.log('[Battle] Remote close overlays received!');
+            this.battleSync.onCloseOverlays = (data) => {
+                console.log('[Battle] Remote close overlays received:', data);
                 this.isGameActive = false;
+                this.isPreparingMatch = (data && data.isStarting) ? true : false;
                 this.gameScore = 0;
                 this.gameTarget = null;
                 this.hideOverlays();
@@ -1284,6 +1286,20 @@ class HandTracker {
 
             if (this.lastVFXDomain !== stableDomain) {
                 this.lastVFXDomain = stableDomain;
+                
+                // Trigger API Action if NOT in an active game and not preparing a match (Sandbox / Testing mode)
+                if (!this.isGameActive && !this.isPreparingMatch && this.apiEndpoint && this.sessionKey) {
+                    const actionMap = {
+                        "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
+                        "Self-Embodiment of Perfection": "domain_self_embodiment", "Authentic Mutual Love": "domain_authentic_love",
+                        "Idle Death Gamble": "domain_idle_death_gamble", "Yuji Itadori": "domain_yuji_itadori",
+                        "Chimera Shadow Garden": "domain_chimera_shadow_garden", "Time Cell Moon Palace": "domain_time_cell_moon_palace",
+                        "Lapse Blue": "lapse_blue", "Reversal Red": "reversal_red", "Hollow Purple": "hollow_purple"
+                    };
+                    console.log(`[API] Sandbox Mode: Triggering robot action: ${actionMap[stableDomain]}`);
+                    this.triggerRobotAction(this.savedRobotId, actionMap[stableDomain]);
+                }
+
                 if (this.mainContainer) { this.mainContainer.classList.remove('shake'); void this.mainContainer.offsetWidth; this.mainContainer.classList.add('shake'); setTimeout(() => this.mainContainer.classList.remove('shake'), 500); }
 
                 // Skip atmosphere for minor techniques to focus on orbs
@@ -1300,18 +1316,29 @@ class HandTracker {
                     this.playVideo(stableDomain);
                 }
 
-                // Update cooldown based on video duration
-                const videoMap = {
-                    "Unlimited Void": "domain_unlimited_void.mp4", "Malevolent Shrine": "domain_malevolent_shrine.mp4",
-                    "Self-Embodiment of Perfection": "domain_self_embodiment.mp4", "Authentic Mutual Love": "domain_authentic_love.mp4",
-                    "Idle Death Gamble": "domain_idle_death_gamble.mp4", "Yuji Itadori": "domain_yuji_itadori.mp4",
-                    "Chimera Shadow Garden": "domain_chimera_shadow_garden.mp4", "Time Cell Moon Palace": "domain_time_cell_moon_palace.mp4",
-                    "Lapse Blue": "technique_lapse_blue.mp4", "Reversal Red": "technique_reversal_red.mp4", "Hollow Purple": "technique_hollow_purple.mp4"
-                };
-                const videoFile = videoMap[stableDomain];
-                if (videoFile && this.videoDurations[videoFile]) {
-                    this.cooldownMs = this.videoDurations[videoFile] + 1000; // Add 1s buffer
-                    console.log(`[Game] Dynamic Cooldown set to ${this.cooldownMs}ms for ${stableDomain}`);
+                // Update cooldown based on video duration (Case 1) or manual slider (Case 2)
+                if (this.disableApi) {
+                    // Case 1: API is disabled. Cooldown follows the video duration.
+                    const videoMap = {
+                        "Unlimited Void": "domain_unlimited_void.mp4", "Malevolent Shrine": "domain_malevolent_shrine.mp4",
+                        "Self-Embodiment of Perfection": "domain_self_embodiment.mp4", "Authentic Mutual Love": "domain_authentic_love.mp4",
+                        "Idle Death Gamble": "domain_idle_death_gamble.mp4", "Yuji Itadori": "domain_yuji_itadori.mp4",
+                        "Chimera Shadow Garden": "domain_chimera_shadow_garden.mp4", "Time Cell Moon Palace": "domain_time_cell_moon_palace.mp4",
+                        "Lapse Blue": "technique_lapse_blue.mp4", "Reversal Red": "technique_reversal_red.mp4", "Hollow Purple": "technique_hollow_purple.mp4"
+                    };
+                    const videoFile = videoMap[stableDomain];
+                    if (videoFile && this.videoDurations[videoFile]) {
+                        this.cooldownMs = this.videoDurations[videoFile] + 1000; // Add 1s buffer
+                        console.log(`[Game] Case 1 (API Disabled): Dynamic Cooldown set to ${this.cooldownMs}ms for ${stableDomain}`);
+                    }
+                } else {
+                    // Case 2: API is enabled. Cooldown follows the manual slider setting.
+                    if (this.cooldownSlider) {
+                        this.cooldownMs = parseInt(this.cooldownSlider.value) * 1000;
+                    } else {
+                        this.cooldownMs = 10000; // Default fallback
+                    }
+                    console.log(`[Game] Case 2 (API Enabled): Cooldown follows slider setting: ${this.cooldownMs}ms`);
                 }
             }
             if (now - this.lastActionTime >= this.cooldownMs) {
@@ -1398,6 +1425,7 @@ class HandTracker {
         if (!this.isGameActive && !manualStop) return; // Ignore redundant stops
         console.log(`[MiniGame] stopMiniGame called. Reason: ${reason}, Manual: ${manualStop}`);
         this.isGameActive = false;
+        this.isPreparingMatch = false;
         this.gameTimeLeft = 0; // Ensure timer shows 0 on end
         clearInterval(this.gameTimerInterval);
         clearTimeout(this.gameActionInterval);

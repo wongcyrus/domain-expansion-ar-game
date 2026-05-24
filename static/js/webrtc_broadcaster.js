@@ -163,7 +163,7 @@ class BattleModeSync {
                 break;
             case 'CLOSE_OVERLAYS':
                 if (this.isPlayer() && this.onCloseOverlays) {
-                    this.onCloseOverlays();
+                    this.onCloseOverlays(data);
                 }
                 break;
             case 'MATCH_OVER':

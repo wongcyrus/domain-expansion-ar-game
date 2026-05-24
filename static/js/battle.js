@@ -84,7 +84,7 @@ function updateSyncMode() {
     setupSyncCallbacks();
 
     // Register active room details with OpenClaw bridge
-    const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+    const openclawSessionId = getOpenclawActiveSessionId();
     const signalingUrl = sync.signalingUrl || window.location.origin;
     callBridge('/api/register-room', {
         sessionId: openclawSessionId,
@@ -123,27 +123,35 @@ let commentaryHideTimeout = null;
 let pendingCasts = [];
 let castTimeoutHandle = null;
 
+function getOpenclawActiveSessionId() {
+    return localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'main';
+}
+
+function getOpenclawBaseSessionId() {
+    return localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'main';
+}
+
 async function callBridge(endpoint, body) {
-    let apiEndpoint = localStorage.getItem('robotApiEndpoint') || '';
-    if (!apiEndpoint || apiEndpoint.includes('3002')) {
-        apiEndpoint = window.location.origin;
-    }
-    const disableApi = localStorage.getItem('disableRobotApi') === 'true';
-    if (disableApi) return null;
-    
+    const apiEndpoint = window.location.origin;
     // Auto-inject preferred user language
     if (body && typeof body === 'object' && !body.lang) {
         body.lang = localStorage.getItem('user_language') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
     }
     
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout for LLM generation
+        
         const response = await fetch(`${apiEndpoint.replace(/\/$/, '')}${endpoint}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
+        
         if (response.ok) {
             return await response.json();
         }
@@ -409,11 +417,11 @@ async function startMatch() {
             startBtn.style.cursor = 'pointer';
             return;
         }
-        sync.broadcast('CLOSE_OVERLAYS', null);
+        sync.broadcast('CLOSE_OVERLAYS', { isStarting: true });
         await masterAudioUnlock(); resetViewerState();
 
         // Generate a clean, unique active session ID for this match
-        const baseSessionId = localStorage.getItem('openclawSessionId') || 'main';
+        const baseSessionId = getOpenclawBaseSessionId();
         const dynamicSessionId = `${baseSessionId}_${Date.now()}`;
         localStorage.setItem('openclawActiveSessionId', dynamicSessionId);
 
@@ -575,14 +583,14 @@ async function showWinner() {
         const isWebcamEnabled = document.getElementById('cfg-commentator-webcam')?.checked !== false;
         if (isWebcamEnabled && sync) {
             // 1. Trigger single-shot end frame webcam capture from Player View
-            const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+            const openclawSessionId = getOpenclawActiveSessionId();
             sync.broadcast('CAPTURE_WEBCAM_FRAME', { phase: 'END', sessionId: openclawSessionId });
             
             // 2. Wait for player device to capture and upload the image (1000ms delay)
             await new Promise(r => setTimeout(r, 1000));
         }
 
-        const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+        const openclawSessionId = getOpenclawActiveSessionId();
         const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
         const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
         callBridge('/api/battle-result', {
@@ -681,7 +689,7 @@ function setupSyncCallbacks() {
                     }
                 }
 
-                const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+                const openclawSessionId = getOpenclawActiveSessionId();
                 const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
                 const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
 
@@ -778,7 +786,7 @@ function setupSyncCallbacks() {
         if (isMatchActive && triggerTimeCritical && canSpeak && isCommentatorEnabled) {
             lastCustomCommentaryTime = now;
             lastPeriodicCommentaryTime = now;
-            const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+            const openclawSessionId = getOpenclawActiveSessionId();
             const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
             const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
             callBridge('/api/live-status', {
@@ -802,7 +810,7 @@ function setupSyncCallbacks() {
         else if (isMatchActive && (now - lastPeriodicCommentaryTime > 35000) && canSpeak && isCommentatorEnabled) {
             lastPeriodicCommentaryTime = now;
             lastCustomCommentaryTime = now;
-            const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+            const openclawSessionId = getOpenclawActiveSessionId();
             const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
             const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
             callBridge('/api/live-status', {
