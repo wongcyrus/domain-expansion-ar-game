@@ -32,6 +32,8 @@ class HandTracker {
         this.cooldownSlider = document.getElementById('cooldown-slider');
         this.cooldownLabel = document.getElementById('cooldown-val');
         this.disableApiCheck = document.getElementById('disable-api-check');
+        this.scoreGraceSlider = document.getElementById('score-grace-slider');
+        this.scoreGraceLabel = document.getElementById('score-grace-val');
         
         // Battle Mode UI
         this.battleRoleSelect = document.getElementById('battle-role');
@@ -97,6 +99,8 @@ class HandTracker {
         this.battleRole = urlRole || localStorage.getItem('battle_role') || 'none';
         this.battleNetMode = urlNetMode || localStorage.getItem('battle_net_mode') || 'local';
         this.onlineRoomCode = urlRoom || localStorage.getItem('online_room_code') || 'BTL1';
+        this.scoreGrace = parseFloat(localStorage.getItem('cfg-score-grace') || '1.0');
+        this.isSyncedGestureMode = false;
         
         // Load camera ID based on role for independence
         const cameraKey = `selected_camera_id_${this.battleRole}`;
@@ -121,6 +125,10 @@ class HandTracker {
         if (this.battleRoleSelect) {
             this.battleRoleSelect.value = this.battleRole;
             this.updateBattleSync();
+        }
+        if (this.scoreGraceSlider) {
+            this.scoreGraceSlider.value = this.scoreGrace;
+            if (this.scoreGraceLabel) this.scoreGraceLabel.textContent = `${parseFloat(this.scoreGrace).toFixed(1)}s`;
         }
         if (this.gameDifficultySlider) {
             this.gameDifficultySlider.value = this.gameDifficulty;
@@ -231,6 +239,10 @@ class HandTracker {
                 localStorage.setItem('auto_open_popup', this.autoOpen);
                 localStorage.setItem('disable_robot_api', this.disableApi);
                 localStorage.setItem('battle_role', this.battleRoleSelect.value);
+                if (this.scoreGraceSlider) {
+                    localStorage.setItem('cfg-score-grace', this.scoreGraceSlider.value);
+                    this.scoreGrace = parseFloat(this.scoreGraceSlider.value);
+                }
                 
                 const cameraKey = `selected_camera_id_${this.battleRoleSelect.value}`;
                 localStorage.setItem(cameraKey, this.cameraSelect.value);
@@ -317,6 +329,22 @@ class HandTracker {
                 localStorage.setItem('game_difficulty', this.gameDifficulty);
             });
         }
+
+        if (this.scoreGraceSlider) {
+            this.scoreGraceSlider.addEventListener('input', () => {
+                this.scoreGrace = parseFloat(this.scoreGraceSlider.value);
+                if (this.scoreGraceLabel) this.scoreGraceLabel.textContent = `${parseFloat(this.scoreGrace).toFixed(1)}s`;
+                localStorage.setItem('cfg-score-grace', this.scoreGraceSlider.value);
+            });
+        }
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'cfg-score-grace' && e.newValue !== null) {
+                this.scoreGrace = parseFloat(e.newValue);
+                if (this.scoreGraceSlider) this.scoreGraceSlider.value = e.newValue;
+                if (this.scoreGraceLabel) this.scoreGraceLabel.textContent = `${parseFloat(e.newValue).toFixed(1)}s`;
+            }
+        });
 
         if (this.startGameBtn) {
             this.startGameBtn.addEventListener('click', () => {
@@ -778,8 +806,8 @@ class HandTracker {
                 console.log('[Battle] Match RESUME received');
                 this.isPaused = false;
                 if (this.isGameActive) {
-                    if (this.gameTarget === null) {
-                        // This player scored and is waiting for the next action
+                    if (this.gameTarget === null || this.isSyncedGestureMode) {
+                        // This player scored and is waiting for the next action, or we are in Synced Same Gesture Mode
                         this.nextGameAction();
                     } else {
                         // This player was in the middle of a task, just resume timer
@@ -918,6 +946,7 @@ class HandTracker {
                 this.setElText('label-cooldown', 'クールダウン (s)');
                 this.setElText('label-disable-api', '🚫 ロボットAPIを無効にする');
                 this.setElText('label-video-mode', '🎬 ビデオ再生');
+                this.setElText('label-score-grace', '⏳ スコアバッファ時間 (秒)');
                 this.setElText('label-game-difficulty', '⏱️ アクションごとの時間 (s)');
                 this.setElText('start-game-btn', 'ラウンド開始');
                 this.setElText('stop-game-btn', 'ゲーム終了');
@@ -947,6 +976,7 @@ class HandTracker {
                 this.setElText('label-cooldown', '冷卻時間 (s)');
                 this.setElText('label-disable-api', '🚫 禁用機器人 API');
                 this.setElText('label-video-mode', '🎬 影片播放');
+                this.setElText('label-score-grace', '⏳ 分數緩衝時間 (秒)');
                 this.setElText('label-game-difficulty', '⏱️ 每個動作限時 (s)');
                 this.setElText('start-game-btn', '開始回合');
                 this.setElText('stop-game-btn', '退出遊戲');
@@ -976,6 +1006,7 @@ class HandTracker {
                 this.setElText('label-cooldown', '🤖 Cooldown (s)');
                 this.setElText('label-disable-api', '🚫 Disable Robot API');
                 this.setElText('label-video-mode', '🎬 Video Playback');
+                this.setElText('label-score-grace', '⏳ Score Buffer Time (s)');
                 this.setElText('label-game-difficulty', '⏱️ Time per Action (s)');
                 this.setElText('start-game-btn', 'Start Round');
                 this.setElText('stop-game-btn', 'Quit Game');
@@ -1329,13 +1360,20 @@ class HandTracker {
         this.isGameActive = true;
         this.gameScore = 0;
 
-        // 3. Prepare action list (Shuffle)
-        const allActions = Object.keys(this.domainGame.displayNamesMap['en']);
-        let shuffled = allActions.sort(() => Math.random() - 0.5);
-        
-        // Respect round length if configured
-        if (config && config.count) {
-            shuffled = shuffled.slice(0, Math.min(config.count, shuffled.length));
+        // 3. Prepare action list (Synced list from Host OR Shuffle locally)
+        let shuffled;
+        if (config && config.actionList && Array.isArray(config.actionList)) {
+            shuffled = [...config.actionList];
+            this.isSyncedGestureMode = true;
+            console.log('[MiniGame] Using synchronized action list received from Spectator host:', shuffled);
+        } else {
+            this.isSyncedGestureMode = false;
+            const allActions = Object.keys(this.domainGame.displayNamesMap['en']);
+            shuffled = allActions.sort(() => Math.random() - 0.5);
+            // Respect round length if configured
+            if (config && config.count) {
+                shuffled = shuffled.slice(0, Math.min(config.count, shuffled.length));
+            }
         }
         
         this.gameActionList = shuffled;

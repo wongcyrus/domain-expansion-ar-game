@@ -120,6 +120,8 @@ const VIDEO_DURATIONS = {
 // --- CORE MATCH LOGIC & COMMENTATOR BRIDGE ---
 let lastPeriodicCommentaryTime = 0;
 let commentaryHideTimeout = null;
+let pendingCasts = [];
+let castTimeoutHandle = null;
 
 async function callBridge(endpoint, body) {
     let apiEndpoint = localStorage.getItem('robotApiEndpoint') || '';
@@ -457,10 +459,29 @@ async function startMatch() {
             for (let i = countdownVal; i > 0; i--) { countdownText.textContent = i; countdownText.style.animation = 'none'; void countdownText.offsetWidth; countdownText.style.animation = 'winner-pop 0.5s'; await new Promise(r => setTimeout(r, 1000)); }
             countdownText.textContent = "GO!"; await new Promise(r => setTimeout(r, 500)); countdownOverlay.style.display = 'none';
         }
+        const syncGestureCheckbox = document.getElementById('cfg-sync-gesture');
+        const isSyncedMode = syncGestureCheckbox ? syncGestureCheckbox.checked : false;
+        let actionList = null;
+
+        if (isSyncedMode) {
+            // Get the exhaustive, complete list of domains and techniques
+            const allActions = [
+                "Unlimited Void", "Malevolent Shrine", "Self-Embodiment of Perfection", 
+                "Authentic Mutual Love", "Idle Death Gamble", "Yuji Itadori", 
+                "Chimera Shadow Garden", "Time Cell Moon Palace", "Lapse Blue", 
+                "Reversal Red", "Hollow Purple"
+            ];
+            // Shuffle them once for this match and crop to the round length count
+            const shuffled = allActions.sort(() => Math.random() - 0.5);
+            actionList = shuffled.slice(0, Math.min(parseInt(inCount.value) || 11, shuffled.length));
+            console.log(`[Battle] Generated synchronized technique target list for both players:`, actionList);
+        }
+
         sync.broadcast('START_BATTLE', { 
             difficulty: parseInt(inDifficulty.value), 
             count: parseInt(inCount.value),
-            openclawSessionId: dynamicSessionId
+            openclawSessionId: dynamicSessionId,
+            actionList: actionList // Send synchronized technique list to players
         });
         hasMatchStarted = true;
         startBtn.style.background = '#4CAF50'; startBtn.textContent = 'GAME RUNNING';
@@ -590,7 +611,27 @@ function setupSyncCallbacks() {
     sync.onPlayVideoSync = (playerID, videoSrc) => {
         if (isMatchOver) return;
         activeCinematicsCount++;
-        sync.broadcast('MATCH_PAUSE', null);
+        
+        // Read dynamic score grace window from UI configuration slider
+        const graceSlider = document.getElementById('cfg-score-grace');
+        const graceSeconds = graceSlider ? parseFloat(graceSlider.value) : 1.0;
+
+        if (graceSeconds <= 0.0) {
+            // Immediate pause
+            sync.broadcast('MATCH_PAUSE', null);
+            console.log(`[BattleSync] Immediate pause broadcasted to players.`);
+        } else {
+            // Delayed pause - allows the other player to score within the grace period!
+            console.log(`[BattleSync] Cinematic started. Scheduling delayed MATCH_PAUSE after grace window of ${graceSeconds}s...`);
+            setTimeout(() => {
+                if (isMatchOver) return;
+                // Only broadcast pause if this cinematic (or any cinematic) is still active and needs freezing!
+                if (activeCinematicsCount > 0) {
+                    console.log(`[BattleSync] Grace period of ${graceSeconds}s elapsed. Freezing players.`);
+                    sync.broadcast('MATCH_PAUSE', null);
+                }
+            }, graceSeconds * 1000);
+        }
         
         // Premium dynamic ticker update for cast actions
         const actionName = getActionNameFromVideo(videoSrc);
@@ -607,25 +648,60 @@ function setupSyncCallbacks() {
         lastPeriodicCommentaryTime = Date.now();
         const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
         if (isCommentatorEnabled) {
-            const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
-            const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
-            const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
-            callBridge('/api/live-status', {
-                sessionId: openclawSessionId,
-                eventType: 'CAST',
-                detail: `${playerID === 'player1' ? 'Player 1' : 'Player 2'} successfully activated ${actionName}`,
-                p1Score: p1ScoreVal,
-                p2Score: p2ScoreVal,
-                p1Total: p1TotalActions,
-                p2Total: p2TotalActions,
-                timeLeft: Math.max(p1Time, p2Time),
-                lang: commentaryLang,
-                foulLanguage: isFoulEnabled
-            }).then(res => {
-                if (res && res.commentary) {
-                    displayCommentary(res.commentary);
+            // Push this cast to pending casts
+            pendingCasts.push({ playerID, actionName, videoSrc });
+
+            // Clear existing timeout so we debounce and aggregate near-simultaneous scores
+            if (castTimeoutHandle) {
+                clearTimeout(castTimeoutHandle);
+            }
+
+            // Wait slightly for the grace window (or a minimum fallback delay of 50ms) to see if the other player also scores
+            const delayMs = graceSeconds > 0 ? (graceSeconds * 1000) : 50;
+
+            castTimeoutHandle = setTimeout(() => {
+                const currentCasts = [...pendingCasts];
+                pendingCasts = [];
+                castTimeoutHandle = null;
+
+                if (currentCasts.length === 0) return;
+
+                let detail = "";
+                if (currentCasts.length === 1) {
+                    const cast = currentCasts[0];
+                    detail = `${cast.playerID === 'player1' ? 'Player 1' : 'Player 2'} successfully activated ${cast.actionName}`;
+                } else {
+                    // Both players scored within the grace period!
+                    const p1Cast = currentCasts.find(c => c.playerID === 'player1');
+                    const p2Cast = currentCasts.find(c => c.playerID === 'player2');
+                    if (p1Cast && p2Cast) {
+                        detail = `Incredible! Both Player 1 (who cast ${p1Cast.actionName}) and Player 2 (who cast ${p2Cast.actionName}) successfully activated their techniques at the exact same time!`;
+                    } else {
+                        detail = `Multiple techniques activated simultaneously: ` + currentCasts.map(c => `${c.playerID === 'player1' ? 'Player 1' : 'Player 2'} (${c.actionName})`).join(', ');
+                    }
                 }
-            });
+
+                const openclawSessionId = localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+                const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+                const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
+
+                callBridge('/api/live-status', {
+                    sessionId: openclawSessionId,
+                    eventType: 'CAST',
+                    detail: detail,
+                    p1Score: p1ScoreVal,
+                    p2Score: p2ScoreVal,
+                    p1Total: p1TotalActions,
+                    p2Total: p2TotalActions,
+                    timeLeft: Math.max(p1Time, p2Time),
+                    lang: commentaryLang,
+                    foulLanguage: isFoulEnabled
+                }).then(res => {
+                    if (res && res.commentary) {
+                        displayCommentary(res.commentary);
+                    }
+                });
+            }, delayMs);
         }
 
         let hasEnded = false;
@@ -971,4 +1047,39 @@ if (window.speechSynthesis) {
     setTimeout(() => {
         updateVoiceSelectorOptions();
     }, 500);
+}
+
+// Score Grace Window Configuration Load & Listeners
+const scoreGraceSlider = document.getElementById('cfg-score-grace');
+const valScoreGrace = document.getElementById('val-score-grace');
+
+if (scoreGraceSlider && valScoreGrace) {
+    // Load saved value or default to 1.0s
+    const savedGrace = localStorage.getItem('cfg-score-grace') || '1.0';
+    scoreGraceSlider.value = savedGrace;
+    valScoreGrace.textContent = parseFloat(savedGrace).toFixed(1) + 's';
+
+    scoreGraceSlider.addEventListener('input', () => {
+        valScoreGrace.textContent = parseFloat(scoreGraceSlider.value).toFixed(1) + 's';
+        localStorage.setItem('cfg-score-grace', scoreGraceSlider.value);
+    });
+
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'cfg-score-grace' && e.newValue !== null) {
+            scoreGraceSlider.value = e.newValue;
+            valScoreGrace.textContent = parseFloat(e.newValue).toFixed(1) + 's';
+        }
+    });
+}
+
+// Synced Same Gesture Configuration Load & Listeners
+const syncGestureCheckbox = document.getElementById('cfg-sync-gesture');
+if (syncGestureCheckbox) {
+    const savedSync = localStorage.getItem('cfg-sync-gesture');
+    if (savedSync !== null) {
+        syncGestureCheckbox.checked = savedSync === 'true';
+    }
+    syncGestureCheckbox.addEventListener('change', () => {
+        localStorage.setItem('cfg-sync-gesture', syncGestureCheckbox.checked);
+    });
 }

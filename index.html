@@ -142,6 +142,15 @@
                     <option value="player1">👤 Player 1</option>
                     <option value="player2">👤 Player 2</option>
                 </select>
+
+                <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin-top: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label id="label-score-grace" style="font-size: 11px; color: #EEE; cursor: pointer;">⏳ Score Buffer Time (s)</label>
+                        <span id="score-grace-val" style="font-size: 11px; font-weight: bold; color: #FFFF00;">1.0s</span>
+                    </div>
+                    <input type="range" id="score-grace-slider" min="0.0" max="5.0" step="0.5" value="1.0" style="width: 100%; cursor: pointer;">
+                </div>
+
                 <button id="open-battle-viewer" style="margin-top: 8px; width: 100%; background: #FF5252; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">📺 Open Battle Viewer</button>
             </div>
             <div style="border-top: 1px solid #444; padding-top: 10px;">

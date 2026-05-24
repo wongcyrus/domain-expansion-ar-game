@@ -122,6 +122,19 @@
             <div><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;"><label style="font-size: 10px; color: #888;">COUNTDOWN</label><span id="val-countdown" style="font-size: 11px; font-weight: bold; color: #FFFF00;">3s</span></div><input type="range" id="cfg-countdown" value="3" min="0" max="10" style="width: 100%;"></div>
             <div><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;"><label style="font-size: 10px; color: #888;">DIFFICULTY</label><span id="val-difficulty" style="font-size: 11px; font-weight: bold; color: #FFFF00;">5s</span></div><input type="range" id="cfg-difficulty" value="5" min="3" max="15" style="width: 100%;"></div>
             <div><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;"><label style="font-size: 10px; color: #888;">TECHNIQUES</label><span id="val-count" style="font-size: 11px; font-weight: bold; color: #FFFF00;">11</span></div><input type="range" id="cfg-count" value="11" min="1" max="11" style="width: 100%;"></div>
+            
+            <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px; display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label for="cfg-score-grace" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">⏳ <b>SCORE GRACE (BUFFER) WINDOW</b></label>
+                    <span id="val-score-grace" style="font-size: 11px; font-weight: bold; color: #FFFF00;">1.0s</span>
+                </div>
+                <input type="range" id="cfg-score-grace" value="1.0" min="0.0" max="5.0" step="0.5" style="width: 100%; cursor: pointer;">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px;">
+                <input type="checkbox" id="cfg-sync-gesture" style="width: 16px; height: 16px; cursor: pointer;">
+                <label for="cfg-sync-gesture" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">👥 <b>SYNCED SAME GESTURE MODE</b></label>
+            </div>
         </div>
 
         <button id="save-battle-cfg" style="background: #4A90E2; border: none; color: white; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);">CLOSE SETTINGS</button>

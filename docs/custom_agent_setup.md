@@ -250,3 +250,17 @@ Our Battle Arena features a highly interactive and fully-equipped **AI Commentat
 ### 6. Capture Webcam Snapshots | 相機視覺觀察
 *   **ID**: `cfg-commentator-webcam`
 *   **Description**: When active, player cameras will snap compressed image frames at match-start (`RESET`) and match-end (`FINISH`), uploading them alongside API requests. Nobara will actively look at your clothes, facial panic, posture, or glasses and make fun of them! If disabled, she falls back gracefully to standard combat text comments.
+
+### 7. Score Grace Window | 分數緩衝視窗
+*   **ID**: `cfg-score-grace`
+*   **Description**: In 2-Player combat, once P1 or P2 scores, their cinematic video starts playing on the spectator screen. Under the original design, the opponent's tracker is paused *immediately*, making it extremely difficult to score at near-simultaneous intervals. This setting relaxes this condition by introducing a configurable grace period (from `0.0s` to `5.0s`, defaulting to `1.0s`).
+    *   **How it works**: When a player scores, their cinematic triggers, but the opponent's tracking remains active for `Score Grace Window` seconds. If the opponent completes their technique during this window, they successfully score as well, and both actions play out sequentially!
+    *   **Simultaneous Commentary Debouncing**: If both players score within the grace period, the commentator system automatically debounces the status report. Instead of sending two separate and overlapping messages, it bundles both events into a single, cohesive message (e.g., *"Incredible! Both Player 1 (who cast Lapse Blue) and Player 2 (who cast Malevolent Shrine) successfully activated their techniques at the exact same time!"*), ensuring smooth and high-quality playbacks.
+    *   **Persistence**: Automatically saved to `localStorage` for tournament stability.
+
+### 8. Synced Same Gesture Mode | 同步相同手勢模式
+*   **ID**: `cfg-sync-gesture`
+*   **Description**: Normally, the battle arena issues random, shuffled technique requests to each player (e.g., P1 is asked to do "Unlimited Void" while P2 is asked to do "Reversal Red"). When testing the game by yourself (with a single player operating both camera feeds), performing two different hand shapes simultaneously is nearly impossible.
+    *   **How it works**: When enabled, the host spectator pre-generates a single, randomized technique list and broadcasts it to both players. Both Player 1 and Player 2 will be asked to perform the **exact same technique/gesture** at the exact same time, making solo testing, calibration, and near-simultaneous score testing incredibly easy!
+    *   **Lockstep Progression**: To guarantee that players stay 100% synchronized on the exact same technique, the game utilizes a lockstep progression mechanism. When the spectator resumes the match (`MATCH_RESUME`), both players advance to the next technique in their shared list simultaneously, regardless of whether one or both of them successfully scored.
+    *   **Persistence**: Automatically saved to `localStorage` for tournament stability.
