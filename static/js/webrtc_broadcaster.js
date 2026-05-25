@@ -10,16 +10,21 @@ class ServerlessSocket {
         this.wsUrl = wsUrl;
         this.listeners = {};
         this.id = 'client_' + Math.random().toString(36).substring(2, 9);
+        this.pingTimer = null;
+        this.reconnectTimer = null;
+        this.explicitDisconnect = false;
         this.connect();
     }
 
     connect() {
+        this.explicitDisconnect = false;
         console.log(`[ServerlessSocket] Connecting to native WebSocket at: ${this.wsUrl}`);
         this.ws = new WebSocket(this.wsUrl);
 
         this.ws.onopen = () => {
             console.log(`[ServerlessSocket] WebSocket open, assigned id: ${this.id}`);
             this.trigger('connect');
+            this.startHeartbeat();
         };
 
         this.ws.onmessage = (event) => {
@@ -28,18 +33,46 @@ class ServerlessSocket {
                 const { type, data } = message;
                 this.trigger(type, data);
             } catch (err) {
-                console.warn('[ServerlessSocket] Error parsing message:', err);
+                // If it's a raw string (like connection confirmations), skip JSON warning
+                if (event.data !== "Connected." && event.data !== "Disconnected." && event.data !== "OK") {
+                    console.warn('[ServerlessSocket] Error parsing message:', err, event.data);
+                }
             }
         };
 
         this.ws.onclose = () => {
             console.log('[ServerlessSocket] WebSocket closed');
+            this.stopHeartbeat();
             this.trigger('disconnect');
+
+            if (!this.explicitDisconnect) {
+                console.log('[ServerlessSocket] Unexpected disconnect, scheduling reconnect in 3s...');
+                if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+                this.reconnectTimer = setTimeout(() => {
+                    this.connect();
+                }, 3000);
+            }
         };
 
         this.ws.onerror = (err) => {
             console.error('[ServerlessSocket] WebSocket error:', err);
         };
+    }
+
+    startHeartbeat() {
+        this.stopHeartbeat();
+        this.pingTimer = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ action: 'ping', client_id: this.id }));
+            }
+        }, 45000); // Keep API Gateway open by pinging every 45 seconds (bypasses 10min idle limit)
+    }
+
+    stopHeartbeat() {
+        if (this.pingTimer) {
+            clearInterval(this.pingTimer);
+            this.pingTimer = null;
+        }
     }
 
     on(event, callback) {
@@ -74,6 +107,12 @@ class ServerlessSocket {
     }
 
     disconnect() {
+        this.explicitDisconnect = true;
+        this.stopHeartbeat();
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
         if (this.ws) {
             this.ws.close();
         }
