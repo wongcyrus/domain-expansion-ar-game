@@ -200,7 +200,16 @@ class BattleModeSync {
 
         if (wsUrl) {
             this.signalingUrl = serverUrl;
-            this.socket = new ServerlessSocket(wsUrl);
+            
+            // Append Cognito ID token if present for WebSocket custom authentication
+            const cognitoToken = localStorage.getItem("cognito_id_token");
+            let finalWsUrl = wsUrl;
+            if (cognitoToken) {
+                const separator = finalWsUrl.includes('?') ? '&' : '?';
+                finalWsUrl = `${finalWsUrl}${separator}token=${encodeURIComponent(cognitoToken)}`;
+            }
+            
+            this.socket = new ServerlessSocket(finalWsUrl);
         } else {
             // Ensure io is available (loaded via CDN in HTML)
             if (typeof io === 'undefined') {

@@ -34,6 +34,7 @@ class HandTracker {
         this.disableApiCheck = document.getElementById('disable-api-check');
         this.scoreGraceSlider = document.getElementById('score-grace-slider');
         this.scoreGraceLabel = document.getElementById('score-grace-val');
+        this.agentImagePolicySelect = document.getElementById('agent-image-policy');
         
         // Battle Mode UI
         this.battleRoleSelect = document.getElementById('battle-role');
@@ -79,6 +80,20 @@ class HandTracker {
         this.connectOnlineBtn = document.getElementById('connect-online-btn');
         this.onlineStatus = document.getElementById('online-status');
 
+        // Scroll of Honor / AI Portrait DOM Elements
+        this.cfgEnableAiPortrait = document.getElementById('cfg-enable-ai-portrait');
+        this.cfgAiTemplate = document.getElementById('cfg-ai-template');
+        this.scrollOfHonorWidget = document.getElementById('scroll-of-honor-widget');
+        this.p1CapturedPreview = document.getElementById('p1-captured-preview');
+        this.p2CapturedPreview = document.getElementById('p2-captured-preview');
+        this.btnActivateAi = document.getElementById('btn-activate-ai');
+        this.aiStatusText = document.getElementById('ai-status-text');
+        this.aiProgressBarContainer = document.getElementById('ai-progress-bar-container');
+        this.aiProgressBar = document.getElementById('ai-progress-bar');
+        this.aiResultPanel = document.getElementById('ai-result-panel');
+        this.aiQrcodeImg = document.getElementById('ai-qrcode-img');
+        this.aiShortUrlLabel = document.getElementById('ai-short-url-label');
+
         // 2. Load Persistence
         const urlParams = new URLSearchParams(window.location.search);
         const urlRole = urlParams.get('role');
@@ -100,6 +115,7 @@ class HandTracker {
         this.battleNetMode = urlNetMode || localStorage.getItem('battle_net_mode') || 'local';
         this.onlineRoomCode = urlRoom || localStorage.getItem('online_room_code') || 'BTL1';
         this.scoreGrace = parseFloat(localStorage.getItem('cfg-score-grace') || '1.0');
+        this.agentImagePolicy = localStorage.getItem('agent_image_policy') || 'always';
         this.isSyncedGestureMode = false;
         
         // Load camera ID based on role for independence
@@ -116,6 +132,7 @@ class HandTracker {
         if (this.videoModeSelect) this.videoModeSelect.value = this.videoMode;
         if (this.autoOpenPopupCheck) this.autoOpenPopupCheck.checked = this.autoOpen;
         if (this.disableApiCheck) this.disableApiCheck.checked = this.disableApi;
+        if (this.agentImagePolicySelect) this.agentImagePolicySelect.value = this.agentImagePolicy;
         if (this.battleNetModeSelect) {
             this.battleNetModeSelect.value = this.battleNetMode;
             this.toggleOnlineUI();
@@ -231,6 +248,10 @@ class HandTracker {
                 this.videoMode = this.videoModeSelect.value;
                 this.autoOpen = this.autoOpenPopupCheck.checked;
                 this.disableApi = this.disableApiCheck.checked;
+                if (this.agentImagePolicySelect) {
+                    this.agentImagePolicy = this.agentImagePolicySelect.value;
+                    localStorage.setItem('agent_image_policy', this.agentImagePolicy);
+                }
                 
                 localStorage.setItem('robot_api_endpoint', this.apiEndpoint);
                 localStorage.setItem('robot_session_key', this.sessionKey);
@@ -374,6 +395,117 @@ class HandTracker {
                 this.gameOverOverlay.classList.add('hidden');
                 if (this.resultVideoPlayer) this.resultVideoPlayer.pause();
                 if (this.resultVideoContainer) this.resultVideoContainer.style.display = 'none';
+            });
+        }
+
+        if (this.btnActivateAi) {
+            this.btnActivateAi.addEventListener('click', async () => {
+                // Disable button during active processing
+                this.btnActivateAi.disabled = true;
+                this.btnActivateAi.style.opacity = '0.5';
+                
+                this.aiProgressBarContainer.classList.remove('hidden');
+                this.aiProgressBar.style.width = '10%';
+                this.aiStatusText.textContent = 'Initiating style fusion sequence...';
+                
+                let sessionId = this.sessionKeyInput ? this.sessionKeyInput.value.trim() : 'main';
+                if (!sessionId) sessionId = 'main';
+                const templateId = this.cfgAiTemplate ? this.cfgAiTemplate.value : 'random';
+                
+                // Read from API endpoint inputs
+                let baseEndpoint = this.endpointInput ? this.endpointInput.value.trim() : '';
+                if (baseEndpoint && baseEndpoint.endsWith('/')) {
+                    baseEndpoint = baseEndpoint.slice(0, -1);
+                }
+                
+                const enhanceUrl = `${baseEndpoint}/api/enhance-portrait`;
+                console.log(`[AI Portrait] Invoking trigger API: ${enhanceUrl} for sessionId=${sessionId}, templateId=${templateId}`);
+                
+                try {
+                    const response = await fetch(enhanceUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionId, templateId })
+                    });
+                    
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    
+                    const result = await response.json();
+                    console.log('[AI Portrait] Trigger API response:', result);
+                    
+                    this.aiProgressBar.style.width = '30%';
+                    this.aiStatusText.textContent = 'Style fusion enqueued. Monitoring queue...';
+                    
+                    // Start checking status every 2 seconds
+                    let pollCount = 0;
+                    const maxPolls = 30; // Max 1 minute wait
+                    
+                    const intervalId = setInterval(async () => {
+                        pollCount++;
+                        // Increment progress bar to look super sleek & alive
+                        const visualProgress = Math.min(90, 30 + (pollCount * 2));
+                        this.aiProgressBar.style.width = `${visualProgress}%`;
+                        
+                        try {
+                            const checkUrl = `${baseEndpoint}/api/check-enhancement?sessionId=${encodeURIComponent(sessionId)}`;
+                            const checkResp = await fetch(checkUrl);
+                            if (!checkResp.ok) throw new Error(`HTTP ${checkResp.status}`);
+                            
+                            const checkResult = await checkResp.json();
+                            console.log('[AI Portrait] Check poll response:', checkResult);
+                            
+                            if (checkResult.status === 'COMPLETE' && checkResult.url) {
+                                clearInterval(intervalId);
+                                this.aiProgressBar.style.width = '100%';
+                                this.aiStatusText.textContent = 'Style fusion successfully completed!';
+                                
+                                // Display final results panel
+                                this.aiResultPanel.classList.remove('hidden');
+                                
+                                // Generate QR Code pointing to the share page!
+                                // The share page URL should point to current page's origin + /share.html?sessionId=xxx
+                                const currentOrigin = window.location.origin;
+                                const shareUrl = `${currentOrigin}/share.html?sessionId=${encodeURIComponent(sessionId)}`;
+                                
+                                // To generate a QR code cleanly without bulky dependencies, we use the beautiful and super reliable public API: qrserver!
+                                const qrcodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}`;
+                                this.aiQrcodeImg.src = qrcodeApiUrl;
+                                this.aiShortUrlLabel.innerHTML = `<a href="${shareUrl}" target="_blank" style="color: #FFFF00; text-decoration: underline;">${shareUrl}</a>`;
+                                
+                                this.btnActivateAi.style.display = 'none';
+                            } else if (checkResult.status && checkResult.status.startsWith('ERROR:')) {
+                                clearInterval(intervalId);
+                                this.aiProgressBarContainer.classList.add('hidden');
+                                this.btnActivateAi.disabled = false;
+                                this.btnActivateAi.style.opacity = '1';
+                                
+                                const err = checkResult.status.replace('ERROR:', '').trim();
+                                if (err === 'NO_FACE') {
+                                    this.aiStatusText.textContent = '❌ No faces detected by Rekognition. Try holding gestures again!';
+                                } else {
+                                    this.aiStatusText.textContent = `❌ Style fusion failed. Error: ${err}`;
+                                }
+                            }
+                        } catch (pollErr) {
+                            console.error('[AI Portrait] Poll error:', pollErr);
+                        }
+                        
+                        if (pollCount >= maxPolls) {
+                            clearInterval(intervalId);
+                            this.aiProgressBarContainer.classList.add('hidden');
+                            this.btnActivateAi.disabled = false;
+                            this.btnActivateAi.style.opacity = '1';
+                            this.aiStatusText.textContent = '❌ Generation timed out. Please try again!';
+                        }
+                    }, 2000);
+                    
+                } catch (err) {
+                    console.error('[AI Portrait] Generation trigger failed:', err);
+                    this.aiProgressBarContainer.classList.add('hidden');
+                    this.btnActivateAi.disabled = false;
+                    this.btnActivateAi.style.opacity = '1';
+                    this.aiStatusText.textContent = `❌ Connection failed: ${err.message}`;
+                }
             });
         }
 
@@ -966,6 +1098,10 @@ class HandTracker {
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 統合 (静音)');
                 this.setOptText('#video-playback-mode option[value="popup"]', '🪟 ポップアップ');
                 this.setOptText('#robot-id option[value="all"]', '🤖 全てのロボット');
+                this.setElText('label-agent-image-policy', '🖼️ AgentCoreに画像送信');
+                this.setOptText('#agent-image-policy option[value="always"]', '📸 常に送信');
+                this.setOptText('#agent-image-policy option[value="start_end"]', '🏁 開始と終了時のみ');
+                this.setOptText('#agent-image-policy option[value="never"]', '🚫 送信しない');
             } else if (isZH) {
                 finalTitle = '領域展開 AR';
                 defaultMode = '結下手印以展開你的領域！';
@@ -996,6 +1132,10 @@ class HandTracker {
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 內置 (靜音)');
                 this.setOptText('#video-playback-mode option[value="popup"]', '🪟 彈出視窗');
                 this.setOptText('#robot-id option[value="all"]', '🤖 所有機器人');
+                this.setElText('label-agent-image-policy', '🖼️ 傳送圖像至 AgentCore');
+                this.setOptText('#agent-image-policy option[value="always"]', '📸 總是傳送');
+                this.setOptText('#agent-image-policy option[value="start_end"]', '🏁 僅限開始和結束時');
+                this.setOptText('#agent-image-policy option[value="never"]', '🚫 不傳送');
             } else {
                 finalTitle = 'Domain Expansion AR';
                 defaultMode = 'Strike a hand sign to expand your domain!';
@@ -1026,6 +1166,10 @@ class HandTracker {
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 Integrated (Silent)');
                 this.setOptText('#video-playback-mode option[value="popup"]', '🪟 Popup Tab');
                 this.setOptText('#robot-id option[value="all"]', '🤖 All Robots');
+                this.setElText('label-agent-image-policy', '🖼️ Send Image to AgentCore');
+                this.setOptText('#agent-image-policy option[value="always"]', '📸 Always Send');
+                this.setOptText('#agent-image-policy option[value="start_end"]', '🏁 Just Start and End Game');
+                this.setOptText('#agent-image-policy option[value="never"]', '🚫 Do Not Send');
             }
 
             if (this.domainGame) this.domainGame.setLanguage(currentLang);
@@ -1469,6 +1613,53 @@ class HandTracker {
 
         // Final broadcast of result state
         this.syncBattleState();
+
+        if (this.scrollOfHonorWidget) {
+            const isAiEnabled = this.cfgEnableAiPortrait ? this.cfgEnableAiPortrait.checked : true;
+            if (isAiEnabled) {
+                this.scrollOfHonorWidget.classList.remove('hidden');
+                
+                // Set loading status text and reset panels
+                if (this.btnActivateAi) {
+                    this.btnActivateAi.style.display = 'block';
+                    this.btnActivateAi.disabled = false;
+                    this.btnActivateAi.style.opacity = '1';
+                }
+                if (this.aiProgressBarContainer) this.aiProgressBarContainer.classList.add('hidden');
+                if (this.aiResultPanel) this.aiResultPanel.classList.add('hidden');
+                if (this.aiStatusText) this.aiStatusText.textContent = 'Click to fuse and stylize player portraits using Bedrock Nova Canvas!';
+                
+                // Render the raw Player 1 and Player 2 captured images
+                let sessionId = this.sessionKeyInput ? this.sessionKeyInput.value.trim() : 'main';
+                if (!sessionId) sessionId = 'main';
+                
+                let baseEndpoint = this.endpointInput ? this.endpointInput.value.trim() : '';
+                if (baseEndpoint && baseEndpoint.endsWith('/')) {
+                    baseEndpoint = baseEndpoint.slice(0, -1);
+                }
+                
+                const loadPreviewImage = async (imgElement, roleName) => {
+                    if (!imgElement) return;
+                    try {
+                        const snapUrl = `${baseEndpoint}/api/get-snapshot?sessionId=${encodeURIComponent(sessionId)}&role=${roleName}&t=${Date.now()}`;
+                        const response = await fetch(snapUrl);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data && data.image) {
+                                imgElement.src = data.image;
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`[AI Portrait] Failed to load preview for ${roleName}:`, e);
+                    }
+                };
+
+                loadPreviewImage(this.p1CapturedPreview, 'player1');
+                loadPreviewImage(this.p2CapturedPreview, 'player2');
+            } else {
+                this.scrollOfHonorWidget.classList.add('hidden');
+            }
+        }
 
         this.gameTarget = null;
     }

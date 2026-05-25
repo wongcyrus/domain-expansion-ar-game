@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scroll of Honor | 領域展開 AR</title>
+    
+    <!-- Modern Premium Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #050508;
+            --accent-gold: #FFFF00;
+            --dark-gold: #B8860B;
+            --blue-glow: #00D2FF;
+            --pink-glow: #FF007F;
+            --card-bg: rgba(15, 15, 25, 0.7);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: #FFFFFF;
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 210, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(255, 0, 127, 0.05) 0%, transparent 40%);
+        }
+
+        /* Ambient animated background particles */
+        .ambient-spark {
+            position: fixed;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.3;
+            pointer-events: none;
+            animation: float-up 10s infinite linear;
+        }
+
+        @keyframes float-up {
+            0% { transform: translateY(110vh) translateX(0); opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { transform: translateY(-10vh) translateX(50px); opacity: 0; }
+        }
+
+        header {
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            padding: 30px 15px 15px 15px;
+            box-sizing: border-box;
+        }
+
+        .jjk-logo {
+            max-height: 70px;
+            width: auto;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 0, 0.3));
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 1.8rem;
+            margin: 5px 0;
+            letter-spacing: 4px;
+            background: linear-gradient(135deg, #FFF 30%, var(--accent-gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: rgba(255, 255, 255, 0.6);
+            margin: 0;
+        }
+
+        main {
+            width: 100%;
+            max-width: 500px;
+            padding: 0 15px;
+            box-sizing: border-box;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+
+        /* Portrait Container Styling */
+        .portrait-container {
+            width: 100%;
+            aspect-ratio: 16/10;
+            background: var(--card-bg);
+            border-radius: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(12px);
+            transition: border-color 0.5s, box-shadow 0.5s;
+        }
+
+        .portrait-container.complete {
+            border-color: var(--accent-gold);
+            box-shadow: 
+                0 0 30px rgba(255, 255, 0, 0.2),
+                0 20px 50px rgba(0, 0, 0, 0.6);
+        }
+
+        .portrait-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+
+        .portrait-img.loaded {
+            opacity: 1;
+        }
+
+        /* Premium JJK Loading Sphere */
+        .loading-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .cursed-sphere {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--blue-glow) 0%, transparent 70%);
+            box-shadow: 
+                0 0 30px var(--blue-glow),
+                0 0 60px var(--pink-glow);
+            position: relative;
+            animation: pulse-sphere 2s infinite alternate, rotate-sphere 6s infinite linear;
+            margin-bottom: 25px;
+        }
+
+        .cursed-sphere::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            bottom: -5px;
+            border-radius: 50%;
+            border: 2px solid var(--pink-glow);
+            opacity: 0.7;
+            animation: orbit-ring 3s infinite linear;
+        }
+
+        @keyframes pulse-sphere {
+            0% { transform: scale(0.9); box-shadow: 0 0 20px var(--blue-glow), 0 0 40px var(--pink-glow); }
+            100% { transform: scale(1.1); box-shadow: 0 0 40px var(--blue-glow), 0 0 80px #9400D3; }
+        }
+
+        @keyframes rotate-sphere {
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes orbit-ring {
+            0% { transform: rotate(0deg) scaleX(1); }
+            50% { transform: rotate(180deg) scaleX(0.5); }
+            100% { transform: rotate(360deg) scaleX(1); }
+        }
+
+        .loading-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            color: #FFF;
+            margin: 5px 0;
+            animation: breathe-opacity 1.5s infinite alternate;
+        }
+
+        .loading-subtext {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin: 0;
+            max-width: 280px;
+            line-height: 1.4;
+        }
+
+        @keyframes breathe-opacity {
+            0% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        /* Specialized Error Panel */
+        .error-wrapper {
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .error-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            animation: shake-error 0.5s ease-in-out;
+        }
+
+        @keyframes shake-error {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+
+        .error-title {
+            color: #FF5252;
+            font-weight: bold;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .error-desc {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+            max-width: 320px;
+        }
+
+        /* Actions CTA Grid */
+        .actions-grid {
+            width: 100%;
+            margin-top: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-gold) 0%, var(--dark-gold) 100%);
+            color: #000000;
+            border: none;
+            padding: 16px;
+            border-radius: 40px;
+            font-size: 1rem;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            text-decoration: none;
+            box-shadow: 0 4px 20px rgba(255, 255, 0, 0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: none;
+        }
+
+        /* Footer styling */
+        footer {
+            font-size: 11px;
+            opacity: 0.4;
+            text-align: center;
+            margin-top: auto;
+            padding: 20px 10px;
+            width: 100%;
+            box-sizing: border-box;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Sparks -->
+    <div id="sparks-container"></div>
+
+    <header>
+        <img src="static/img/jujutsu-kaisen-logo.png" alt="JJK Logo" class="jjk-logo"><br>
+        <h1>SCROLL OF HONOR</h1>
+        <p class="subtitle">領域展開 AI PORTRAIT</p>
+    </header>
+
+    <main>
+        <!-- The Main Interactive Container -->
+        <div class="portrait-container" id="portrait-frame">
+            
+            <!-- 1. LOADING VIEW -->
+            <div class="loading-wrapper" id="loading-view">
+                <div class="cursed-sphere"></div>
+                <div class="loading-text" id="status-title">領域展開中...</div>
+                <div class="loading-subtext" id="status-desc">Fusing player captures into the Scroll of Honor background...</div>
+            </div>
+
+            <!-- 2. ERROR VIEW -->
+            <div class="error-wrapper hidden" id="error-view">
+                <div class="error-icon">⚠️</div>
+                <div class="error-title" id="error-title">NO FACE DETECTED</div>
+                <div class="error-desc" id="error-desc">Failed to locate sorcerer faces. Make sure both players stand inside webcam view during hand gestures!</div>
+            </div>
+
+            <!-- 3. COMPLETED PORTRAIT VIEW -->
+            <img class="portrait-img" id="final-image" alt="AI Domain Portrait">
+        </div>
+
+        <!-- Interactive Buttons (visible only after completion or error) -->
+        <div class="actions-grid hidden" id="actions-panel">
+            <button class="btn" id="btn-download">
+                📥 Download Scroll
+            </button>
+            <button class="btn btn-secondary" id="btn-share" onclick="navigator.share({title: 'My JJK Scroll of Honor', url: window.location.href}).catch(()=>{})">
+                🔗 Share Battle Scroll
+            </button>
+        </div>
+    </main>
+
+    <footer>
+        Fan-made project for educational purposes. All Jujutsu Kaisen assets belong to Shueisha / MAPPA.
+    </footer>
+
+    <script>
+        // Create random floating ambient sparks
+        const sparksContainer = document.getElementById('sparks-container');
+        for (let i = 0; i < 20; i++) {
+            const spark = document.createElement('div');
+            spark.className = 'ambient-spark';
+            spark.style.left = `${Math.random() * 100}vw`;
+            spark.style.animationDelay = `${Math.random() * 10}s`;
+            spark.style.animationDuration = `${5 + Math.random() * 8}s`;
+            sparksContainer.appendChild(spark);
+        }
+
+        // Parse Session Query Parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('sessionId') || urlParams.get('session_id') || 'main';
+        
+        const frame = document.getElementById('portrait-frame');
+        const loadingView = document.getElementById('loading-view');
+        const errorView = document.getElementById('error-view');
+        const finalImg = document.getElementById('final-image');
+        const actionsPanel = document.getElementById('actions-panel');
+        const statusTitle = document.getElementById('status-title');
+        const statusDesc = document.getElementById('status-desc');
+        const btnDownload = document.getElementById('btn-download');
+
+        let checkInterval = null;
+        let elapsedSeconds = 0;
+        const maxWaitSeconds = 60; // Timeout after 1 minute
+
+        async function pollStatus() {
+            try {
+                // Fetch relative to the current distribution endpoint (works seamlessly in CDK CloudFront AND Local node servers!)
+                const response = await fetch(`/api/check-enhancement?sessionId=${encodeURIComponent(sessionId)}`);
+                if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+                
+                const data = await response.json();
+                console.log("[Poll Status]", data);
+
+                if (data.status === "PENDING") {
+                    elapsedSeconds += 2;
+                    if (elapsedSeconds >= maxWaitSeconds) {
+                        showError("GENERATION TIMEOUT", "The sorcerer expansion SQS queue is backlogged. Please try triggering domain expansion again!");
+                    } else if (elapsedSeconds > 10) {
+                        statusTitle.textContent = "AI FUSION ACTIVE...";
+                        statusDesc.textContent = "Bedrock Nova Canvas is blending and expanding domain styles. Please hold...";
+                    }
+                } else if (data.status === "COMPLETE" && data.url) {
+                    showSuccess(data.url);
+                } else if (data.status && data.status.startsWith("ERROR:")) {
+                    const errCode = data.status.replace("ERROR:", "").trim();
+                    if (errCode === "NO_FACE") {
+                        showError("NO FACE DETECTED", "Rekognition could not locate sorcerer faces. Please make sure both players look directly at the webcam when holding gestures!");
+                    } else {
+                        showError("FUSION INTERFERENCE", `Curse spirits interfered (Error Code: ${errCode}). Please try generating again!`);
+                    }
+                } else {
+                    // "NONE" or uninitialized
+                    showError("UNINITIALIZED SCROLL", "No domain portrait request is active for this match session.");
+                }
+            } catch (err) {
+                console.error("[Poll Error]", err);
+                // Keep polling on minor network glitches, but stop if timeout exceeded
+                elapsedSeconds += 2;
+                if (elapsedSeconds >= maxWaitSeconds) {
+                    showError("NETWORK FAILURE", "Unable to communicate with the domain expansion server. Please check your internet connection.");
+                }
+            }
+        }
+
+        function showSuccess(imageUrl) {
+            clearInterval(checkInterval);
+            
+            // Set image source
+            finalImg.src = imageUrl;
+            finalImg.onload = () => {
+                loadingView.classList.add('hidden');
+                errorView.classList.add('hidden');
+                finalImg.classList.add('loaded');
+                frame.classList.add('complete');
+                actionsPanel.classList.remove('hidden');
+            };
+
+            // Set up download click behavior
+            btnDownload.onclick = async () => {
+                try {
+                    const response = await fetch(imageUrl);
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `jjk_battle_scroll_${sessionId}.jpg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                } catch (err) {
+                    // Fallback if cross-origin constraints block direct fetching
+                    window.open(imageUrl, '_blank');
+                }
+            };
+        }
+
+        function showError(title, desc) {
+            clearInterval(checkInterval);
+            loadingView.classList.add('hidden');
+            finalImg.classList.add('hidden');
+            
+            document.getElementById('error-title').textContent = title;
+            document.getElementById('error-desc').textContent = desc;
+            errorView.classList.remove('hidden');
+        }
+
+        // Start polling immediately on page load
+        if (sessionId) {
+            console.log(`[Initiating Polling] Session ID: ${sessionId}`);
+            pollStatus();
+            checkInterval = setInterval(pollStatus, 2000);
+        } else {
+            showError("SESSION MISSING", "No active Jujutsu Battle Session parameter was found in the URL.");
+        }
+    </script>
+</body>
+</html>

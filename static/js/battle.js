@@ -152,9 +152,12 @@ function getOpenclawBaseSessionId() {
 
 async function callBridge(endpoint, body) {
     const apiEndpoint = window.location.origin;
-    // Auto-inject preferred user language
-    if (body && typeof body === 'object' && !body.lang) {
-        body.lang = localStorage.getItem('user_language') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
+    // Auto-inject preferred user language and image upload policy
+    if (body && typeof body === 'object') {
+        if (!body.lang) {
+            body.lang = localStorage.getItem('user_language') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
+        }
+        body.agentImagePolicy = localStorage.getItem('agent_image_policy') || 'always';
     }
     
     try {
@@ -419,6 +422,29 @@ function resetViewerState() {
     updateLayout();
 }
 
+async function waitForSnapshots(sessionId, maxWaitMs = 4500) {
+    console.log(`[Battle] Waiting for Player 1 and Player 2 webcam snapshots for session: ${sessionId}...`);
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitMs) {
+        try {
+            const [p1Resp, p2Resp] = await Promise.all([
+                fetch(`/api/get-snapshot?sessionId=${sessionId}&role=player1`).then(r => r.json()).catch(() => ({})),
+                fetch(`/api/get-snapshot?sessionId=${sessionId}&role=player2`).then(r => r.json()).catch(() => ({}))
+            ]);
+            if (p1Resp && p1Resp.success && p2Resp && p2Resp.success) {
+                console.log('[Battle] Both player webcam snapshots successfully uploaded!');
+                await new Promise(r => setTimeout(r, 200));
+                return true;
+            }
+        } catch (e) {
+            console.warn('[Battle] Error polling snapshots:', e);
+        }
+        await new Promise(r => setTimeout(r, 300));
+    }
+    console.log('[Battle] Snapshot wait timed out. Proceeding with available frames.');
+    return false;
+}
+
 async function startMatch() {
     if (startBtn.disabled) return;
     startBtn.disabled = true;
@@ -460,8 +486,8 @@ async function startMatch() {
                 // 1. Trigger single-shot start frame webcam capture from Player View
                 sync.broadcast('CAPTURE_WEBCAM_FRAME', { phase: 'START', sessionId: dynamicSessionId });
                 
-                // 2. Wait for player device to capture and upload the image (1000ms delay)
-                await new Promise(r => setTimeout(r, 1000));
+                // 2. Wait for player devices to capture and upload both player snapshots with polling (max 4.5s)
+                await waitForSnapshots(dynamicSessionId, 4500);
             }
 
             const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';

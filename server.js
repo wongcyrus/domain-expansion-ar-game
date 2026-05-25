@@ -227,6 +227,70 @@ app.post('/api/register-room', (req, res) => {
     res.json({ ok: true });
 });
 
+app.post('/api/enhance-portrait', (req, res) => {
+    const { sessionId, templateId } = req.body;
+    const resolvedSessionId = sessionId || "main";
+    console.log(`[Bridge-Local] Enhance portrait requested: sessionId=${resolvedSessionId}, templateId=${templateId}`);
+    
+    const session = gameSessions.get(resolvedSessionId);
+    if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+    }
+    
+    // Simulate Rekognition validation: fail if webcam snaps are missing
+    if (!session.latestWebcamFrameP1 || !session.latestWebcamFrameP2) {
+        console.warn(`[Bridge-Local] Snapshots missing for local mock generation. P1 present: ${!!session.latestWebcamFrameP1}, P2 present: ${!!session.latestWebcamFrameP2}`);
+        session.enhancedImageUrl = "ERROR: NO_FACE";
+        gameSessions.set(resolvedSessionId, session);
+        return res.json({ success: true, status: "ERROR: NO_FACE" });
+    }
+    
+    session.enhancedImageUrl = "PENDING";
+    gameSessions.set(resolvedSessionId, session);
+    
+    // Simulate background SQS -> Lambda style fusion worker delay (3 seconds)
+    setTimeout(() => {
+        const resolvedTemplateId = (templateId === "random" || !templateId) 
+            ? (Math.random() > 0.5 ? "infinite_clash" : "sendai_clash") 
+            : templateId;
+            
+        // Serve local template file as elegant, zero-dependency offline mock asset
+        const localMockUrl = `/static/img/templates/${resolvedTemplateId}.jpg`;
+        
+        session.enhancedImageUrl = localMockUrl;
+        gameSessions.set(resolvedSessionId, session);
+        console.log(`[Bridge-Local] Background SQS mock processing completed for session=${resolvedSessionId}. Enhanced URL: ${localMockUrl}`);
+    }, 3000);
+    
+    res.json({ success: true, status: "PENDING" });
+});
+
+app.get('/api/check-enhancement', (req, res) => {
+    const { sessionId } = req.query;
+    const resolvedSessionId = sessionId || "main";
+    
+    const session = gameSessions.get(resolvedSessionId);
+    if (!session) {
+        return res.json({ success: true, status: "NONE", url: "" });
+    }
+    
+    const enhancedUrl = session.enhancedImageUrl || "";
+    let status = "NONE";
+    if (enhancedUrl === "PENDING") {
+        status = "PENDING";
+    } else if (enhancedUrl.startsWith("ERROR:")) {
+        status = enhancedUrl;
+    } else if (enhancedUrl) {
+        status = "COMPLETE";
+    }
+    
+    res.json({
+        success: true,
+        status: status,
+        url: status === "COMPLETE" ? enhancedUrl : ""
+    });
+});
+
 app.post('/api/webcam-upload', (req, res) => {
     const { sessionId, role, image } = req.body;
     const resolvedSessionId = sessionId || "main";
@@ -269,6 +333,24 @@ app.get('/api/last-image', (req, res) => {
     `);
 });
 
+app.get('/api/get-snapshot', (req, res) => {
+    const { sessionId, role } = req.query;
+    const resolvedSessionId = sessionId || "main";
+    const session = gameSessions.get(resolvedSessionId);
+    if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+    }
+    const frame = (role === 'player1') ? session.latestWebcamFrameP1 : session.latestWebcamFrameP2;
+    if (!frame) {
+        return res.status(404).json({ error: "Snapshot not found" });
+    }
+    const cleanFrame = frame.startsWith('data:image/') ? frame : `data:image/jpeg;base64,${frame}`;
+    res.json({
+        success: true,
+        image: cleanFrame
+    });
+});
+
 function getSystemPrompt(isZh, foulLanguage) {
     if (isZh) {
         let systemPrompt = `你係釘崎野薔薇，特級咒術解說！請遵循你在 IDENTITY.md 與 SOUL.md 中設定的所有核心解說員人設與限制（無 Markdown、無表情符號、口語廣東話）。`;
@@ -290,7 +372,7 @@ function getSystemPrompt(isZh, foulLanguage) {
 }
 
 app.post('/api/live-status', async (req, res) => {
-    const { sessionId, eventType, detail, p1Score, p2Score, p1Total, p2Total, lang, foulLanguage } = req.body;
+    const { sessionId, eventType, detail, p1Score, p2Score, p1Total, p2Total, lang, foulLanguage, agentImagePolicy } = req.body;
     const resolvedSessionId = sessionId || "main";
     const { agentId } = loadOpenClawConfig();
     const isZh = lang && lang.toLowerCase().startsWith('zh');
@@ -305,7 +387,8 @@ app.post('/api/live-status', async (req, res) => {
                 p1Score: p1Score || 0,
                 p2Score: p2Score || 0,
                 text: detail || "",
-                isReset: eventType === "RESET"
+                isReset: eventType === "RESET",
+                agentImagePolicy: agentImagePolicy || "always"
             };
             const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/live-status`, {
                 method: 'POST',
@@ -336,11 +419,16 @@ app.post('/api/live-status', async (req, res) => {
         
         let openingInstruction = "";
         if (isZh) {
-            openingInstruction = `【重要系統指示：請直接以你的「釘崎野薔薇（Kugisaki Nobara）」人設，對玩家 P1、P2 發表最傲嬌、最震撼嘅開局廣東話解說旁白（1至2句）！你必須在第一句明確介紹自己（例如說出「本大小姐係釘崎野薔薇！」或「我係釘崎野薔薇」），否則沒有人知道是你！直接進入角色解說，不要複述或確認本指令！】\n\n【附加指令】：\n${systemPrompt}`;
+            openingInstruction = `【重要系統指示：請直接以你的「釘崎野薔薇（Kugisaki Nobara）」人設，對玩家 P1、P2 發表最傲嬌、最震撼嘅開局廣東話解說旁白（1至2句）！你必須在第一句明確介紹自己（例如說出「本大小姐係釘崎野薔薇！」或「我係釘崎野薔薇」），否則沒有人知道是你！請注意：對戰尚未開始，玩家正處於準備階段，在你的開場白說完之後才會正式進入對戰倒數。因此，你的解說必須是開戰前的嗆聲、熱身或宣戰，千萬不要說「對戰已經開始」之類的話！直接進入角色解說，不要複述或確認本指令！】\n\n【附加指令】：\n${systemPrompt}`;
         } else {
-            openingInstruction = `[IMPORTANT DIRECTIVE: Please act immediately in your Kugisaki Nobara persona to deliver an epic, sassy opening welcome commentary (1-2 sentences) to players P1 and P2! You MUST explicitly introduce yourself in the first sentence by name (e.g. "I am Nobara Kugisaki!" or "It's me, Nobara Kugisaki!") so that players know who is talking. Speak only in character!]\n\n[CURRENT MATCH INSTRUCTION]:\n${systemPrompt}`;
+            openingInstruction = `[IMPORTANT DIRECTIVE: Please act immediately in your Kugisaki Nobara persona to deliver an epic, sassy opening welcome commentary (1-2 sentences) to players P1 and P2! You MUST explicitly introduce yourself in the first sentence by name (e.g. "I am Nobara Kugisaki!" or "It's me, Nobara Kugisaki!") so that players know who is talking. NOTE: The match has NOT started yet. The players are in the preparation stage, and the match countdown will begin right after your introduction speech. Frame your welcoming commentary as a pre-match hype/call-to-action before the countdown begins, NOT as if the match is already running. Speak only in character!]\n\n[CURRENT MATCH INSTRUCTION]:\n${systemPrompt}`;
         }
-        const welcomeMessage = await callOpenClawGateway(resolvedSessionId, agentId, openingInstruction, true);
+        let attachImages = false;
+        const resolvedPolicy = agentImagePolicy || "always";
+        if (resolvedPolicy === "always" || resolvedPolicy === "start_end") {
+            attachImages = true;
+        }
+        const welcomeMessage = await callOpenClawGateway(resolvedSessionId, agentId, openingInstruction, attachImages);
         return res.json({ ok: true, welcomeMessage });
     }
 
@@ -368,12 +456,17 @@ app.post('/api/live-status', async (req, res) => {
 
     console.log(`[Bridge] Live Status: ${eventType} p1Score=${p1Score}/${p1Total} p2Score=${p2Score}/${p2Total} lang=${lang} foul=${foulLanguage}`);
 
-    const commentary = await callOpenClawGateway(resolvedSessionId, agentId, promptText, false);
+    let attachImages = false;
+    const resolvedPolicy = agentImagePolicy || "always";
+    if (resolvedPolicy === "always") {
+        attachImages = true;
+    }
+    const commentary = await callOpenClawGateway(resolvedSessionId, agentId, promptText, attachImages);
     res.json({ ok: true, commentary });
 });
 
 app.post('/api/battle-result', async (req, res) => {
-    const { sessionId, winner, p1Score, p2Score, lang, foulLanguage } = req.body;
+    const { sessionId, winner, p1Score, p2Score, lang, foulLanguage, agentImagePolicy } = req.body;
     const resolvedSessionId = sessionId || "main";
     const { agentId } = loadOpenClawConfig();
 
@@ -387,7 +480,8 @@ app.post('/api/battle-result', async (req, res) => {
                 p1Score: p1Score || 0,
                 p2Score: p2Score || 0,
                 text: winner || "DRAW",
-                isReset: true
+                isReset: true,
+                agentImagePolicy: agentImagePolicy || "always"
             };
             const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/battle-result`, {
                 method: 'POST',
@@ -410,7 +504,7 @@ app.post('/api/battle-result', async (req, res) => {
     const isZh = lang && lang.toLowerCase().startsWith('zh');
 
     if (isZh) {
-        promptText = `[SYSTEM UPDATE] 對戰結束！勝者：${winner === 'DRAW' ? '平手' : (winner === 'PLAYER 1' ? 'P1' : 'P2')}。最終比分 - P1 完成了 ${p1Score} 次，P2 完成了 ${p2Score} 次。請用香港廣東話（完全口語，聽起來像極度熱血、宏大的日本動畫粵語配音、主播，充滿張力）提供一句史詩般震撼、精彩的對戰結算和勝利旁白（最長兩短句）。請為勝者喝采，並以「P1」和「P2」稱呼玩家，保持角色風格！請不要使用 markdown 語法或表情符號。`;
+        promptText = `[SYSTEM UPDATE] 對戰結束！勝者：${winner === 'DRAW' ? '平手' : (winner === 'PLAYER 1' ? 'P1' : 'P2')}。最終比分 - P1 完成了 ${p1Score} 次，P2 完成了 ${p2Score} 次。請用香港廣東話（完全口語，聽起來像極度熱血、宏大的日本動畫粵語配音、主播，充滿張力）提供一句史詩般震撼、精彩的對戰結算和勝利旁白（最長兩短句）。請為勝者喝采，並以「P1」和「P2」稱呼玩家，保持角色風格！請不要使用 markdown 語法 or 表情符號。`;
         if (foulLanguage) {
             promptText += `特別注意（核心要求）：由於玩家開啟了「粗口垃圾話」模式，請在旁白中加入適量香港廣東話粗口/Swearing或極度不禮貌的街頭垃圾話，令其聽起來極度搞笑、熱血，且具有街頭咒術師互相問候挑釁的風味！`;
         } else {
@@ -422,7 +516,12 @@ app.post('/api/battle-result', async (req, res) => {
 
     console.log(`[Bridge] Battle result: Winner: ${winner}, scores: P1=${p1Score}, P2=${p2Score} lang=${lang} foul=${foulLanguage}`);
 
-    const commentary = await callOpenClawGateway(resolvedSessionId, agentId, promptText, true);
+    let attachImages = false;
+    const resolvedPolicy = agentImagePolicy || "always";
+    if (resolvedPolicy === "always" || resolvedPolicy === "start_end") {
+        attachImages = true;
+    }
+    const commentary = await callOpenClawGateway(resolvedSessionId, agentId, promptText, attachImages);
     res.json({ ok: true, commentary });
 });
 
