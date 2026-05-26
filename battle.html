@@ -116,6 +116,10 @@
                 <input type="checkbox" id="cfg-commentator-webcam" style="width: 16px; height: 16px; cursor: pointer;" checked>
                 <label for="cfg-commentator-webcam" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">📷 <b>CAPTURE WEBCAM SNAPSHOTS</b></label>
             </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px;">
+                <input type="checkbox" id="cfg-enable-ai-portrait" style="width: 16px; height: 16px; cursor: pointer;" checked>
+                <label for="cfg-enable-ai-portrait" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">✨ <b>AI DOMAIN PORTRAIT FUSION</b></label>
+            </div>
         </div>
 
         <h4 style="margin: 10px 0 0; color: #4A90E2; font-size: 0.9rem;">GAME RULES</h4>
@@ -169,6 +173,67 @@
             <div class="result-score-item p2-color">
                 <div class="result-score-label">PLAYER 2</div>
                 <div id="res-score-p2" class="result-score-val">0</div>
+            </div>
+        </div>
+        
+        <!-- Centralized Scroll of Honor AI Style Fusion Dashboard -->
+        <div id="central-scroll-of-honor" style="width: 80%; max-width: 600px; margin: 20px auto; background: rgba(20, 20, 30, 0.85); border: 2px solid rgba(255,215,0,0.3); border-radius: 16px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); backdrop-filter: blur(10px); display: none; flex-direction: column; gap: 15px;">
+            <div style="font-size: 1.4rem; font-weight: bold; color: #FFFF00; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(255,255,0,0.3); text-align: center; font-family: sans-serif;">
+                📜 Scroll of Honor (領域展影)
+            </div>
+            
+            <!-- Raw captured photos side-by-side -->
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <div style="flex: 1; aspect-ratio: 4/3; background: #000; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; position: relative;">
+                    <img id="p1-captured-preview" style="width: 100%; height: 100%; object-fit: cover;" src="" alt="Player 1 Captured">
+                    <span style="position: absolute; bottom: 6px; left: 8px; background: rgba(0,0,0,0.8); color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: bold; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.2); font-family: sans-serif;">Player 1</span>
+                </div>
+                <div style="flex: 1; aspect-ratio: 4/3; background: #000; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; position: relative;">
+                    <img id="p2-captured-preview" style="width: 100%; height: 100%; object-fit: cover;" src="" alt="Player 2 Captured">
+                    <span style="position: absolute; bottom: 6px; left: 8px; background: rgba(0,0,0,0.8); color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: bold; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.2); font-family: sans-serif;">Player 2</span>
+                </div>
+            </div>
+
+            <!-- Action & Status Trigger Block -->
+            <div id="ai-trigger-container" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                <div style="display: flex; gap: 10px; width: 100%; justify-content: center; margin-top: 10px;">
+                    <!-- Template Selector -->
+                    <select id="cfg-ai-template" style="background: rgba(0,0,0,0.8); color: #FFF; border: 1px solid rgba(255,255,255,0.3); padding: 10px 20px; border-radius: 20px; font-size: 0.95rem; cursor: pointer; outline: none; min-width: 150px;">
+                        <option value="random">🔮 RANDOM STYLE</option>
+                        <option value="cyberpunk">🌌 CYBERPUNK DE</option>
+                        <option value="ink-wash">🎨 INK SHADOW</option>
+                        <option value="neon-glow">⚡ NEON FORCE</option>
+                    </select>
+                    <button id="btn-activate-ai" style="background: linear-gradient(135deg, #FFFF00 0%, #FFD700 100%); color: #000; border: none; padding: 12px 30px; border-radius: 25px; font-size: 1.1rem; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(255,255,0,0.3); transition: transform 0.2s, box-shadow 0.2s; font-family: sans-serif;">
+                        ✨ Activate AI Domain Enhancement
+                    </button>
+                </div>
+                <div id="ai-status-text" style="font-size: 12px; color: rgba(255,255,255,0.7); font-style: italic; margin-top: 5px; font-family: sans-serif;">
+                    Click to fuse and stylize player portraits using Bedrock Nova Canvas!
+                </div>
+                
+                <!-- Progress bar -->
+                <div id="ai-progress-bar-container" style="width: 80%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-top: 5px; display: none;">
+                    <div id="ai-progress-bar" style="width: 0%; height: 100%; background: #FFFF00; border-radius: 3px; transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+
+            <!-- Final Output with QR Code area (initially hidden) -->
+            <div id="ai-result-panel" style="display: none; gap: 20px; align-items: center; justify-content: center; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 15px; font-family: sans-serif;">
+                <div id="ai-qrcode-container" style="background: white; padding: 8px; border-radius: 12px; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); flex-shrink: 0;">
+                    <img id="ai-qrcode-img" style="width: 100%; height: 100%; display: block;" src="" alt="Scan to View">
+                </div>
+                <div style="flex: 1; text-align: left;">
+                    <div style="font-size: 14px; font-weight: bold; color: #FFFF00; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px;">
+                        Scan to Download Scroll!
+                    </div>
+                    <div style="font-size: 11px; color: rgba(255,255,255,0.85); line-height: 1.4; margin-bottom: 8px;">
+                        Take your custom stylized battle scroll on your mobile device instantly!
+                    </div>
+                    <div style="font-size: 10px; color: rgba(255,255,255,0.5); word-break: break-all; font-family: monospace;" id="ai-short-url-label">
+                        loading link...
+                    </div>
+                </div>
             </div>
         </div>
         

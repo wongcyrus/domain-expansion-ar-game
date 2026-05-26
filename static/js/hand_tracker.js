@@ -398,116 +398,7 @@ class HandTracker {
             });
         }
 
-        if (this.btnActivateAi) {
-            this.btnActivateAi.addEventListener('click', async () => {
-                // Disable button during active processing
-                this.btnActivateAi.disabled = true;
-                this.btnActivateAi.style.opacity = '0.5';
-                
-                this.aiProgressBarContainer.classList.remove('hidden');
-                this.aiProgressBar.style.width = '10%';
-                this.aiStatusText.textContent = 'Initiating style fusion sequence...';
-                
-                let sessionId = this.sessionKeyInput ? this.sessionKeyInput.value.trim() : 'main';
-                if (!sessionId) sessionId = 'main';
-                const templateId = this.cfgAiTemplate ? this.cfgAiTemplate.value : 'random';
-                
-                // Read from API endpoint inputs
-                let baseEndpoint = this.endpointInput ? this.endpointInput.value.trim() : '';
-                if (baseEndpoint && baseEndpoint.endsWith('/')) {
-                    baseEndpoint = baseEndpoint.slice(0, -1);
-                }
-                
-                const enhanceUrl = `${baseEndpoint}/api/enhance-portrait`;
-                console.log(`[AI Portrait] Invoking trigger API: ${enhanceUrl} for sessionId=${sessionId}, templateId=${templateId}`);
-                
-                try {
-                    const response = await fetch(enhanceUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sessionId, templateId })
-                    });
-                    
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    
-                    const result = await response.json();
-                    console.log('[AI Portrait] Trigger API response:', result);
-                    
-                    this.aiProgressBar.style.width = '30%';
-                    this.aiStatusText.textContent = 'Style fusion enqueued. Monitoring queue...';
-                    
-                    // Start checking status every 2 seconds
-                    let pollCount = 0;
-                    const maxPolls = 30; // Max 1 minute wait
-                    
-                    const intervalId = setInterval(async () => {
-                        pollCount++;
-                        // Increment progress bar to look super sleek & alive
-                        const visualProgress = Math.min(90, 30 + (pollCount * 2));
-                        this.aiProgressBar.style.width = `${visualProgress}%`;
-                        
-                        try {
-                            const checkUrl = `${baseEndpoint}/api/check-enhancement?sessionId=${encodeURIComponent(sessionId)}`;
-                            const checkResp = await fetch(checkUrl);
-                            if (!checkResp.ok) throw new Error(`HTTP ${checkResp.status}`);
-                            
-                            const checkResult = await checkResp.json();
-                            console.log('[AI Portrait] Check poll response:', checkResult);
-                            
-                            if (checkResult.status === 'COMPLETE' && checkResult.url) {
-                                clearInterval(intervalId);
-                                this.aiProgressBar.style.width = '100%';
-                                this.aiStatusText.textContent = 'Style fusion successfully completed!';
-                                
-                                // Display final results panel
-                                this.aiResultPanel.classList.remove('hidden');
-                                
-                                // Generate QR Code pointing to the share page!
-                                // The share page URL should point to current page's origin + /share.html?sessionId=xxx
-                                const currentOrigin = window.location.origin;
-                                const shareUrl = `${currentOrigin}/share.html?sessionId=${encodeURIComponent(sessionId)}`;
-                                
-                                // To generate a QR code cleanly without bulky dependencies, we use the beautiful and super reliable public API: qrserver!
-                                const qrcodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}`;
-                                this.aiQrcodeImg.src = qrcodeApiUrl;
-                                this.aiShortUrlLabel.innerHTML = `<a href="${shareUrl}" target="_blank" style="color: #FFFF00; text-decoration: underline;">${shareUrl}</a>`;
-                                
-                                this.btnActivateAi.style.display = 'none';
-                            } else if (checkResult.status && checkResult.status.startsWith('ERROR:')) {
-                                clearInterval(intervalId);
-                                this.aiProgressBarContainer.classList.add('hidden');
-                                this.btnActivateAi.disabled = false;
-                                this.btnActivateAi.style.opacity = '1';
-                                
-                                const err = checkResult.status.replace('ERROR:', '').trim();
-                                if (err === 'NO_FACE') {
-                                    this.aiStatusText.textContent = '❌ No faces detected by Rekognition. Try holding gestures again!';
-                                } else {
-                                    this.aiStatusText.textContent = `❌ Style fusion failed. Error: ${err}`;
-                                }
-                            }
-                        } catch (pollErr) {
-                            console.error('[AI Portrait] Poll error:', pollErr);
-                        }
-                        
-                        if (pollCount >= maxPolls) {
-                            clearInterval(intervalId);
-                            this.aiProgressBarContainer.classList.add('hidden');
-                            this.btnActivateAi.disabled = false;
-                            this.btnActivateAi.style.opacity = '1';
-                            this.aiStatusText.textContent = '❌ Generation timed out. Please try again!';
-                        }
-                    }, 2000);
-                    
-                } catch (err) {
-                    console.error('[AI Portrait] Generation trigger failed:', err);
-                    this.aiProgressBarContainer.classList.add('hidden');
-                    this.btnActivateAi.disabled = false;
-                    this.btnActivateAi.style.opacity = '1';
-                    this.aiStatusText.textContent = `❌ Connection failed: ${err.message}`;
-                }
-            });
-        }
+        // btnActivateAi is now fully handled inside the centralized audience Battle View to prevent any player-side conflicts.
 
         if (this.gameToggleBtn) {
             this.gameToggleBtn.addEventListener('click', () => {
@@ -743,7 +634,7 @@ class HandTracker {
             const dataUrl = capCanvas.toDataURL('image/jpeg', 0.6);
             const base64Str = dataUrl.split('base64,')[1];
             
-            const openclawSessionId = sessionIdOverride || localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'main';
+            const openclawSessionId = sessionIdOverride || localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'mcpserver';
             if (sessionIdOverride) {
                 localStorage.setItem('openclawActiveSessionId', sessionIdOverride);
             }
@@ -1613,53 +1504,6 @@ class HandTracker {
 
         // Final broadcast of result state
         this.syncBattleState();
-
-        if (this.scrollOfHonorWidget) {
-            const isAiEnabled = this.cfgEnableAiPortrait ? this.cfgEnableAiPortrait.checked : true;
-            if (isAiEnabled) {
-                this.scrollOfHonorWidget.classList.remove('hidden');
-                
-                // Set loading status text and reset panels
-                if (this.btnActivateAi) {
-                    this.btnActivateAi.style.display = 'block';
-                    this.btnActivateAi.disabled = false;
-                    this.btnActivateAi.style.opacity = '1';
-                }
-                if (this.aiProgressBarContainer) this.aiProgressBarContainer.classList.add('hidden');
-                if (this.aiResultPanel) this.aiResultPanel.classList.add('hidden');
-                if (this.aiStatusText) this.aiStatusText.textContent = 'Click to fuse and stylize player portraits using Bedrock Nova Canvas!';
-                
-                // Render the raw Player 1 and Player 2 captured images
-                let sessionId = this.sessionKeyInput ? this.sessionKeyInput.value.trim() : 'main';
-                if (!sessionId) sessionId = 'main';
-                
-                let baseEndpoint = this.endpointInput ? this.endpointInput.value.trim() : '';
-                if (baseEndpoint && baseEndpoint.endsWith('/')) {
-                    baseEndpoint = baseEndpoint.slice(0, -1);
-                }
-                
-                const loadPreviewImage = async (imgElement, roleName) => {
-                    if (!imgElement) return;
-                    try {
-                        const snapUrl = `${baseEndpoint}/api/get-snapshot?sessionId=${encodeURIComponent(sessionId)}&role=${roleName}&t=${Date.now()}`;
-                        const response = await fetch(snapUrl);
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (data && data.image) {
-                                imgElement.src = data.image;
-                            }
-                        }
-                    } catch (e) {
-                        console.error(`[AI Portrait] Failed to load preview for ${roleName}:`, e);
-                    }
-                };
-
-                loadPreviewImage(this.p1CapturedPreview, 'player1');
-                loadPreviewImage(this.p2CapturedPreview, 'player2');
-            } else {
-                this.scrollOfHonorWidget.classList.add('hidden');
-            }
-        }
 
         this.gameTarget = null;
     }

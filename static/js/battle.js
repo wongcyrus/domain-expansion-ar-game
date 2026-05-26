@@ -143,11 +143,11 @@ let pendingCasts = [];
 let castTimeoutHandle = null;
 
 function getOpenclawActiveSessionId() {
-    return localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'main';
+    return localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'mcpserver';
 }
 
 function getOpenclawBaseSessionId() {
-    return localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'main';
+    return localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'mcpserver';
 }
 
 async function callBridge(endpoint, body) {
@@ -596,6 +596,9 @@ function playGlobalResultVideo(isWin, winnerName) {
         resultCinema.pause(); resultCinema.style.display = 'none';
         if (skipResultBtn) skipResultBtn.style.display = 'none';
         closeResultBtn.style.display = 'block';
+        
+        // Load, show, and initialize the central Scroll of Honor only after victory video is finished or skipped!
+        initCentralScrollOfHonor();
     };
     resultCinema.onended = endResult;
     if (skipResultBtn) skipResultBtn.onclick = endResult;
@@ -1136,3 +1139,170 @@ if (syncGestureCheckbox) {
         localStorage.setItem('cfg-sync-gesture', syncGestureCheckbox.checked);
     });
 }
+
+// AI Domain Portrait Configuration Load & Listeners
+const enableAiPortraitCheckbox = document.getElementById('cfg-enable-ai-portrait');
+if (enableAiPortraitCheckbox) {
+    const savedAi = localStorage.getItem('cfg-enable-ai-portrait');
+    if (savedAi !== null) {
+        enableAiPortraitCheckbox.checked = savedAi === 'true';
+    }
+    enableAiPortraitCheckbox.addEventListener('change', () => {
+        localStorage.setItem('cfg-enable-ai-portrait', enableAiPortraitCheckbox.checked);
+    });
+}
+
+function initCentralScrollOfHonor() {
+    const p1Preview = document.getElementById('p1-captured-preview');
+    const p2Preview = document.getElementById('p2-captured-preview');
+    const btnActivateAi = document.getElementById('btn-activate-ai');
+    const cfgAiTemplate = document.getElementById('cfg-ai-template');
+    const aiStatusText = document.getElementById('ai-status-text');
+    const progressBarContainer = document.getElementById('ai-progress-bar-container');
+    const progressBar = document.getElementById('ai-progress-bar');
+    const resultPanel = document.getElementById('ai-result-panel');
+    const qrcodeImg = document.getElementById('ai-qrcode-img');
+    const shortUrlLabel = document.getElementById('ai-short-url-label');
+
+    const isAiPortraitEnabled = document.getElementById('cfg-enable-ai-portrait')?.checked !== false;
+    const centralWidget = document.getElementById('central-scroll-of-honor');
+    if (centralWidget) {
+        if (isAiPortraitEnabled) {
+            centralWidget.style.display = 'flex';
+        } else {
+            centralWidget.style.display = 'none';
+            return; // Exit early since AI fusion is disabled
+        }
+    }
+
+    const sessionId = getOpenclawActiveSessionId();
+
+    // Reset visual panels
+    if (btnActivateAi) {
+        btnActivateAi.style.display = 'block';
+        btnActivateAi.disabled = false;
+        btnActivateAi.style.opacity = '1';
+    }
+    if (progressBarContainer) progressBarContainer.style.display = 'none';
+    if (progressBar) progressBar.style.width = '0%';
+    if (resultPanel) resultPanel.style.display = 'none';
+    if (aiStatusText) aiStatusText.textContent = 'Click to fuse and stylize player portraits using Bedrock Nova Canvas!';
+
+    // Load preview images from get-snapshot API
+    const loadPreviewImage = async (imgElement, roleName) => {
+        if (!imgElement) return;
+        imgElement.src = ''; // Clear first
+        try {
+            const snapUrl = `/api/get-snapshot?sessionId=${encodeURIComponent(sessionId)}&role=${roleName}&t=${Date.now()}`;
+            const response = await fetch(snapUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.image) {
+                    imgElement.src = data.image;
+                }
+            }
+        } catch (e) {
+            console.error(`[Central AI Portrait] Failed to load preview for ${roleName}:`, e);
+        }
+    };
+
+    loadPreviewImage(p1Preview, 'player1');
+    loadPreviewImage(p2Preview, 'player2');
+
+    // Click handler for activating central AI Style Fusion
+    if (btnActivateAi && !btnActivateAi.hasEventListener) {
+        btnActivateAi.hasEventListener = true;
+        btnActivateAi.addEventListener('click', async () => {
+            btnActivateAi.disabled = true;
+            btnActivateAi.style.opacity = '0.5';
+
+            if (progressBarContainer) progressBarContainer.style.display = 'block';
+            if (progressBar) progressBar.style.width = '10%';
+            if (aiStatusText) aiStatusText.textContent = 'Initiating central style fusion sequence...';
+
+            const templateId = cfgAiTemplate ? cfgAiTemplate.value : 'random';
+            const enhanceUrl = `/api/enhance-portrait`;
+            console.log(`[Central AI Portrait] Invoking trigger API: ${enhanceUrl} for sessionId=${sessionId}, templateId=${templateId}`);
+
+            try {
+                const response = await fetch(enhanceUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, templateId })
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+                console.log('[Central AI Portrait] Trigger response:', result);
+
+                if (progressBar) progressBar.style.width = '30%';
+                if (aiStatusText) aiStatusText.textContent = 'Style fusion enqueued. Monitoring Bedrock Canvas queue...';
+
+                let pollCount = 0;
+                const maxPolls = 30; // Max 1 min
+
+                const intervalId = setInterval(async () => {
+                    pollCount++;
+                    const visualProgress = Math.min(90, 30 + (pollCount * 2));
+                    if (progressBar) progressBar.style.width = `${visualProgress}%`;
+
+                    try {
+                        const checkUrl = `/api/check-enhancement?sessionId=${encodeURIComponent(sessionId)}&t=${Date.now()}`;
+                        const checkResp = await fetch(checkUrl);
+                        if (!checkResp.ok) throw new Error(`HTTP ${checkResp.status}`);
+
+                        const checkResult = await checkResp.json();
+                        console.log('[Central AI Portrait] Poll check response:', checkResult);
+
+                        if (checkResult.status === 'COMPLETE' && checkResult.url) {
+                            clearInterval(intervalId);
+                            if (progressBar) progressBar.style.width = '100%';
+                            if (aiStatusText) aiStatusText.textContent = 'Style fusion successfully completed!';
+
+                            if (resultPanel) resultPanel.style.display = 'flex';
+
+                            const shareUrl = `${window.location.origin}/share.html?sessionId=${encodeURIComponent(sessionId)}`;
+                            const qrcodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}`;
+                            
+                            if (qrcodeImg) qrcodeImg.src = qrcodeApiUrl;
+                            if (shortUrlLabel) {
+                                shortUrlLabel.innerHTML = `<a href="${shareUrl}" target="_blank" style="color: #FFFF00; text-decoration: underline; font-weight: bold;">${shareUrl}</a>`;
+                            }
+                            btnActivateAi.style.display = 'none';
+                        } else if (checkResult.status && checkResult.status.startsWith('ERROR:')) {
+                            clearInterval(intervalId);
+                            if (progressBarContainer) progressBarContainer.style.display = 'none';
+                            btnActivateAi.disabled = false;
+                            btnActivateAi.style.opacity = '1';
+
+                            const err = checkResult.status.replace('ERROR:', '').trim();
+                            if (err === 'NO_FACE') {
+                                if (aiStatusText) aiStatusText.textContent = '❌ No faces detected by Rekognition. Try holding JJK hand signs closer!';
+                            } else {
+                                if (aiStatusText) aiStatusText.textContent = `❌ Style fusion failed. Error: ${err}`;
+                            }
+                        }
+                    } catch (pollErr) {
+                        console.error('[Central AI Portrait] Poll error:', pollErr);
+                    }
+
+                    if (pollCount >= maxPolls) {
+                        clearInterval(intervalId);
+                        if (progressBarContainer) progressBarContainer.style.display = 'none';
+                        btnActivateAi.disabled = false;
+                        btnActivateAi.style.opacity = '1';
+                        if (aiStatusText) aiStatusText.textContent = '❌ Generation timed out. Please try again!';
+                    }
+                }, 2000);
+
+            } catch (err) {
+                console.error('[Central AI Portrait] Trigger failed:', err);
+                if (progressBarContainer) progressBarContainer.style.display = 'none';
+                btnActivateAi.disabled = false;
+                btnActivateAi.style.opacity = '1';
+                if (aiStatusText) aiStatusText.textContent = `❌ Connection failed: ${err.message}`;
+            }
+        });
+    }
+}
+
