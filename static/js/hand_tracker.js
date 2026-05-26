@@ -34,8 +34,6 @@ class HandTracker {
         this.disableApiCheck = document.getElementById('disable-api-check');
         this.scoreGraceSlider = document.getElementById('score-grace-slider');
         this.scoreGraceLabel = document.getElementById('score-grace-val');
-        this.agentImagePolicySelect = document.getElementById('agent-image-policy');
-        
         // Battle Mode UI
         this.battleRoleSelect = document.getElementById('battle-role');
         this.cameraSelect = document.getElementById('camera-select');
@@ -115,7 +113,6 @@ class HandTracker {
         this.battleNetMode = urlNetMode || localStorage.getItem('battle_net_mode') || 'local';
         this.onlineRoomCode = urlRoom || localStorage.getItem('online_room_code') || 'BTL1';
         this.scoreGrace = parseFloat(localStorage.getItem('cfg-score-grace') || '1.0');
-        this.agentImagePolicy = localStorage.getItem('agent_image_policy') || 'always';
         this.isSyncedGestureMode = false;
         
         // Load camera ID based on role for independence
@@ -132,7 +129,6 @@ class HandTracker {
         if (this.videoModeSelect) this.videoModeSelect.value = this.videoMode;
         if (this.autoOpenPopupCheck) this.autoOpenPopupCheck.checked = this.autoOpen;
         if (this.disableApiCheck) this.disableApiCheck.checked = this.disableApi;
-        if (this.agentImagePolicySelect) this.agentImagePolicySelect.value = this.agentImagePolicy;
         if (this.battleNetModeSelect) {
             this.battleNetModeSelect.value = this.battleNetMode;
             this.toggleOnlineUI();
@@ -248,11 +244,6 @@ class HandTracker {
                 this.videoMode = this.videoModeSelect.value;
                 this.autoOpen = this.autoOpenPopupCheck.checked;
                 this.disableApi = this.disableApiCheck.checked;
-                if (this.agentImagePolicySelect) {
-                    this.agentImagePolicy = this.agentImagePolicySelect.value;
-                    localStorage.setItem('agent_image_policy', this.agentImagePolicy);
-                }
-                
                 localStorage.setItem('robot_api_endpoint', this.apiEndpoint);
                 localStorage.setItem('robot_session_key', this.sessionKey);
                 localStorage.setItem('user_language', this.userLang);
@@ -989,10 +980,6 @@ class HandTracker {
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 統合 (静音)');
                 this.setOptText('#video-playback-mode option[value="popup"]', '🪟 ポップアップ');
                 this.setOptText('#robot-id option[value="all"]', '🤖 全てのロボット');
-                this.setElText('label-agent-image-policy', '🖼️ AgentCoreに画像送信');
-                this.setOptText('#agent-image-policy option[value="always"]', '📸 常に送信');
-                this.setOptText('#agent-image-policy option[value="start_end"]', '🏁 開始と終了時のみ');
-                this.setOptText('#agent-image-policy option[value="never"]', '🚫 送信しない');
             } else if (isZH) {
                 finalTitle = '領域展開 AR';
                 defaultMode = '結下手印以展開你的領域！';
@@ -1023,10 +1010,6 @@ class HandTracker {
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 內置 (靜音)');
                 this.setOptText('#video-playback-mode option[value="popup"]', '🪟 彈出視窗');
                 this.setOptText('#robot-id option[value="all"]', '🤖 所有機器人');
-                this.setElText('label-agent-image-policy', '🖼️ 傳送圖像至 AgentCore');
-                this.setOptText('#agent-image-policy option[value="always"]', '📸 總是傳送');
-                this.setOptText('#agent-image-policy option[value="start_end"]', '🏁 僅限開始和結束時');
-                this.setOptText('#agent-image-policy option[value="never"]', '🚫 不傳送');
             } else {
                 finalTitle = 'Domain Expansion AR';
                 defaultMode = 'Strike a hand sign to expand your domain!';
@@ -1057,10 +1040,6 @@ class HandTracker {
                 this.setOptText('#video-playback-mode option[value="integrated_silent"]', '🔇 Integrated (Silent)');
                 this.setOptText('#video-playback-mode option[value="popup"]', '🪟 Popup Tab');
                 this.setOptText('#robot-id option[value="all"]', '🤖 All Robots');
-                this.setElText('label-agent-image-policy', '🖼️ Send Image to AgentCore');
-                this.setOptText('#agent-image-policy option[value="always"]', '📸 Always Send');
-                this.setOptText('#agent-image-policy option[value="start_end"]', '🏁 Just Start and End Game');
-                this.setOptText('#agent-image-policy option[value="never"]', '🚫 Do Not Send');
             }
 
             if (this.domainGame) this.domainGame.setLanguage(currentLang);
@@ -1140,6 +1119,12 @@ class HandTracker {
                 this.ctx.save();
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
             }
+            if (this.isResultOverlayVisible()) {
+                this.domainDisplay.textContent = '';
+                if (this.atmosphereOverlay) this.atmosphereOverlay.style.background = 'transparent';
+                if (this.ctx) this.ctx.restore();
+                return;
+            }
             let stableDomain = null;
             if (results.multiHandLandmarks) {
                 let skeletonColor = '#00FF00';
@@ -1161,6 +1146,12 @@ class HandTracker {
 
             if (this.ctx) this.ctx.restore();
         } catch (err) { console.error('❌ Tracking Error:', err); if (this.ctx) this.ctx.restore(); }
+    }
+
+    isResultOverlayVisible() {
+        return !!(this.gameOverOverlay &&
+            !this.gameOverOverlay.classList.contains('hidden') &&
+            this.gameOverOverlay.style.display !== 'none');
     }
 
     hexToRgba(hex, opacity) {

@@ -209,9 +209,9 @@ Once restarted, start a new game match!
 
 ## 🎙️ 4. Spectator UI Settings & Voice Optimization | 旁白界面配置與語音優化
 
-Our Battle Arena features a highly interactive and fully-equipped **AI Commentator Config Panel** on the Spectator Screen (`battle.html`). Below is a complete guide to all available settings and features:
+Our Battle Arena features a highly interactive and fully-equipped **AI Commentator Config Panel** on the Spectator Screen (`battle.html`). These controls belong to the **single battle host / spectator screen**, not to individual player devices. They are designed for the **server / API-enabled mode**; in pure static local mode, the battle itself still works but the commentator backend features do not.
 
-本戰鬥競技場在觀戰者畫面（`battle.html`）提供了一個功能完整的 **AI 旁白配置面板**。以下是所有可用設定與功能的完整指南：
+本戰鬥競技場在觀戰者畫面（`battle.html`）提供了一個功能完整的 **AI 旁白配置面板**。這些控制項屬於**單一 battle 主控 / 觀戰者畫面**，並不屬於個別玩家裝置；同時它們是為**啟用伺服器 / API 的模式**而設計。在純靜態本地模式下，對戰仍然可玩，但旁白後端功能不會啟用。
 
 ### 1. Commentary Language | 旁白語言
 *   **ID**: `cfg-commentary-lang`
@@ -251,14 +251,22 @@ Our Battle Arena features a highly interactive and fully-equipped **AI Commentat
 *   **ID**: `cfg-commentator-webcam`
 *   **Description**: When active, player cameras will snap compressed image frames at match-start (`RESET`) and match-end (`FINISH`), uploading them alongside API requests. Nobara will actively look at your clothes, facial panic, posture, or glasses and make fun of them! If disabled, she falls back gracefully to standard combat text comments.
 
-### 7. Score Grace Window | 分數緩衝視窗
+### 7. AI Snapshot Send Mode | AI 快照送出模式
+*   **ID**: `cfg-commentator-image-policy`
+*   **Description**: Controls **when both players' captured images are attached to commentator requests**.
+    *   `always`: Attach images on every supported commentator call.
+    *   `start_end`: Attach images only at match start and match end.
+    *   `never`: Never attach player images.
+    *   This selector is disabled automatically when `cfg-commentator-webcam` is turned OFF.
+
+### 8. Score Grace Window | 分數緩衝視窗
 *   **ID**: `cfg-score-grace`
 *   **Description**: In 2-Player combat, once P1 or P2 scores, their cinematic video starts playing on the spectator screen. Under the original design, the opponent's tracker is paused *immediately*, making it extremely difficult to score at near-simultaneous intervals. This setting relaxes this condition by introducing a configurable grace period (from `0.0s` to `5.0s`, defaulting to `1.0s`).
     *   **How it works**: When a player scores, their cinematic triggers, but the opponent's tracking remains active for `Score Grace Window` seconds. If the opponent completes their technique during this window, they successfully score as well, and both actions play out sequentially!
     *   **Simultaneous Commentary Debouncing**: If both players score within the grace period, the commentator system automatically debounces the status report. Instead of sending two separate and overlapping messages, it bundles both events into a single, cohesive message (e.g., *"Incredible! Both Player 1 (who cast Lapse Blue) and Player 2 (who cast Malevolent Shrine) successfully activated their techniques at the exact same time!"*), ensuring smooth and high-quality playbacks.
     *   **Persistence**: Automatically saved to `localStorage` for tournament stability.
 
-### 8. Synced Same Gesture Mode | 同步相同手勢模式
+### 9. Synced Same Gesture Mode | 同步相同手勢模式
 *   **ID**: `cfg-sync-gesture`
 *   **Description**: Normally, the battle arena issues random, shuffled technique requests to each player (e.g., P1 is asked to do "Unlimited Void" while P2 is asked to do "Reversal Red"). When testing the game by yourself (with a single player operating both camera feeds), performing two different hand shapes simultaneously is nearly impossible.
     *   **How it works**: When enabled, the host spectator pre-generates a single, randomized technique list and broadcasts it to both players. Both Player 1 and Player 2 will be asked to perform the **exact same technique/gesture** at the exact same time, making solo testing, calibration, and near-simultaneous score testing incredibly easy!

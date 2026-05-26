@@ -11,8 +11,10 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 
 - **Mini-Game Mode**: Challenge yourself to perform gestures within a time limit and score points!
 - **迷你遊戲模式**: 在限時內挑戰完成手勢並獲取分數！
-- **No WebSocket Required**: Operates via standalone HTTP API requests.
-- **無須 WebSocket**: 透過獨立的 HTTP API 請求運行。
+- **Static Local Battle Mode**: Same-browser battle works with pure client-side tab communication (`BroadcastChannel` + WebRTC), even on a static host.
+- **靜態本地對戰模式**: 同一瀏覽器內的對戰可透過純前端分頁通訊（`BroadcastChannel` + WebRTC）運行，即使只是靜態網站託管也可使用。
+- **Server-Assisted Advanced Features**: AI commentator, webcam snapshot upload, AI portrait fusion, and internet multiplayer require backend APIs / signaling.
+- **伺服器增強功能**: AI 解說、相機快照上傳、AI 人像融合與跨網路多人連線仍然需要後端 API / 信令服務。
 - **Configurable Endpoint**: Save your Robot API URL locally.
 - **可配置端點**: 在本地保存您的機器人 API 網址。
 - **High-Quality VFX**: Full particle and atmospheric effects included.
@@ -24,11 +26,44 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 
 ## Setup | 設定
 
+### Quick Start: Static / No-Server Mode | 快速開始：純靜態 / 無伺服器模式
+
+This is the **lowest-friction mode** and intentionally has **fewer features**.
+這是**最容易啟動**的模式，但功能會**較少**。
+
+1. Serve the folder on any normal HTTP static host (for example GitHub Pages, S3 static website, `npx serve`, or `python -m http.server`).
+2. Open `index.html?role=player1`, `index.html?role=player2`, and `battle.html` in the **same browser**.
+3. Use the battle viewer as the single match controller.
+4. Strike a hand sign to start.
+
+> **Note | 注意**  
+> Static mode works best over normal `http://` or `https://` hosting. Opening files directly with `file://` is not recommended because browser media and cross-tab behavior may be inconsistent.  
+> 純靜態模式建議使用一般 `http://` 或 `https://` 網站託管，不建議直接以 `file://` 開啟檔案，否則相機與分頁通訊行為可能不穩定。
+
+### Full Mode: Server / API Enabled | 完整模式：啟用伺服器 / API
+
 1. Open `index.html` in a web browser.
 2. Enter your Robot API endpoint in the Settings Panel.
 3. Enter your encrypted session key.
 4. Click "Save Settings".
-5. Strike a hand sign to start!
+5. Strike a hand sign to start.
+
+## Runtime Modes & Feature Matrix | 運行模式與功能矩陣
+
+| Capability | Static Local Mode (same browser) | Server / API Mode |
+| :-- | :--: | :--: |
+| Two-player local battle | ✅ | ✅ |
+| Battle viewer authority | ✅ | ✅ |
+| Cross-tab sync (`BroadcastChannel`) | ✅ | ✅ |
+| WebRTC local viewer stream | ✅ | ✅ |
+| Robot API control | ❌ | ✅ |
+| AI commentator text / voice workflow | ❌ | ✅ |
+| Webcam snapshot upload for commentator | ❌ | ✅ |
+| AI portrait fusion / Scroll of Honor | ❌ | ✅ |
+| Online multiplayer across devices | ❌ | ✅ |
+
+In short: **static mode is for local gameplay and testing**, while **server mode unlocks the AI and internet features**.
+簡單來說：**靜態模式適合本地遊玩與測試**；**伺服器模式才會啟用 AI 與跨網路功能**。
 
 ## 🧪 Local Testing & Mobile Development | 本地測試與行動端開發
 
@@ -58,6 +93,10 @@ The game supports two types of multi-monitor setup for professional battles:
 **無須伺服器。** 使用 `BroadcastChannel` 實現本地即時同步。
 
 - **Setup**: Open `index.html?role=player1`, `index.html?role=player2`, and `battle.html` as tabs in the same browser.
+- **What still works**: battle flow, score sync, local viewer, pause/resume, synchronized match control.
+- **仍可使用功能**：對戰流程、分數同步、本地觀戰畫面、暫停/恢復、同步比賽控制。
+- **What is intentionally missing**: AI commentator APIs, webcam upload, AI portrait generation, and internet multiplayer.
+- **刻意缺少的功能**：AI 解說 API、相機上傳、AI 人像生成，以及跨網路多人模式。
 
 ### 2. Online Mode (Internet) | 線上模式 (網際網路)
 **Supports different devices/networks.** Uses a Node.js + Socket.io backend as a signaling switchboard.
@@ -68,6 +107,27 @@ The game supports two types of multi-monitor setup for professional battles:
   2. In the Viewer (`battle.html`), select **ONLINE** mode. It will show a **Room Code** (Default: `BTL1`).
   3. On players' devices, go to Settings, select **ONLINE** mode, enter the Room Code, and click **JOIN**.
 - **P2P Privacy**: Video streams travel **directly between devices (Peer-to-Peer)** via WebRTC. The server only handles small text signals (scores/triggers) and never sees your camera.
+
+## Settings Ownership Rules | 設定歸屬規則
+
+The game has **2 player screens** (`index.html`) and **1 battle viewer** (`battle.html`). The simplest rule is:
+遊戲有 **2 個玩家畫面**（`index.html`）以及 **1 個觀戰 / 仲裁畫面**（`battle.html`）。最簡單的規則如下：
+
+- **Player settings belong to one device only**: camera source, player role, local robot/API preferences.
+- **玩家設定只屬於單一裝置**：相機來源、玩家角色、本機機器人/API 偏好。
+- **Battle settings belong to the whole match**: countdown, scoring/grace window, synced gesture mode, commentator behavior, battle layout.
+- **對戰設定屬於整場比賽**：倒數、計分/緩衝視窗、同步手勢模式、AI 解說行為、觀戰版面配置。
+
+### Recommended Ownership | 建議歸屬
+
+| Screen | Owns these settings |
+| :-- | :-- |
+| `index.html` (Player 1 / Player 2) | camera source, role, local API endpoint/session key, local playback preference |
+| `battle.html` (Battle Viewer) | network mode, room code, countdown, difficulty, technique count, score grace, synced gesture mode, commentator language/voice/webcam/image policy, AI portrait controls |
+
+> **Important | 重要**  
+> In the current implementation, some values are still persisted with shared `localStorage` keys, so same-browser tabs may still share a few settings. The intended documentation rule is nevertheless: **device settings on player screens, match settings on battle screen**.  
+> 目前實作中仍有部分設定透過共用的 `localStorage` key 保存，因此同一瀏覽器分頁之間仍可能共享某些值；但文件上的設計原則仍應視為：**裝置設定放玩家畫面，對戰設定放 battle 畫面**。
 
 ---
 
@@ -159,6 +219,10 @@ If you encounter a **403 Forbidden** error after deployment, you must manually g
 The game supports a **direct, push-based JJK AI Commentator** integrated natively with your local **OpenClaw Gateway**.
 
 遊戲支援與本地 **OpenClaw 網關** 整合的 **直接、基於推送之咒術 AI 旁白** 技術。
+
+> **Requirement | 前提條件**  
+> This feature is part of the **server / API-enabled mode**. In pure static local mode, the battle still runs, but commentator API calls, snapshot upload, and portrait generation are unavailable.  
+> 此功能屬於**啟用伺服器 / API 的模式**。若使用純靜態本地模式，對戰仍可運作，但解說 API、快照上傳與 AI 人像生成將不可用。
 
 - **Event-Driven Commentary**: Fired instantly on techniques (`/api/live-status`) or end match (`/api/battle-result`) with zero polling.
 - **事件驅動旁白**: 在施展術式或對戰結束時即時觸發，完全無須輪詢。

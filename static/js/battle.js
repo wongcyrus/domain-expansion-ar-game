@@ -150,19 +150,20 @@ function getOpenclawBaseSessionId() {
     return localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'mcpserver';
 }
 
-async function callBridge(endpoint, body) {
+async function callBridge(endpoint, body, options = {}) {
     const apiEndpoint = window.location.origin;
+    const timeoutMs = options.timeoutMs || 30000;
     // Auto-inject preferred user language and image upload policy
     if (body && typeof body === 'object') {
         if (!body.lang) {
             body.lang = localStorage.getItem('user_language') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
         }
-        body.agentImagePolicy = localStorage.getItem('agent_image_policy') || 'always';
+        body.agentImagePolicy = document.getElementById('cfg-commentator-image-policy')?.value || localStorage.getItem('agent_image_policy') || 'always';
     }
     
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout for LLM generation
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         
         const response = await fetch(`${apiEndpoint.replace(/\/$/, '')}${endpoint}`, {
             method: 'POST',
@@ -177,6 +178,7 @@ async function callBridge(endpoint, body) {
         if (response.ok) {
             return await response.json();
         }
+        console.warn(`[Bridge] Endpoint ${endpoint} returned HTTP ${response.status}`);
     } catch (err) {
         console.warn(`[Bridge] Failed to call bridge endpoint ${endpoint}:`, err);
     }
@@ -492,17 +494,30 @@ async function startMatch() {
 
             const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
             const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
-            const resp = await callBridge('/api/live-status', {
+            let resp = await callBridge('/api/live-status', {
                 sessionId: dynamicSessionId,
                 eventType: 'RESET',
                 p1Score: 0,
                 p2Score: 0,
                 lang: commentaryLang,
                 foulLanguage: isFoulEnabled
-            });
+            }, { timeoutMs: 60000 });
+            if (!resp || !resp.welcomeMessage) {
+                console.warn('[Battle] Initial welcome commentary did not return in time. Retrying once before countdown...');
+                resp = await callBridge('/api/live-status', {
+                    sessionId: dynamicSessionId,
+                    eventType: 'RESET',
+                    p1Score: 0,
+                    p2Score: 0,
+                    lang: commentaryLang,
+                    foulLanguage: isFoulEnabled
+                }, { timeoutMs: 60000 });
+            }
             if (resp && resp.welcomeMessage) {
                 // 3. Wait for the entire welcoming hype commentary to be spoken before countdown
                 await displayCommentary(resp.welcomeMessage);
+            } else {
+                console.warn('[Battle] Initial welcome commentary still missing; continuing match startup without intro.');
             }
         }
 
@@ -888,6 +903,8 @@ updateLayout();
 const enableCommentatorCheckbox = document.getElementById('cfg-enable-commentator');
 const commentatorVolumeSlider = document.getElementById('cfg-commentator-volume');
 const commentatorVolumeVal = document.getElementById('val-commentator-volume');
+const commentatorWebcamCheckbox = document.getElementById('cfg-commentator-webcam');
+const commentatorImagePolicySelector = document.getElementById('cfg-commentator-image-policy');
 
 // Always accessible quick controls & inline commentator bubble controls
 const quickVolumeSlider = document.getElementById('quick-volume-slider');
@@ -953,6 +970,38 @@ if (enableCommentatorCheckbox) {
             if (window.speechSynthesis) window.speechSynthesis.cancel();
         }
     });
+}
+
+function syncCommentatorImagePolicyUi() {
+    if (!commentatorImagePolicySelector) return;
+    const isWebcamEnabled = commentatorWebcamCheckbox?.checked !== false;
+    commentatorImagePolicySelector.disabled = !isWebcamEnabled;
+    commentatorImagePolicySelector.style.opacity = isWebcamEnabled ? '1' : '0.5';
+    commentatorImagePolicySelector.title = isWebcamEnabled
+        ? 'Choose when both player snapshots are sent to the AI commentator'
+        : 'Enable webcam snapshots to send player images to the AI commentator';
+}
+
+if (commentatorImagePolicySelector) {
+    const savedPolicy = localStorage.getItem('agent_image_policy');
+    const resolvedPolicy = ['always', 'start_end', 'never'].includes(savedPolicy) ? savedPolicy : 'always';
+    commentatorImagePolicySelector.value = resolvedPolicy;
+    localStorage.setItem('agent_image_policy', resolvedPolicy);
+    commentatorImagePolicySelector.addEventListener('change', () => {
+        localStorage.setItem('agent_image_policy', commentatorImagePolicySelector.value);
+    });
+}
+
+if (commentatorWebcamCheckbox) {
+    const savedWebcam = localStorage.getItem('cfg-commentator-webcam');
+    if (savedWebcam !== null) {
+        commentatorWebcamCheckbox.checked = savedWebcam === 'true';
+    }
+    commentatorWebcamCheckbox.addEventListener('change', () => {
+        localStorage.setItem('cfg-commentator-webcam', commentatorWebcamCheckbox.checked);
+        syncCommentatorImagePolicyUi();
+    });
+    syncCommentatorImagePolicyUi();
 }
 
 // Initial Volume State Load
@@ -1305,4 +1354,3 @@ function initCentralScrollOfHonor() {
         });
     }
 }
-
