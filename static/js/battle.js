@@ -1284,8 +1284,18 @@ function initCentralScrollOfHonor() {
                 const result = await response.json();
                 console.log('[Central AI Portrait] Trigger response:', result);
 
+                const shareUrl = `${window.location.origin}/share.html?sessionId=${encodeURIComponent(sessionId)}`;
+                const qrcodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}`;
+
+                if (resultPanel) resultPanel.style.display = 'flex';
+                if (qrcodeImg) qrcodeImg.src = qrcodeApiUrl;
+                if (shortUrlLabel) {
+                    shortUrlLabel.innerHTML = `<a href="${shareUrl}" target="_blank" style="color: #FFFF00; text-decoration: underline; font-weight: bold;">${shareUrl}</a><div style="margin-top: 6px; color: rgba(255,255,255,0.65); font-size: 10px;">Scan now to open the live share page while the portrait is still generating.</div>`;
+                }
+
                 if (progressBar) progressBar.style.width = '30%';
-                if (aiStatusText) aiStatusText.textContent = 'Style fusion enqueued. Monitoring Bedrock Canvas queue...';
+                if (aiStatusText) aiStatusText.textContent = 'Style fusion enqueued. QR is ready now - the share page will show a loading state until the final portrait is finished.';
+                btnActivateAi.style.display = 'none';
 
                 let pollCount = 0;
                 const maxPolls = 30; // Max 1 min
@@ -1307,22 +1317,15 @@ function initCentralScrollOfHonor() {
                             clearInterval(intervalId);
                             if (progressBar) progressBar.style.width = '100%';
                             if (aiStatusText) aiStatusText.textContent = 'Style fusion successfully completed!';
-
-                            if (resultPanel) resultPanel.style.display = 'flex';
-
-                            const shareUrl = `${window.location.origin}/share.html?sessionId=${encodeURIComponent(sessionId)}`;
-                            const qrcodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}`;
-                            
-                            if (qrcodeImg) qrcodeImg.src = qrcodeApiUrl;
                             if (shortUrlLabel) {
                                 shortUrlLabel.innerHTML = `<a href="${shareUrl}" target="_blank" style="color: #FFFF00; text-decoration: underline; font-weight: bold;">${shareUrl}</a>`;
                             }
-                            btnActivateAi.style.display = 'none';
                         } else if (checkResult.status && checkResult.status.startsWith('ERROR:')) {
                             clearInterval(intervalId);
                             if (progressBarContainer) progressBarContainer.style.display = 'none';
                             btnActivateAi.disabled = false;
                             btnActivateAi.style.opacity = '1';
+                            btnActivateAi.style.display = 'block';
 
                             const err = checkResult.status.replace('ERROR:', '').trim();
                             if (err === 'NO_FACE') {
@@ -1340,6 +1343,7 @@ function initCentralScrollOfHonor() {
                         if (progressBarContainer) progressBarContainer.style.display = 'none';
                         btnActivateAi.disabled = false;
                         btnActivateAi.style.opacity = '1';
+                        btnActivateAi.style.display = 'block';
                         if (aiStatusText) aiStatusText.textContent = '❌ Generation timed out. Please try again!';
                     }
                 }, 2000);
@@ -1349,6 +1353,7 @@ function initCentralScrollOfHonor() {
                 if (progressBarContainer) progressBarContainer.style.display = 'none';
                 btnActivateAi.disabled = false;
                 btnActivateAi.style.opacity = '1';
+                btnActivateAi.style.display = 'block';
                 if (aiStatusText) aiStatusText.textContent = `❌ Connection failed: ${err.message}`;
             }
         });
