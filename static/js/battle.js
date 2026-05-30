@@ -1353,12 +1353,15 @@ function initCentralScrollOfHonor() {
     const p2Preview = document.getElementById('p2-captured-preview');
     const btnActivateAi = document.getElementById('btn-activate-ai');
     const cfgAiTemplate = document.getElementById('cfg-ai-template');
+    const triggerContainer = document.getElementById('ai-trigger-container');
     const aiStatusText = document.getElementById('ai-status-text');
     const progressBarContainer = document.getElementById('ai-progress-bar-container');
     const progressBar = document.getElementById('ai-progress-bar');
     const resultPanel = document.getElementById('ai-result-panel');
     const qrcodeImg = document.getElementById('ai-qrcode-img');
     const shortUrlLabel = document.getElementById('ai-short-url-label');
+    const resultTitle = document.getElementById('ai-result-title');
+    const resultDesc = document.getElementById('ai-result-desc');
 
     const isAiPortraitEnabled = document.getElementById('cfg-enable-ai-portrait')?.checked !== false;
     const centralWidget = document.getElementById('central-scroll-of-honor');
@@ -1372,6 +1375,8 @@ function initCentralScrollOfHonor() {
     }
 
     const sessionId = getOpenclawActiveSessionId();
+    const shareUrl = `${window.location.origin}/share.html?sessionId=${encodeURIComponent(sessionId)}`;
+    const qrcodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}`;
 
     // Reset visual panels
     if (btnActivateAi) {
@@ -1383,6 +1388,28 @@ function initCentralScrollOfHonor() {
     if (progressBar) progressBar.style.width = '0%';
     if (resultPanel) resultPanel.style.display = 'none';
     if (aiStatusText) aiStatusText.textContent = 'Click to fuse and stylize player portraits using Bedrock Nova Canvas!';
+
+    fetch('/config.json')
+        .then((response) => response.ok ? response.json() : {})
+        .then((config) => {
+            if (!config || !config.isServerless) return;
+
+            if (triggerContainer) triggerContainer.style.display = 'none';
+            if (progressBarContainer) progressBarContainer.style.display = 'none';
+            if (resultPanel) resultPanel.style.display = 'flex';
+            if (qrcodeImg) qrcodeImg.src = qrcodeApiUrl;
+            if (resultTitle) resultTitle.textContent = 'Scan to Get Player Images';
+            if (resultDesc) resultDesc.textContent = 'AWS portrait generation is disabled here. Open the player image page on your phone to download the original Player 1 and Player 2 captures.';
+            if (shortUrlLabel) {
+                shortUrlLabel.innerHTML = `<a href="${shareUrl}" target="_blank" style="color: #FFFF00; text-decoration: underline; font-weight: bold;">${shareUrl}</a>`;
+            }
+            if (aiStatusText) {
+                aiStatusText.textContent = 'AWS mode: AI portrait generation is disabled. Scan the QR code or open the link to get the original player images.';
+            }
+        })
+        .catch((error) => {
+            logClientDebug('WARN', 'Central AI Portrait', 'config.json lookup failed for serverless portrait mode', { error: error.message });
+        });
 
     // Load preview images from get-snapshot API
     const loadPreviewImage = async (imgElement, roleName) => {
@@ -1420,6 +1447,11 @@ function initCentralScrollOfHonor() {
 
             const templateId = cfgAiTemplate ? cfgAiTemplate.value : 'random';
             const enhanceUrl = `/api/enhance-portrait`;
+            if (resultPanel) resultPanel.style.display = 'flex';
+            if (qrcodeImg) qrcodeImg.src = qrcodeApiUrl;
+            if (shortUrlLabel) {
+                shortUrlLabel.innerHTML = `<a href="${shareUrl}" target="_blank" style="color: #FFFF00; text-decoration: underline; font-weight: bold;">${shareUrl}</a><div style="margin-top: 6px; color: rgba(255,255,255,0.65); font-size: 10px;">Scan now to recover the original player captures even if AI fusion never finishes.</div>`;
+            }
             logClientDebug('INFO', 'Central AI Portrait', 'Invoking trigger API', { enhanceUrl, sessionId, templateId });
 
             try {
@@ -1433,13 +1465,19 @@ function initCentralScrollOfHonor() {
                 const result = await response.json();
                 logClientDebug('INFO', 'Central AI Portrait', 'Trigger response received', result);
 
-                const shareUrl = `${window.location.origin}/share.html?sessionId=${encodeURIComponent(sessionId)}`;
-                const qrcodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}`;
+                if (result.status && result.status.startsWith('ERROR:')) {
+                    if (progressBarContainer) progressBarContainer.style.display = 'none';
+                    btnActivateAi.disabled = false;
+                    btnActivateAi.style.opacity = '1';
+                    btnActivateAi.style.display = 'block';
 
-                if (resultPanel) resultPanel.style.display = 'flex';
-                if (qrcodeImg) qrcodeImg.src = qrcodeApiUrl;
-                if (shortUrlLabel) {
-                    shortUrlLabel.innerHTML = `<a href="${shareUrl}" target="_blank" style="color: #FFFF00; text-decoration: underline; font-weight: bold;">${shareUrl}</a><div style="margin-top: 6px; color: rgba(255,255,255,0.65); font-size: 10px;">Scan now to open the live share page while the portrait is still generating.</div>`;
+                    const err = result.status.replace('ERROR:', '').trim();
+                    if (err === 'AWS_IMAGE_GENERATION_DISABLED') {
+                        if (aiStatusText) aiStatusText.textContent = 'ℹ️ AWS AI portrait generation is disabled. Scan the QR code to open the share page and download the original player captures.';
+                    } else {
+                        if (aiStatusText) aiStatusText.textContent = `❌ Style fusion unavailable. Error: ${err}`;
+                    }
+                    return;
                 }
 
                 if (progressBar) progressBar.style.width = '30%';
@@ -1488,6 +1526,8 @@ function initCentralScrollOfHonor() {
                                 if (aiStatusText) aiStatusText.textContent = '❌ Bedrock image model is unavailable for this AWS account right now. Switch to an active model or re-enable Nova Canvas access.';
                             } else if (err === 'BEDROCK_ACCESS_DENIED') {
                                 if (aiStatusText) aiStatusText.textContent = '❌ AWS denied Bedrock image generation. Check Lambda Bedrock permissions.';
+                            } else if (err === 'AWS_IMAGE_GENERATION_DISABLED') {
+                                if (aiStatusText) aiStatusText.textContent = 'ℹ️ AWS AI portrait generation is disabled. Scan the QR code to open the share page and download the original player captures.';
                             } else {
                                 if (aiStatusText) aiStatusText.textContent = `❌ Style fusion failed. Error: ${err}`;
                             }

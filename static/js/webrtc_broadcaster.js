@@ -131,8 +131,13 @@ class BattleModeSync {
 
         this.pcMap = new Map(); // For viewer: Map of playerID -> PeerConnection
         this.localPC = null;    // For broadcaster: Single connection to viewer
+        this.localPCTargetId = null;
         this.localStream = null;
         this.isClosed = false;
+        this.pendingIceCandidates = new Map();
+        this.queuedViewerIds = new Set();
+        this.playerReadyAnnounceTimer = null;
+        this.viewerJoinThrottle = new Map();
         
         this.onStreamReceived = null; // Callback for viewer
         this.onStateReceived = null;  // Callback for viewer
@@ -281,6 +286,21 @@ class BattleModeSync {
                 break;
             case 'PLAYER_READY':
                 if (this.role === 'viewer') {
+                    const targetID = from || senderID;
+                    const existingPc = this.pcMap.get(targetID);
+                    const lastJoinRequest = this.viewerJoinThrottle.get(targetID) || 0;
+
+                    if (this.hasUsablePeerConnection(existingPc)) {
+                        console.log(`[BattleSync] Player ${senderID} is already connected, skipping duplicate stream request.`);
+                        break;
+                    }
+
+                    if (Date.now() - lastJoinRequest < 5000) {
+                        console.log(`[BattleSync] Player ${senderID} was requested recently, throttling duplicate stream request.`);
+                        break;
+                    }
+
+                    this.viewerJoinThrottle.set(targetID, Date.now());
                     console.log(`[BattleSync] Player ${senderID} is ready, requesting stream...`);
                     this.broadcast('VIEWER_JOIN', null, from);
                 }
@@ -351,10 +371,18 @@ class BattleModeSync {
             this.localPC.close();
             this.localPC = null;
         }
+        this.localPCTargetId = null;
         if (this.pcMap) {
             this.pcMap.forEach(pc => pc.close());
             this.pcMap.clear();
         }
+        if (this.playerReadyAnnounceTimer) {
+            clearInterval(this.playerReadyAnnounceTimer);
+            this.playerReadyAnnounceTimer = null;
+        }
+        this.pendingIceCandidates.clear();
+        this.queuedViewerIds.clear();
+        this.viewerJoinThrottle.clear();
     }
 
     isPlayer() {
@@ -380,16 +408,56 @@ class BattleModeSync {
         }
     }
 
+    hasUsablePeerConnection(pc) {
+        if (!pc) return false;
+
+        const connectionState = pc.connectionState || '';
+        const iceConnectionState = pc.iceConnectionState || '';
+        const signalingState = pc.signalingState || '';
+
+        if (signalingState === 'closed') return false;
+        if (connectionState && ['connected', 'connecting'].includes(connectionState)) return true;
+        if (iceConnectionState && ['connected', 'completed', 'checking'].includes(iceConnectionState)) return true;
+
+        return false;
+    }
+
     // --- Broadcaster (Player) Logic ---
 
     async startBroadcasting(stream) {
         this.localStream = stream;
+        if (this.playerReadyAnnounceTimer) {
+            clearInterval(this.playerReadyAnnounceTimer);
+        }
+
         this.broadcast('PLAYER_READY', null);
+
+        // Keep announcing readiness so late viewer joins or missed first messages do not require manual refreshes.
+        this.playerReadyAnnounceTimer = setInterval(() => {
+            if (this.isClosed || !this.localStream) return;
+            this.broadcast('PLAYER_READY', null);
+        }, 3000);
+
+        if (this.queuedViewerIds.size > 0) {
+            Array.from(this.queuedViewerIds).forEach((viewerID) => {
+                this.handleViewerJoin(viewerID);
+            });
+        }
     }
 
     async handleViewerJoin(viewerID) {
         console.log('[BattleSync] Viewer joined, creating offer...');
-        if (!this.localStream) return;
+        if (!this.localStream) {
+            this.queuedViewerIds.add(viewerID);
+            console.log('[BattleSync] Local stream not ready yet; queuing viewer until broadcast stream is available.');
+            return;
+        }
+        this.queuedViewerIds.delete(viewerID);
+
+        if (this.localPC && this.localPCTargetId === viewerID && this.hasUsablePeerConnection(this.localPC)) {
+            console.log('[BattleSync] Viewer connection already active, skipping duplicate offer.');
+            return;
+        }
 
         if (this.localPC) {
             try { this.localPC.close(); } catch(e) {}
@@ -398,10 +466,19 @@ class BattleModeSync {
         this.localPC = new RTCPeerConnection({
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         });
+        this.localPCTargetId = viewerID;
 
         this.localStream.getTracks().forEach(track => {
             this.localPC.addTrack(track, this.localStream);
         });
+
+        this.localPC.onconnectionstatechange = () => {
+            if (!this.localPC) return;
+            const state = this.localPC.connectionState;
+            if (['failed', 'disconnected', 'closed'].includes(state)) {
+                this.localPCTargetId = null;
+            }
+        };
 
         this.localPC.onicecandidate = (event) => {
             if (event.candidate) {
@@ -417,6 +494,7 @@ class BattleModeSync {
     async handleAnswer(answer) {
         if (this.localPC) {
             await this.localPC.setRemoteDescription(new RTCSessionDescription(answer));
+            await this.flushPendingIceCandidates('__broadcaster__', this.localPC);
         }
     }
 
@@ -426,9 +504,15 @@ class BattleModeSync {
         console.log(`[BattleSync] Received offer from ${playerID}`);
         
         const targetID = socketID || playerID;
+        const existingPc = this.pcMap.get(targetID);
 
-        if (this.pcMap.has(targetID)) {
-            try { this.pcMap.get(targetID).close(); } catch(e) {}
+        if (this.hasUsablePeerConnection(existingPc)) {
+            console.log(`[BattleSync] Viewer already has an active peer connection for ${playerID}, ignoring duplicate offer.`);
+            return;
+        }
+
+        if (existingPc) {
+            try { existingPc.close(); } catch(e) {}
         }
 
         const pc = new RTCPeerConnection({
@@ -436,10 +520,20 @@ class BattleModeSync {
         });
 
         this.pcMap.set(targetID, pc);
+        this.viewerJoinThrottle.delete(targetID);
 
         pc.onicecandidate = (event) => {
             if (event.candidate) {
                 this.broadcast('ICE_CANDIDATE', event.candidate.toJSON(), targetID);
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            const state = pc.connectionState;
+            if (['failed', 'disconnected', 'closed'].includes(state)) {
+                if (this.pcMap.get(targetID) === pc) {
+                    this.pcMap.delete(targetID);
+                }
             }
         };
 
@@ -451,26 +545,50 @@ class BattleModeSync {
         };
 
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await this.flushPendingIceCandidates(targetID, pc);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         this.broadcast('ANSWER', answer, targetID);
     }
 
-    handleIceCandidate(from, candidate, socketID = null) {
+    async handleIceCandidate(from, candidate, socketID = null) {
         // In online mode, we might map by socketID in pcMap
         const targetID = socketID || from;
+        const pcKey = (this.role === 'viewer') ? targetID : '__broadcaster__';
         const pc = (this.role === 'viewer') ? this.pcMap.get(targetID) : this.localPC;
         
-        if (pc) {
-            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => {
-                console.warn('[BattleSync] Error adding ice candidate', e);
-            });
+        if (!pc || !pc.remoteDescription) {
+            if (!this.pendingIceCandidates.has(pcKey)) {
+                this.pendingIceCandidates.set(pcKey, []);
+            }
+            this.pendingIceCandidates.get(pcKey).push(candidate);
+            return;
+        }
+
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+            console.warn('[BattleSync] Error adding ice candidate', e);
         }
     }
 
     sendState(state) {
         if (this.isPlayer()) {
             this.broadcast('GAME_STATE', state);
+        }
+    }
+
+    async flushPendingIceCandidates(pcKey, pc) {
+        const pendingCandidates = this.pendingIceCandidates.get(pcKey);
+        if (!pendingCandidates || !pendingCandidates.length) return;
+
+        this.pendingIceCandidates.delete(pcKey);
+        for (const candidate of pendingCandidates) {
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+                console.warn('[BattleSync] Error replaying queued ICE candidate', e);
+            }
         }
     }
 }

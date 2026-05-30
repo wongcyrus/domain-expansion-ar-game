@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scroll of Honor | 領域展開 AR</title>
+    <title>Player Images | 領域展開 AR</title>
     
     <!-- Modern Premium Typography -->
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
@@ -105,6 +105,50 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
             margin-bottom: 18px;
+        }
+
+        body.snapshot-only-mode header {
+            max-width: 1100px;
+            padding-bottom: 24px;
+        }
+
+        body.snapshot-only-mode main {
+            max-width: 1100px;
+            justify-content: flex-start;
+            margin-bottom: 24px;
+        }
+
+        body.snapshot-only-mode .snapshot-strip {
+            gap: 24px;
+        }
+
+        body.snapshot-only-mode .snapshot-card img {
+            min-height: 360px;
+        }
+
+        body.snapshot-only-mode .snapshot-label {
+            padding: 14px 16px;
+            font-size: 0.95rem;
+        }
+
+        body.snapshot-only-mode .portrait-container {
+            display: none !important;
+        }
+
+        body.snapshot-only-mode .actions-grid {
+            width: 100%;
+            max-width: 420px;
+            margin: 24px auto 0;
+        }
+
+        @media (max-width: 900px) {
+            body.snapshot-only-mode .snapshot-strip {
+                grid-template-columns: 1fr;
+            }
+
+            body.snapshot-only-mode .snapshot-card img {
+                min-height: 0;
+            }
         }
 
         .snapshot-card {
@@ -342,8 +386,8 @@
 
     <header>
         <img src="static/img/jujutsu-kaisen-logo.png" alt="JJK Logo" class="jjk-logo"><br>
-        <h1>SCROLL OF HONOR</h1>
-        <p class="subtitle">領域展開 AI PORTRAIT</p>
+        <h1>PLAYER IMAGES</h1>
+        <p class="subtitle">領域展開 MATCH CAPTURES</p>
     </header>
 
     <main>
@@ -364,28 +408,28 @@
             <!-- 1. LOADING VIEW -->
             <div class="loading-wrapper" id="loading-view">
                 <div class="cursed-sphere"></div>
-                <div class="loading-text" id="status-title">領域展開中...</div>
-                <div class="loading-subtext" id="status-desc">Fusing player captures into the Scroll of Honor background...</div>
+                <div class="loading-text" id="status-title">Preparing player images...</div>
+                <div class="loading-subtext" id="status-desc">Loading the original Player 1 and Player 2 match captures...</div>
             </div>
 
             <!-- 2. ERROR VIEW -->
             <div class="error-wrapper hidden" id="error-view">
                 <div class="error-icon">⚠️</div>
-                <div class="error-title" id="error-title">NO FACE DETECTED</div>
-                <div class="error-desc" id="error-desc">Failed to locate sorcerer faces. Make sure both players stand inside webcam view during hand gestures!</div>
+                <div class="error-title" id="error-title">PLAYER IMAGES UNAVAILABLE</div>
+                <div class="error-desc" id="error-desc">Unable to load the saved player images for this match session.</div>
             </div>
 
             <!-- 3. COMPLETED PORTRAIT VIEW -->
-            <img class="portrait-img" id="final-image" alt="AI Domain Portrait">
+            <img class="portrait-img" id="final-image" alt="Match result image">
         </div>
 
         <!-- Interactive Buttons (visible only after completion or error) -->
         <div class="actions-grid hidden" id="actions-panel">
             <button class="btn" id="btn-download">
-                📥 Download Scroll
+                📥 Download Player Images
             </button>
-            <button class="btn btn-secondary" id="btn-share" onclick="navigator.share({title: 'My JJK Scroll of Honor', url: window.location.href}).catch(()=>{})">
-                🔗 Share Battle Scroll
+            <button class="btn btn-secondary" id="btn-share">
+                🔗 Share Player Images Page
             </button>
         </div>
     </main>
@@ -418,13 +462,30 @@
         const statusTitle = document.getElementById('status-title');
         const statusDesc = document.getElementById('status-desc');
         const btnDownload = document.getElementById('btn-download');
+        const btnShare = document.getElementById('btn-share');
         const snapshotStrip = document.getElementById('snapshot-strip');
         const snapshotP1 = document.getElementById('snapshot-p1');
         const snapshotP2 = document.getElementById('snapshot-p2');
+        const cursedSphere = document.querySelector('.cursed-sphere');
 
         let checkInterval = null;
         let elapsedSeconds = 0;
         const maxWaitSeconds = 60; // Timeout after 1 minute
+        let hasRealSnapshotP1 = false;
+        let hasRealSnapshotP2 = false;
+        let finalPortraitUrl = "";
+        let snapshotOnlyMode = false;
+
+        async function loadRuntimeConfig() {
+            try {
+                const response = await fetch(`/config.json?t=${Date.now()}`);
+                if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+                return await response.json();
+            } catch (err) {
+                console.warn('[Config Load Failed]', err);
+                return {};
+            }
+        }
 
         function buildSnapshotFallbackDataUrl(playerLabel) {
             const svg = `
@@ -446,6 +507,8 @@
                 const data = await response.json();
                 if (data && data.success && data.image) {
                     imageElement.src = data.image;
+                    if (roleName === 'player1') hasRealSnapshotP1 = true;
+                    if (roleName === 'player2') hasRealSnapshotP2 = true;
                     return true;
                 }
             } catch (err) {
@@ -463,10 +526,98 @@
             ]);
 
             if (!hasSnapshotP1 || !hasSnapshotP2) {
-                statusDesc.textContent = 'Player captures are shown first. If AI fusion fails, the original webcam snapshots still stay visible here.';
+                statusDesc.textContent = 'Player captures are shown first. Even if no generated image exists, the original webcam snapshots stay available here.';
             }
 
             snapshotStrip.classList.remove('hidden');
+            actionsPanel.classList.remove('hidden');
+            configureDownloadButton();
+        }
+
+        function showSnapshotOnlyState() {
+            snapshotOnlyMode = true;
+            clearInterval(checkInterval);
+            document.body.classList.add('snapshot-only-mode');
+            if (cursedSphere) cursedSphere.classList.add('hidden');
+            if (frame) frame.classList.add('hidden');
+            finalImg.classList.add('hidden');
+            errorView.classList.add('hidden');
+            loadingView.classList.add('hidden');
+            frame.classList.remove('complete');
+            if (btnDownload) btnDownload.classList.add('hidden');
+            actionsPanel.classList.remove('hidden');
+            configureDownloadButton();
+        }
+
+        function triggerDownload(url, fileName) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function configureDownloadButton() {
+            if (btnDownload) {
+                if (snapshotOnlyMode) {
+                    btnDownload.classList.add('hidden');
+                } else {
+                    btnDownload.classList.remove('hidden');
+                }
+            }
+
+            if (btnDownload && finalPortraitUrl && !snapshotOnlyMode) {
+                btnDownload.textContent = '📥 Download Result Image';
+                btnDownload.onclick = async () => {
+                    try {
+                        const response = await fetch(finalPortraitUrl);
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        triggerDownload(url, `jjk_match_result_${sessionId}.jpg`);
+                        window.URL.revokeObjectURL(url);
+                    } catch (err) {
+                        window.open(finalPortraitUrl, '_blank');
+                    }
+                };
+            } else if (btnDownload && !snapshotOnlyMode) {
+                btnDownload.textContent = '📥 Download Player Images';
+                btnDownload.onclick = () => {
+                    if (!hasRealSnapshotP1 && !hasRealSnapshotP2) {
+                        showError("SNAPSHOTS UNAVAILABLE", "The share page is live, but no original player captures were found for download.");
+                        return;
+                    }
+
+                    if (hasRealSnapshotP1) triggerDownload(snapshotP1.src, `jjk_player1_capture_${sessionId}.jpg`);
+                    if (hasRealSnapshotP2) triggerDownload(snapshotP2.src, `jjk_player2_capture_${sessionId}.jpg`);
+                };
+            }
+
+            if (!btnShare) return;
+            btnShare.textContent = finalPortraitUrl ? '🔗 Share Result Image Page' : '🔗 Share Player Images Page';
+            btnShare.onclick = () => {
+                const shareData = {
+                    title: finalPortraitUrl ? 'JJK Match Result Image' : 'JJK Player Images',
+                    text: finalPortraitUrl
+                        ? 'Open the match result image.'
+                        : 'Open the player images page.',
+                    url: window.location.href
+                };
+
+                if (navigator.share) {
+                    navigator.share(shareData).catch(() => {});
+                    return;
+                }
+
+                if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(window.location.href).catch(() => {
+                        window.prompt('Copy this link:', window.location.href);
+                    });
+                    return;
+                }
+
+                window.prompt('Copy this link:', window.location.href);
+            };
         }
 
         async function pollStatus() {
@@ -481,36 +632,43 @@
                 if (data.status === "PENDING") {
                     elapsedSeconds += 2;
                     if (elapsedSeconds >= maxWaitSeconds) {
-                        showError("GENERATION TIMEOUT", "The sorcerer expansion SQS queue is backlogged. Please try triggering domain expansion again!");
+                        showError("IMAGE STATUS TIMEOUT", "The player image page could not confirm a result in time. You can still download the original player captures below.");
                     } else if (elapsedSeconds > 10) {
-                        statusTitle.textContent = "AI FUSION ACTIVE...";
-                        statusDesc.textContent = "Bedrock Nova Canvas is blending and expanding domain styles. Please hold...";
+                        statusTitle.textContent = "Checking result status...";
+                        statusDesc.textContent = "Still waiting for a saved result image. The original player captures remain available below.";
                     }
                 } else if (data.status === "COMPLETE" && data.url) {
                     showSuccess(data.url);
                 } else if (data.status && data.status.startsWith("ERROR:")) {
                     const errCode = data.status.replace("ERROR:", "").trim();
                     if (errCode === "NO_FACE") {
-                        showError("NO FACE DETECTED", "Rekognition could not locate sorcerer faces. Please make sure both players look directly at the webcam when holding gestures!");
+                        showError("NO FACE DETECTED", "No generated result image is available because faces could not be detected. You can still download the original player captures below.");
+                    } else if (errCode === "AWS_IMAGE_GENERATION_DISABLED") {
+                        showError("AWS IMAGE GENERATION DISABLED", "AWS image generation is disabled for this deployment. You can still download the original Player 1 and Player 2 captures below.");
                     } else {
-                        showError("FUSION INTERFERENCE", `Curse spirits interfered (Error Code: ${errCode}). Please try generating again!`);
+                        showError("RESULT IMAGE UNAVAILABLE", `No generated result image is available right now (Error Code: ${errCode}). You can still download the original player captures below.`);
                     }
                 } else {
                     // "NONE" or uninitialized
-                    showError("UNINITIALIZED SCROLL", "No domain portrait request is active for this match session.");
+                    showError("NO RESULT IMAGE", "No generated result image exists for this match session. You can still download the original player captures below.");
                 }
             } catch (err) {
                 console.error("[Poll Error]", err);
+                if (String(err.message).includes('401')) {
+                    showSnapshotOnlyState();
+                    return;
+                }
                 // Keep polling on minor network glitches, but stop if timeout exceeded
                 elapsedSeconds += 2;
                 if (elapsedSeconds >= maxWaitSeconds) {
-                    showError("NETWORK FAILURE", "Unable to communicate with the domain expansion server. Please check your internet connection.");
+                    showError("NETWORK FAILURE", "Unable to load the match image status. You can still use the original player captures below.");
                 }
             }
         }
 
         function showSuccess(imageUrl) {
             clearInterval(checkInterval);
+            finalPortraitUrl = imageUrl;
             
             // Set image source
             finalImg.src = imageUrl;
@@ -520,25 +678,7 @@
                 finalImg.classList.add('loaded');
                 frame.classList.add('complete');
                 actionsPanel.classList.remove('hidden');
-            };
-
-            // Set up download click behavior
-            btnDownload.onclick = async () => {
-                try {
-                    const response = await fetch(imageUrl);
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `jjk_battle_scroll_${sessionId}.jpg`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                } catch (err) {
-                    // Fallback if cross-origin constraints block direct fetching
-                    window.open(imageUrl, '_blank');
-                }
+                configureDownloadButton();
             };
         }
 
@@ -550,14 +690,26 @@
             document.getElementById('error-title').textContent = title;
             document.getElementById('error-desc').textContent = desc;
             errorView.classList.remove('hidden');
+            actionsPanel.classList.remove('hidden');
+            configureDownloadButton();
         }
 
         // Start polling immediately on page load
         if (sessionId) {
-            console.log(`[Initiating Polling] Session ID: ${sessionId}`);
-            loadSnapshotPreviews();
-            pollStatus();
-            checkInterval = setInterval(pollStatus, 2000);
+            (async () => {
+                await loadSnapshotPreviews();
+                const config = await loadRuntimeConfig();
+
+                if (config && config.isServerless) {
+                    console.log(`[Share Page] Serverless mode detected for ${sessionId}; skipping result-image polling.`);
+                    showSnapshotOnlyState();
+                    return;
+                }
+
+                console.log(`[Initiating Polling] Session ID: ${sessionId}`);
+                pollStatus();
+                checkInterval = setInterval(pollStatus, 2000);
+            })();
         } else {
             showError("SESSION MISSING", "No active Jujutsu Battle Session parameter was found in the URL.");
         }
