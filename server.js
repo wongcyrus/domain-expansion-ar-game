@@ -242,7 +242,17 @@ app.post('/api/enhance-portrait', (req, res) => {
         console.warn(`[Bridge-Local] Snapshots missing for local mock generation. P1 present: ${!!session.latestWebcamFrameP1}, P2 present: ${!!session.latestWebcamFrameP2}`);
         session.enhancedImageUrl = "ERROR: NO_FACE";
         gameSessions.set(resolvedSessionId, session);
-        return res.json({ success: true, status: "ERROR: NO_FACE" });
+        return res.json({
+            success: true,
+            status: "ERROR: NO_FACE",
+            debug: {
+                mode: "local-mock",
+                sessionFound: true,
+                hasSnapshotP1: !!session.latestWebcamFrameP1,
+                hasSnapshotP2: !!session.latestWebcamFrameP2,
+                templateId: templateId || "random",
+            }
+        });
     }
     
     session.enhancedImageUrl = "PENDING";
@@ -262,7 +272,17 @@ app.post('/api/enhance-portrait', (req, res) => {
         console.log(`[Bridge-Local] Background SQS mock processing completed for session=${resolvedSessionId}. Enhanced URL: ${localMockUrl}`);
     }, 3000);
     
-    res.json({ success: true, status: "PENDING" });
+    res.json({
+        success: true,
+        status: "PENDING",
+        debug: {
+            mode: "local-mock",
+            sessionFound: true,
+            hasSnapshotP1: !!session.latestWebcamFrameP1,
+            hasSnapshotP2: !!session.latestWebcamFrameP2,
+            templateId: templateId || "random",
+        }
+    });
 });
 
 app.get('/api/check-enhancement', (req, res) => {
@@ -287,7 +307,12 @@ app.get('/api/check-enhancement', (req, res) => {
     res.json({
         success: true,
         status: status,
-        url: status === "COMPLETE" ? enhancedUrl : ""
+        url: status === "COMPLETE" ? enhancedUrl : "",
+        debug: {
+            mode: "local-mock",
+            sessionFound: true,
+            rawEnhancedImageValue: enhancedUrl,
+        }
     });
 });
 
@@ -397,11 +422,22 @@ app.post('/api/live-status', async (req, res) => {
             });
             if (response.ok) {
                 const data = await response.json();
-                console.log(`[AWS Bridge Proxy] Received AWS Commentary: "${data.commentary}"`);
+                const resolvedCommentary = data.welcomeMessage || data.commentary || "";
+                console.log(`[AWS Bridge Proxy] Received AWS Commentary: "${resolvedCommentary}"`);
                 if (eventType === "RESET") {
-                    return res.json({ ok: true, welcomeMessage: data.commentary });
+                    return res.json({
+                        ok: true,
+                        welcomeMessage: resolvedCommentary,
+                        debugPrompt: data.debugPrompt || "",
+                        debugImageContext: data.debugImageContext || null
+                    });
                 } else {
-                    return res.json({ ok: true, commentary: data.commentary });
+                    return res.json({
+                        ok: true,
+                        commentary: resolvedCommentary,
+                        debugPrompt: data.debugPrompt || "",
+                        debugImageContext: data.debugImageContext || null
+                    });
                 }
             } else {
                 console.error(`[AWS Bridge Proxy Error] Status: ${response.status}`);
@@ -419,9 +455,9 @@ app.post('/api/live-status', async (req, res) => {
         
         let openingInstruction = "";
         if (isZh) {
-            openingInstruction = `【重要系統指示：請直接以你的「釘崎野薔薇（Kugisaki Nobara）」人設，對玩家 P1、P2 發表最傲嬌、最震撼嘅開局廣東話解說旁白（1至2句）！你必須在第一句明確介紹自己（例如說出「本大小姐係釘崎野薔薇！」或「我係釘崎野薔薇」），否則沒有人知道是你！請注意：對戰尚未開始，玩家正處於準備階段，在你的開場白說完之後才會正式進入對戰倒數。因此，你的解說必須是開戰前的嗆聲、熱身或宣戰，千萬不要說「對戰已經開始」之類的話！直接進入角色解說，不要複述或確認本指令！】\n\n【附加指令】：\n${systemPrompt}`;
+            openingInstruction = `【重要系統指示：請直接以你的「釘崎野薔薇（Kugisaki Nobara）」人設，對玩家 P1、P2 發表最傲嬌、最震撼嘅開局廣東話解說旁白（1至2句）！你必須在第一句明確介紹自己（例如說出「本大小姐係釘崎野薔薇！」或「我係釘崎野薔薇」），否則沒有人知道是你！請注意：對戰尚未開始，玩家正處於準備階段，在你的開場白說完之後才會正式進入對戰倒數。因此，你的解說必須是開戰前的嗆聲、熱身或宣戰，千萬不要說「對戰已經開始」之類的話！如果系統同時提供咗 P1、P2 嘅玩家即時畫面，請先觀察兩位玩家當下清楚可見嘅表情、姿勢、氣勢、服裝或準備狀態，並自然融入至少一兩個具體可見細節去開場挑釁或炒熱氣氛；只可以講肉眼睇到嘅內容，唔好亂作。直接進入角色解說，不要複述或確認本指令！】\n\n【附加指令】：\n${systemPrompt}`;
         } else {
-            openingInstruction = `[IMPORTANT DIRECTIVE: Please act immediately in your Kugisaki Nobara persona to deliver an epic, sassy opening welcome commentary (1-2 sentences) to players P1 and P2! You MUST explicitly introduce yourself in the first sentence by name (e.g. "I am Nobara Kugisaki!" or "It's me, Nobara Kugisaki!") so that players know who is talking. NOTE: The match has NOT started yet. The players are in the preparation stage, and the match countdown will begin right after your introduction speech. Frame your welcoming commentary as a pre-match hype/call-to-action before the countdown begins, NOT as if the match is already running. Speak only in character!]\n\n[CURRENT MATCH INSTRUCTION]:\n${systemPrompt}`;
+            openingInstruction = `[IMPORTANT DIRECTIVE: Please act immediately in your Kugisaki Nobara persona to deliver an epic, sassy opening welcome commentary (1-2 sentences) to players P1 and P2! You MUST explicitly introduce yourself in the first sentence by name (e.g. "I am Nobara Kugisaki!" or "It's me, Nobara Kugisaki!") so that players know who is talking. NOTE: The match has NOT started yet. The players are in the preparation stage, and the match countdown will begin right after your introduction speech. Frame your welcoming commentary as a pre-match hype/call-to-action before the countdown begins, NOT as if the match is already running. If player webcam snapshots are attached, inspect both players first and weave in one or two specific visible details about their expression, posture, outfit, or readiness to make the opening taunt feel personalized; only mention things clearly visible in the images and do not invent hidden details. Speak only in character!]\n\n[CURRENT MATCH INSTRUCTION]:\n${systemPrompt}`;
         }
         let attachImages = false;
         const resolvedPolicy = agentImagePolicy || "always";
@@ -429,7 +465,14 @@ app.post('/api/live-status', async (req, res) => {
             attachImages = true;
         }
         const welcomeMessage = await callOpenClawGateway(resolvedSessionId, agentId, openingInstruction, attachImages);
-        return res.json({ ok: true, welcomeMessage });
+        return res.json({
+            ok: true,
+            welcomeMessage,
+            debugPrompt: openingInstruction,
+            debugImageContext: {
+                shouldAttachImage: attachImages
+            }
+        });
     }
 
     // 2. Handle subsequent live status game updates
@@ -462,7 +505,14 @@ app.post('/api/live-status', async (req, res) => {
         attachImages = true;
     }
     const commentary = await callOpenClawGateway(resolvedSessionId, agentId, promptText, attachImages);
-    res.json({ ok: true, commentary });
+    res.json({
+        ok: true,
+        commentary,
+        debugPrompt: promptText,
+        debugImageContext: {
+            shouldAttachImage: attachImages
+        }
+    });
 });
 
 app.post('/api/battle-result', async (req, res) => {
@@ -491,7 +541,12 @@ app.post('/api/battle-result', async (req, res) => {
             if (response.ok) {
                 const data = await response.json();
                 console.log(`[AWS Bridge Proxy] Received AWS Battle Result: "${data.commentary}"`);
-                return res.json({ ok: true, commentary: data.commentary });
+                return res.json({
+                    ok: true,
+                    commentary: data.commentary,
+                    debugPrompt: data.debugPrompt || "",
+                    debugImageContext: data.debugImageContext || null
+                });
             } else {
                 console.error(`[AWS Bridge Proxy Error] Status: ${response.status}`);
             }
@@ -522,7 +577,14 @@ app.post('/api/battle-result', async (req, res) => {
         attachImages = true;
     }
     const commentary = await callOpenClawGateway(resolvedSessionId, agentId, promptText, attachImages);
-    res.json({ ok: true, commentary });
+    res.json({
+        ok: true,
+        commentary,
+        debugPrompt: promptText,
+        debugImageContext: {
+            shouldAttachImage: attachImages
+        }
+    });
 });
 
 

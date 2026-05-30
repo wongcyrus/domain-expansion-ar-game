@@ -141,6 +141,8 @@ let lastPeriodicCommentaryTime = 0;
 let commentaryHideTimeout = null;
 let pendingCasts = [];
 let castTimeoutHandle = null;
+let commentarySpeechNonce = 0;
+let isSpeechPrimed = false;
 
 function getOpenclawActiveSessionId() {
     return localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'mcpserver';
@@ -176,7 +178,14 @@ async function callBridge(endpoint, body, options = {}) {
         clearTimeout(timeoutId);
         
         if (response.ok) {
-            return await response.json();
+            const responseJson = await response.json();
+            if (responseJson?.debugPrompt) {
+                console.log(`[Bridge Debug Prompt] ${endpoint}`, responseJson.debugPrompt);
+            }
+            if (responseJson?.debugImageContext) {
+                console.log(`[Bridge Debug Images] ${endpoint}`, responseJson.debugImageContext);
+            }
+            return responseJson;
         }
         console.warn(`[Bridge] Endpoint ${endpoint} returned HTTP ${response.status}`);
     } catch (err) {
@@ -204,6 +213,84 @@ function getActionNameFromVideo(videoSrc) {
     // Fallback parsing
     let name = filename.replace(".mp4", "").replace("domain_", "").replace("technique_", "").replace(/_/g, " ");
     return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function estimateCommentaryDurationMs(text) {
+    const normalizedText = (text || "").replace(/\s+/g, " ").trim();
+    if (!normalizedText) return 0;
+    const isChinese = /[\u4e00-\u9fa5]/.test(normalizedText);
+    const estimateMs = isChinese
+        ? Math.max(2000, (normalizedText.length * 250) + 500)
+        : Math.max(2000, (normalizedText.length * 80) + 800);
+    return Math.min(10000, estimateMs);
+}
+
+function waitForCommentaryDuration(text) {
+    const estimateMs = estimateCommentaryDurationMs(text);
+    if (!estimateMs) {
+        return Promise.resolve();
+    }
+    return new Promise((resolve) => setTimeout(resolve, estimateMs));
+}
+
+async function primeSpeechSynthesis(force = false) {
+    if (!window.speechSynthesis) {
+        return;
+    }
+    if (isSpeechPrimed && !force) {
+        return;
+    }
+
+    window.speechSynthesis.getVoices();
+
+    await new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+        };
+
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            finish();
+            return;
+        }
+
+        const handleVoicesChanged = () => {
+            window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+            finish();
+        };
+
+        window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged, { once: true });
+        setTimeout(() => {
+            window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+            finish();
+        }, 350);
+    });
+
+    await new Promise((resolve) => {
+        try {
+            window.speechSynthesis.cancel();
+            const primer = new SpeechSynthesisUtterance('commentator ready');
+            primer.volume = 0;
+            primer.rate = 1;
+            primer.pitch = 1;
+            primer.onend = resolve;
+            primer.onerror = resolve;
+            setTimeout(() => {
+                try {
+                    window.speechSynthesis.speak(primer);
+                } catch (err) {
+                    resolve();
+                }
+            }, 0);
+        } catch (err) {
+            resolve();
+        }
+    });
+
+    isSpeechPrimed = true;
 }
 
 function displayCommentary(text) {
@@ -245,20 +332,9 @@ function speakCommentary(text) {
     }
 
     if (ttsVolume === 0) {
-        // Local audio is muted, but we must simulate the speaking delay to keep the waiting times and sync with other devices!
-        const isChinese = /[\u4e00-\u9fa5]/.test(sanitizedText);
-        let estimateMs;
-        if (isChinese) {
-            // 250ms per character (4 chars/sec) + 500ms lead-in buffer
-            estimateMs = Math.max(2000, (sanitizedText.length * 250) + 500);
-        } else {
-            // 80ms per character (12 chars/sec) + 800ms lead-in buffer
-            estimateMs = Math.max(2000, (sanitizedText.length * 80) + 800);
-        }
-        estimateMs = Math.min(10000, estimateMs); // Cap at 10 seconds max
-
+        const estimateMs = estimateCommentaryDurationMs(sanitizedText);
         console.log(`[TTS] Local audio is muted (Volume 0%). Simulating speaking delay of ${estimateMs}ms for physical device sync.`);
-        return new Promise((resolve) => setTimeout(resolve, estimateMs));
+        return waitForCommentaryDuration(sanitizedText);
     }
 
     if (!window.speechSynthesis) {
@@ -266,20 +342,55 @@ function speakCommentary(text) {
         return Promise.resolve();
     }
     console.log(`[TTS] speakCommentary trigger: "${sanitizedText}" | Current setting volume: ${ttsVolume}%`);
+    const requestNonce = ++commentarySpeechNonce;
     return new Promise((resolve) => {
         try {
             console.log("[TTS] Cancelling existing speech queue...");
             window.speechSynthesis.cancel();
             
             const utterance = new SpeechSynthesisUtterance(sanitizedText);
+            let speechStarted = false;
+            let retriedAfterColdStart = false;
+            let settled = false;
+
+            const finish = async () => {
+                if (settled) return;
+                settled = true;
+                resolve();
+            };
+
+            utterance.onstart = () => {
+                speechStarted = true;
+                isSpeechPrimed = true;
+                console.log("[TTS] Speech playback started.");
+            };
             
             utterance.onend = () => {
                 console.log("[TTS] Speech playback ended successfully.");
-                resolve();
+                finish();
             };
-            utterance.onerror = (e) => {
+            utterance.onerror = async (e) => {
                 console.warn("[TTS] Speech synthesis error event:", e);
-                resolve();
+                if (!speechStarted && !retriedAfterColdStart && requestNonce === commentarySpeechNonce) {
+                    retriedAfterColdStart = true;
+                    console.warn("[TTS] Cold-start speech failure detected. Re-priming speech synthesis and retrying once...");
+                    await primeSpeechSynthesis(true);
+                    setTimeout(() => {
+                        try {
+                            if (requestNonce !== commentarySpeechNonce) {
+                                finish();
+                                return;
+                            }
+                            window.speechSynthesis.cancel();
+                            window.speechSynthesis.speak(utterance);
+                        } catch (retryErr) {
+                            console.warn("[TTS] Speech synthesis retry failed:", retryErr);
+                            waitForCommentaryDuration(sanitizedText).then(finish);
+                        }
+                    }, 120);
+                    return;
+                }
+                waitForCommentaryDuration(sanitizedText).then(finish);
             };
 
             const voices = window.speechSynthesis.getVoices();
@@ -372,16 +483,20 @@ function speakCommentary(text) {
             console.log("[TTS] Preparing asynchronous delayed speak (100ms queue buffer)...");
             setTimeout(() => {
                 try {
+                    if (requestNonce !== commentarySpeechNonce) {
+                        finish();
+                        return;
+                    }
                     console.log("[TTS] Executing window.speechSynthesis.speak()...");
                     window.speechSynthesis.speak(utterance);
                 } catch (e) {
                     console.warn("[TTS] Speech synthesis speak failed:", e);
-                    resolve();
+                    waitForCommentaryDuration(sanitizedText).then(finish);
                 }
             }, 100);
         } catch (e) {
             console.warn("[TTS] Speech synthesis failed:", e);
-            resolve();
+            waitForCommentaryDuration(sanitizedText).then(resolve);
         }
     });
 }
@@ -389,6 +504,28 @@ function speakCommentary(text) {
 function addTickerMsg(msg, playerClass) { const el = document.createElement('div'); el.className = `ticker-msg ${playerClass}`; el.textContent = `> ${msg}`; ticker.appendChild(el); ticker.scrollTop = ticker.scrollHeight; if (ticker.children.length > 5) ticker.removeChild(ticker.firstChild); }
 function triggerHitEffect(victimID) { const view = (victimID === 'player1') ? viewP1 : viewP2; view.classList.add('hit-shake'); const flash = document.createElement('div'); flash.className = 'hit-flash'; view.appendChild(flash); setTimeout(() => { view.classList.remove('hit-shake'); if (flash.parentNode) view.removeChild(flash); }, 400); }
 function updatePowerBar() { const total = p1ScoreVal + p2ScoreVal; if (total === 0) powerP1.style.width = '50%'; else powerP1.style.width = `${(p1ScoreVal / total) * 100}%`; }
+
+function logClientDebug(level, scope, message, details = null) {
+    const prefix = `[${scope}] ${message}`;
+    const normalizedLevel = (level || 'INFO').toUpperCase();
+    if (normalizedLevel === 'ERROR') {
+        console.error(prefix, details || '');
+    } else if (normalizedLevel === 'WARN' || normalizedLevel === 'WARNING') {
+        console.warn(prefix, details || '');
+    } else {
+        console.log(prefix, details || '');
+    }
+
+    const serializedDetails = details ? ` | ${JSON.stringify(details)}` : '';
+    fetch('/api/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            level: normalizedLevel,
+            message: `${prefix}${serializedDetails}`
+        })
+    }).catch(() => {});
+}
 
 let isAudioUnlocked = false;
 async function masterAudioUnlock() {
@@ -398,6 +535,7 @@ async function masterAudioUnlock() {
         v.muted = false; v.volume = 1.0; v.src = unlockSrc; v.load();
         try { await v.play(); v.pause(); v.currentTime = 0; } catch(e) {}
     }
+    await primeSpeechSynthesis();
     isAudioUnlocked = true; audioHint.textContent = '🔊 Audio Active'; audioHint.classList.add('unlocked');
     setTimeout(() => audioHint.style.display = 'none', 3000);
 }
@@ -408,6 +546,11 @@ function resetViewerState() {
     console.log('[Battle] resetViewerState');
     if (winnerTimeoutHandle) clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = null;
     if (resultTimeoutHandle) clearTimeout(resultTimeoutHandle); resultTimeoutHandle = null;
+    if (commentaryHideTimeout) clearTimeout(commentaryHideTimeout); commentaryHideTimeout = null;
+    commentarySpeechNonce += 1;
+    const commentaryBubble = document.getElementById('commentator-bubble');
+    if (commentaryBubble) commentaryBubble.style.display = 'none';
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
     isMatchOver = false; isWinnerLogicActive = false; hasMatchStarted = false;
     p1Active = false; p2Active = false; p1ScoreVal = 0; p2ScoreVal = 0;
     lastP1ScoreVal = 0; lastP2ScoreVal = 0;
@@ -497,25 +640,29 @@ async function startMatch() {
             let resp = await callBridge('/api/live-status', {
                 sessionId: dynamicSessionId,
                 eventType: 'RESET',
+                isReset: true,
                 p1Score: 0,
                 p2Score: 0,
                 lang: commentaryLang,
                 foulLanguage: isFoulEnabled
             }, { timeoutMs: 60000 });
-            if (!resp || !resp.welcomeMessage) {
+            let welcomeText = resp?.welcomeMessage || resp?.commentary || "";
+            if (!welcomeText) {
                 console.warn('[Battle] Initial welcome commentary did not return in time. Retrying once before countdown...');
                 resp = await callBridge('/api/live-status', {
                     sessionId: dynamicSessionId,
                     eventType: 'RESET',
+                    isReset: true,
                     p1Score: 0,
                     p2Score: 0,
                     lang: commentaryLang,
                     foulLanguage: isFoulEnabled
                 }, { timeoutMs: 60000 });
+                welcomeText = resp?.welcomeMessage || resp?.commentary || "";
             }
-            if (resp && resp.welcomeMessage) {
+            if (welcomeText) {
                 // 3. Wait for the entire welcoming hype commentary to be spoken before countdown
-                await displayCommentary(resp.welcomeMessage);
+                await displayCommentary(welcomeText);
             } else {
                 console.warn('[Battle] Initial welcome commentary still missing; continuing match startup without intro.');
             }
@@ -1243,15 +1390,17 @@ function initCentralScrollOfHonor() {
         imgElement.src = ''; // Clear first
         try {
             const snapUrl = `/api/get-snapshot?sessionId=${encodeURIComponent(sessionId)}&role=${roleName}&t=${Date.now()}`;
+            logClientDebug('INFO', 'Central AI Portrait', 'Loading preview image', { sessionId, roleName, snapUrl });
             const response = await fetch(snapUrl);
             if (response.ok) {
                 const data = await response.json();
+                logClientDebug('INFO', 'Central AI Portrait', 'Preview image response received', { roleName, response: data });
                 if (data && data.image) {
                     imgElement.src = data.image;
                 }
             }
         } catch (e) {
-            console.error(`[Central AI Portrait] Failed to load preview for ${roleName}:`, e);
+            logClientDebug('ERROR', 'Central AI Portrait', `Failed to load preview for ${roleName}`, { error: e.message });
         }
     };
 
@@ -1271,7 +1420,7 @@ function initCentralScrollOfHonor() {
 
             const templateId = cfgAiTemplate ? cfgAiTemplate.value : 'random';
             const enhanceUrl = `/api/enhance-portrait`;
-            console.log(`[Central AI Portrait] Invoking trigger API: ${enhanceUrl} for sessionId=${sessionId}, templateId=${templateId}`);
+            logClientDebug('INFO', 'Central AI Portrait', 'Invoking trigger API', { enhanceUrl, sessionId, templateId });
 
             try {
                 const response = await fetch(enhanceUrl, {
@@ -1282,7 +1431,7 @@ function initCentralScrollOfHonor() {
 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const result = await response.json();
-                console.log('[Central AI Portrait] Trigger response:', result);
+                logClientDebug('INFO', 'Central AI Portrait', 'Trigger response received', result);
 
                 const shareUrl = `${window.location.origin}/share.html?sessionId=${encodeURIComponent(sessionId)}`;
                 const qrcodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}`;
@@ -1307,11 +1456,12 @@ function initCentralScrollOfHonor() {
 
                     try {
                         const checkUrl = `/api/check-enhancement?sessionId=${encodeURIComponent(sessionId)}&t=${Date.now()}`;
+                        logClientDebug('INFO', 'Central AI Portrait', 'Polling enhancement status', { pollCount, checkUrl });
                         const checkResp = await fetch(checkUrl);
                         if (!checkResp.ok) throw new Error(`HTTP ${checkResp.status}`);
 
                         const checkResult = await checkResp.json();
-                        console.log('[Central AI Portrait] Poll check response:', checkResult);
+                        logClientDebug('INFO', 'Central AI Portrait', 'Poll response received', checkResult);
 
                         if (checkResult.status === 'COMPLETE' && checkResult.url) {
                             clearInterval(intervalId);
@@ -1330,12 +1480,20 @@ function initCentralScrollOfHonor() {
                             const err = checkResult.status.replace('ERROR:', '').trim();
                             if (err === 'NO_FACE') {
                                 if (aiStatusText) aiStatusText.textContent = '❌ No faces detected by Rekognition. Try holding JJK hand signs closer!';
+                            } else if (err === 'SNAPSHOTS_MISSING') {
+                                if (aiStatusText) aiStatusText.textContent = '❌ Player snapshots were missing in the portrait worker. Check preview loads and upload logs.';
+                            } else if (err === 'QUEUE_SEND_FAILED') {
+                                if (aiStatusText) aiStatusText.textContent = '❌ Portrait queue failed to start. Check the returned debug details.';
+                            } else if (err === 'BEDROCK_LEGACY_MODEL' || err === 'BEDROCK_MODEL_UNAVAILABLE') {
+                                if (aiStatusText) aiStatusText.textContent = '❌ Bedrock image model is unavailable for this AWS account right now. Switch to an active model or re-enable Nova Canvas access.';
+                            } else if (err === 'BEDROCK_ACCESS_DENIED') {
+                                if (aiStatusText) aiStatusText.textContent = '❌ AWS denied Bedrock image generation. Check Lambda Bedrock permissions.';
                             } else {
                                 if (aiStatusText) aiStatusText.textContent = `❌ Style fusion failed. Error: ${err}`;
                             }
                         }
                     } catch (pollErr) {
-                        console.error('[Central AI Portrait] Poll error:', pollErr);
+                        logClientDebug('ERROR', 'Central AI Portrait', 'Poll request failed', { error: pollErr.message });
                     }
 
                     if (pollCount >= maxPolls) {
@@ -1345,11 +1503,12 @@ function initCentralScrollOfHonor() {
                         btnActivateAi.style.opacity = '1';
                         btnActivateAi.style.display = 'block';
                         if (aiStatusText) aiStatusText.textContent = '❌ Generation timed out. Please try again!';
+                        logClientDebug('WARN', 'Central AI Portrait', 'Generation timed out', { sessionId, templateId, maxPolls });
                     }
                 }, 2000);
 
             } catch (err) {
-                console.error('[Central AI Portrait] Trigger failed:', err);
+                logClientDebug('ERROR', 'Central AI Portrait', 'Trigger failed', { error: err.message });
                 if (progressBarContainer) progressBarContainer.style.display = 'none';
                 btnActivateAi.disabled = false;
                 btnActivateAi.style.opacity = '1';

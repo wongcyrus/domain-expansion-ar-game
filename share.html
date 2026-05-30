@@ -99,6 +99,40 @@
             margin-bottom: 40px;
         }
 
+        .snapshot-strip {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .snapshot-card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(10px);
+        }
+
+        .snapshot-card img {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            display: block;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .snapshot-label {
+            padding: 10px 12px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.82);
+        }
+
         /* Portrait Container Styling */
         .portrait-container {
             width: 100%;
@@ -313,6 +347,17 @@
     </header>
 
     <main>
+        <div class="snapshot-strip" id="snapshot-strip">
+            <div class="snapshot-card">
+                <img id="snapshot-p1" alt="Player 1 webcam snapshot">
+                <div class="snapshot-label">Player 1 Capture</div>
+            </div>
+            <div class="snapshot-card">
+                <img id="snapshot-p2" alt="Player 2 webcam snapshot">
+                <div class="snapshot-label">Player 2 Capture</div>
+            </div>
+        </div>
+
         <!-- The Main Interactive Container -->
         <div class="portrait-container" id="portrait-frame">
             
@@ -373,10 +418,56 @@
         const statusTitle = document.getElementById('status-title');
         const statusDesc = document.getElementById('status-desc');
         const btnDownload = document.getElementById('btn-download');
+        const snapshotStrip = document.getElementById('snapshot-strip');
+        const snapshotP1 = document.getElementById('snapshot-p1');
+        const snapshotP2 = document.getElementById('snapshot-p2');
 
         let checkInterval = null;
         let elapsedSeconds = 0;
         const maxWaitSeconds = 60; // Timeout after 1 minute
+
+        function buildSnapshotFallbackDataUrl(playerLabel) {
+            const svg = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480">
+                    <rect width="640" height="480" fill="#11131a"/>
+                    <rect x="24" y="24" width="592" height="432" rx="24" fill="#1b1f2b" stroke="#3a4158" stroke-width="4"/>
+                    <text x="320" y="220" text-anchor="middle" fill="#ffffff" font-size="34" font-family="Arial, sans-serif">Snapshot Missing</text>
+                    <text x="320" y="270" text-anchor="middle" fill="#aab2cf" font-size="24" font-family="Arial, sans-serif">${playerLabel}</text>
+                </svg>
+            `;
+            return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+        }
+
+        async function loadSnapshotInto(roleName, imageElement) {
+            try {
+                const response = await fetch(`/api/get-snapshot?sessionId=${encodeURIComponent(sessionId)}&role=${roleName}&t=${Date.now()}`);
+                if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+
+                const data = await response.json();
+                if (data && data.success && data.image) {
+                    imageElement.src = data.image;
+                    return true;
+                }
+            } catch (err) {
+                console.warn(`[Snapshot Load Failed] ${roleName}`, err);
+            }
+
+            imageElement.src = buildSnapshotFallbackDataUrl(roleName === 'player1' ? 'Player 1' : 'Player 2');
+            return false;
+        }
+
+        async function loadSnapshotPreviews() {
+            const [hasSnapshotP1, hasSnapshotP2] = await Promise.all([
+                loadSnapshotInto('player1', snapshotP1),
+                loadSnapshotInto('player2', snapshotP2)
+            ]);
+
+            if (!hasSnapshotP1 || !hasSnapshotP2) {
+                statusDesc.textContent = 'Player captures are shown first. If AI fusion fails, the original webcam snapshots still stay visible here.';
+            }
+
+            snapshotStrip.classList.remove('hidden');
+        }
 
         async function pollStatus() {
             try {
@@ -464,6 +555,7 @@
         // Start polling immediately on page load
         if (sessionId) {
             console.log(`[Initiating Polling] Session ID: ${sessionId}`);
+            loadSnapshotPreviews();
             pollStatus();
             checkInterval = setInterval(pollStatus, 2000);
         } else {

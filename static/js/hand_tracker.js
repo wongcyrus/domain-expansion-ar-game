@@ -1367,10 +1367,9 @@ class HandTracker {
                     console.log(`[Game] Case 2 (API Enabled): Cooldown follows slider setting: ${this.cooldownMs}ms`);
                 }
             }
-            if (now - this.lastActionTime >= this.cooldownMs) {
-                this.lastActionTime = now;
-            } else {
-                const wait = Math.ceil((this.cooldownMs - (now - this.lastActionTime)) / 1000);
+            const cooldownRemainingMs = this.cooldownMs - (now - this.lastActionTime);
+            if (cooldownRemainingMs > 0) {
+                const wait = Math.ceil(cooldownRemainingMs / 1000);
                 this.domainDisplay.textContent = `${displayName} (Cooldown ${wait}s)`;
             }
         } else {
@@ -1652,11 +1651,28 @@ class HandTracker {
         } catch (e) { console.warn('Audio failed', e); }
     }
 
-    async triggerRobotAction(robotId, action) {
+    async triggerRobotAction(robotId, action, options = {}) {
+        const { bypassCooldown = false } = options;
+
         if (this.disableApi) {
             console.log('[API] Robot API is disabled. Skipping call.');
             if (this.lastResp) this.lastResp.textContent = 'DISABLED';
             return;
+        }
+
+        if (!bypassCooldown) {
+            const now = Date.now();
+            const elapsedMs = now - this.lastActionTime;
+            const remainingMs = this.cooldownMs - elapsedMs;
+
+            if (remainingMs > 0) {
+                const waitSeconds = Math.ceil(remainingMs / 1000);
+                console.log(`[API] Cooldown active. Blocking robot action "${action}" for ${waitSeconds}s more.`);
+                if (this.lastResp) this.lastResp.textContent = `COOLDOWN ${waitSeconds}s`;
+                return { sent: false, cooldownRemainingMs: remainingMs };
+            }
+
+            this.lastActionTime = now;
         }
 
         // Dynamic Player-to-Robot mapping:
@@ -1665,16 +1681,16 @@ class HandTracker {
             if (this.battleRole === "player1") {
                 console.log("[API] Role is Player 1: Concurrently triggering Robots 1, 2, and 3");
                 return Promise.all([
-                    this.triggerRobotAction("robot_1", action),
-                    this.triggerRobotAction("robot_2", action),
-                    this.triggerRobotAction("robot_3", action)
+                    this.triggerRobotAction("robot_1", action, { bypassCooldown: true }),
+                    this.triggerRobotAction("robot_2", action, { bypassCooldown: true }),
+                    this.triggerRobotAction("robot_3", action, { bypassCooldown: true })
                 ]);
             } else if (this.battleRole === "player2") {
                 console.log("[API] Role is Player 2: Concurrently triggering Robots 4, 5, and 6");
                 return Promise.all([
-                    this.triggerRobotAction("robot_4", action),
-                    this.triggerRobotAction("robot_5", action),
-                    this.triggerRobotAction("robot_6", action)
+                    this.triggerRobotAction("robot_4", action, { bypassCooldown: true }),
+                    this.triggerRobotAction("robot_5", action, { bypassCooldown: true }),
+                    this.triggerRobotAction("robot_6", action, { bypassCooldown: true })
                 ]);
             }
         }
