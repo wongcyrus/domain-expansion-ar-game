@@ -617,12 +617,12 @@ class HandTracker {
         
         try {
             const capCanvas = document.createElement('canvas');
-            capCanvas.width = 320;
-            capCanvas.height = 240;
+            capCanvas.width = 640;
+            capCanvas.height = 480;
             const capCtx = capCanvas.getContext('2d');
             capCtx.drawImage(this.video, 0, 0, capCanvas.width, capCanvas.height);
             
-            const dataUrl = capCanvas.toDataURL('image/jpeg', 0.6);
+            const dataUrl = capCanvas.toDataURL('image/jpeg', 0.7);
             const base64Str = dataUrl.split('base64,')[1];
             
             const openclawSessionId = sessionIdOverride || localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'mcpserver';

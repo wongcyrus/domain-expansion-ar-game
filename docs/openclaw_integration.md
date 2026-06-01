@@ -273,6 +273,8 @@ Our Battle Arena features a highly interactive and fully-equipped **AI Commentat
     *   Setting it to `0%` (or muting) will skip the audio playback but **simulate the speaking delay** to keep game triggers and visuals synchronized across multiple player devices.
     *   Includes a quick mute button (`🔇` / `🔊`) for seamless control during a live tournament.
 
+👉 **For technical details on the audio playback synchronization and fallback logic, see [docs/commentary_system.md](commentary_system.md).**
+
 ### 6. Capture Webcam Snapshots | 相機視覺觀察
 *   **ID**: `cfg-commentator-webcam`
 *   **Description**: When active, player cameras will snap compressed image frames at match-start (`RESET`) and match-end (`FINISH`), uploading them alongside API requests. Nobara will actively look at your clothes, facial panic, posture, or glasses and make fun of them! If disabled, she falls back gracefully to standard combat text comments.

@@ -397,7 +397,7 @@ function getSystemPrompt(isZh, foulLanguage) {
 }
 
 app.post('/api/live-status', async (req, res) => {
-    const { sessionId, eventType, detail, p1Score, p2Score, p1Total, p2Total, lang, foulLanguage, agentImagePolicy } = req.body;
+    const { sessionId, eventType, detail, p1Score, p2Score, p1Total, p2Total, lang, foulLanguage, agentImagePolicy, ttsMode } = req.body;
     const resolvedSessionId = sessionId || "main";
     const { agentId } = loadOpenClawConfig();
     const isZh = lang && lang.toLowerCase().startsWith('zh');
@@ -412,8 +412,12 @@ app.post('/api/live-status', async (req, res) => {
                 p1Score: p1Score || 0,
                 p2Score: p2Score || 0,
                 text: detail || "",
+                eventType: eventType || "",
+                lang: lang || "en",
+                foulLanguage: !!foulLanguage,
                 isReset: eventType === "RESET",
-                agentImagePolicy: agentImagePolicy || "always"
+                agentImagePolicy: agentImagePolicy || "always",
+                ttsMode: ttsMode || "browser"
             };
             const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/live-status`, {
                 method: 'POST',
@@ -423,11 +427,16 @@ app.post('/api/live-status', async (req, res) => {
             if (response.ok) {
                 const data = await response.json();
                 const resolvedCommentary = data.welcomeMessage || data.commentary || "";
-                console.log(`[AWS Bridge Proxy] Received AWS Commentary: "${resolvedCommentary}"`);
+                console.log(`[AWS Bridge Proxy] Received AWS Commentary: "${resolvedCommentary}" ttsMode=${data.ttsMode || 'browser'} hasAudioUrl=${!!data.audioUrl}`);
                 if (eventType === "RESET") {
                     return res.json({
                         ok: true,
                         welcomeMessage: resolvedCommentary,
+                        commentary: resolvedCommentary,
+                        ttsMode: data.ttsMode || "browser",
+                        audioUrl: data.audioUrl || "",
+                        voiceId: data.voiceId || "",
+                        duration: data.duration || 0,
                         debugPrompt: data.debugPrompt || "",
                         debugImageContext: data.debugImageContext || null
                     });
@@ -435,12 +444,17 @@ app.post('/api/live-status', async (req, res) => {
                     return res.json({
                         ok: true,
                         commentary: resolvedCommentary,
+                        ttsMode: data.ttsMode || "browser",
+                        audioUrl: data.audioUrl || "",
+                        voiceId: data.voiceId || "",
+                        duration: data.duration || 0,
                         debugPrompt: data.debugPrompt || "",
                         debugImageContext: data.debugImageContext || null
                     });
                 }
             } else {
-                console.error(`[AWS Bridge Proxy Error] Status: ${response.status}`);
+                const errorText = await response.text();
+                console.error(`[AWS Bridge Proxy Error] Status: ${response.status} Body: ${errorText}`);
             }
         } catch (err) {
             console.error(`[AWS Bridge Proxy Exception]:`, err.message);
@@ -468,6 +482,9 @@ app.post('/api/live-status', async (req, res) => {
         return res.json({
             ok: true,
             welcomeMessage,
+            commentary: welcomeMessage,
+            ttsMode: 'browser',
+            duration: 0,
             debugPrompt: openingInstruction,
             debugImageContext: {
                 shouldAttachImage: attachImages
@@ -508,6 +525,8 @@ app.post('/api/live-status', async (req, res) => {
     res.json({
         ok: true,
         commentary,
+        ttsMode: 'browser',
+        duration: 0,
         debugPrompt: promptText,
         debugImageContext: {
             shouldAttachImage: attachImages
@@ -516,7 +535,7 @@ app.post('/api/live-status', async (req, res) => {
 });
 
 app.post('/api/battle-result', async (req, res) => {
-    const { sessionId, winner, p1Score, p2Score, lang, foulLanguage, agentImagePolicy } = req.body;
+    const { sessionId, winner, p1Score, p2Score, lang, foulLanguage, agentImagePolicy, ttsMode } = req.body;
     const resolvedSessionId = sessionId || "main";
     const { agentId } = loadOpenClawConfig();
 
@@ -530,8 +549,12 @@ app.post('/api/battle-result', async (req, res) => {
                 p1Score: p1Score || 0,
                 p2Score: p2Score || 0,
                 text: winner || "DRAW",
+                eventType: "BATTLE_RESULT",
+                lang: lang || "en",
+                foulLanguage: !!foulLanguage,
                 isReset: true,
-                agentImagePolicy: agentImagePolicy || "always"
+                agentImagePolicy: agentImagePolicy || "always",
+                ttsMode: ttsMode || "browser"
             };
             const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/battle-result`, {
                 method: 'POST',
@@ -540,15 +563,20 @@ app.post('/api/battle-result', async (req, res) => {
             });
             if (response.ok) {
                 const data = await response.json();
-                console.log(`[AWS Bridge Proxy] Received AWS Battle Result: "${data.commentary}"`);
+                console.log(`[AWS Bridge Proxy] Received AWS Battle Result: "${data.commentary}" ttsMode=${data.ttsMode || 'browser'} hasAudioUrl=${!!data.audioUrl}`);
                 return res.json({
                     ok: true,
                     commentary: data.commentary,
+                    ttsMode: data.ttsMode || "browser",
+                    audioUrl: data.audioUrl || "",
+                    voiceId: data.voiceId || "",
+                    duration: data.duration || 0,
                     debugPrompt: data.debugPrompt || "",
                     debugImageContext: data.debugImageContext || null
                 });
             } else {
-                console.error(`[AWS Bridge Proxy Error] Status: ${response.status}`);
+                const errorText = await response.text();
+                console.error(`[AWS Bridge Proxy Error] Status: ${response.status} Body: ${errorText}`);
             }
         } catch (err) {
             console.error(`[AWS Bridge Proxy Exception]:`, err.message);
@@ -580,6 +608,8 @@ app.post('/api/battle-result', async (req, res) => {
     res.json({
         ok: true,
         commentary,
+        ttsMode: 'browser',
+        duration: 0,
         debugPrompt: promptText,
         debugImageContext: {
             shouldAttachImage: attachImages

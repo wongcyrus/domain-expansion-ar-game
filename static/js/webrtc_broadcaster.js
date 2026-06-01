@@ -273,7 +273,7 @@ class BattleModeSync {
         if (to && to !== this.role && to !== this.socketId) return;
 
         // Only log important signaling events
-        if (type !== 'GAME_STATE' && type !== 'ICE_CANDIDATE') {
+        if (type !== 'GAME_STATE' && type !== 'ICE_CANDIDATE' && type !== 'PLAYER_READY') {
             console.log(`[BattleSync] Received ${type} from ${senderID} (${from})`);
         }
 
@@ -291,12 +291,10 @@ class BattleModeSync {
                     const lastJoinRequest = this.viewerJoinThrottle.get(targetID) || 0;
 
                     if (this.hasUsablePeerConnection(existingPc)) {
-                        console.log(`[BattleSync] Player ${senderID} is already connected, skipping duplicate stream request.`);
                         break;
                     }
 
                     if (Date.now() - lastJoinRequest < 5000) {
-                        console.log(`[BattleSync] Player ${senderID} was requested recently, throttling duplicate stream request.`);
                         break;
                     }
 

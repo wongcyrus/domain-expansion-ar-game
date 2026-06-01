@@ -1,3 +1,5 @@
+console.log('[Battle] JS version 2.5 loaded');
+
 let sync = null;
 const p1Video = document.getElementById('p1-video'), p2Video = document.getElementById('p2-video'), p1Waiting = document.getElementById('p1-waiting'), p2Waiting = document.getElementById('p2-waiting');
 const p1Score = document.getElementById('p1-score'), p2Score = document.getElementById('p2-score'), p1Domain = document.getElementById('p1-domain'), p2Domain = document.getElementById('p2-domain');
@@ -143,6 +145,22 @@ let pendingCasts = [];
 let castTimeoutHandle = null;
 let commentarySpeechNonce = 0;
 let isSpeechPrimed = false;
+let activeCommentaryAudio = null;
+let isCommentaryPlaying = false;
+let commentaryRequestCount = 0;
+let commentaryBusyUntil = 0;
+
+const COMMENTARY_END_BUFFER_MS = 600;
+const COMMENTARY_SAFETY_TIMEOUT_BUFFER_MS = 5000;
+const COMMENTARY_REQUEST_RETRY_BUFFER_MS = 150;
+
+const POLLY_VOICE_BY_LANG = {
+    'zh-HK': { voiceId: 'Hiujin', label: 'Hiujin' },
+    'zh-TW': { voiceId: 'Zhiyu', label: 'Zhiyu' },
+    'en': { voiceId: 'Joanna', label: 'Joanna' },
+    'ja': { voiceId: 'Mizuki', label: 'Mizuki' }
+};
+const SILENT_AUDIO_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
 
 function getOpenclawActiveSessionId() {
     return localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'mcpserver';
@@ -150,6 +168,146 @@ function getOpenclawActiveSessionId() {
 
 function getOpenclawBaseSessionId() {
     return localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'mcpserver';
+}
+
+function getCommentaryLanguage() {
+    return document.getElementById('cfg-commentary-lang')?.value || 'en';
+}
+
+function getCommentaryTtsMode() {
+    const mode = document.getElementById('cfg-commentary-tts-mode')?.value || localStorage.getItem('cfg-commentary-tts-mode') || 'browser';
+    return mode === 'aws' ? 'aws' : 'browser';
+}
+
+function getPollyVoiceConfig(language = getCommentaryLanguage()) {
+    return POLLY_VOICE_BY_LANG[language] || POLLY_VOICE_BY_LANG.en;
+}
+
+function getCommentaryAudioElement() {
+    if (!activeCommentaryAudio) {
+        activeCommentaryAudio = new Audio();
+        activeCommentaryAudio.preload = 'auto';
+    }
+    return activeCommentaryAudio;
+}
+
+function stopCurrentCommentaryAudio() {
+    if (!activeCommentaryAudio) {
+        return;
+    }
+
+    try {
+        // Clear all handlers to prevent race conditions with subsequent playback requests
+        activeCommentaryAudio.onended = null;
+        activeCommentaryAudio.onerror = null;
+        activeCommentaryAudio.oncanplay = null;
+        activeCommentaryAudio.onplay = null;
+        activeCommentaryAudio.onplaying = null;
+        activeCommentaryAudio.onloadedmetadata = null;
+
+        activeCommentaryAudio.pause();
+        activeCommentaryAudio.removeAttribute('src');
+        activeCommentaryAudio.src = '';
+        activeCommentaryAudio.load();
+    } catch (err) {
+        console.warn('[TTS] Failed to stop active AWS commentary audio:', err);
+    }
+}
+
+function stopCommentaryPlayback() {
+    commentarySpeechNonce += 1;
+    isCommentaryPlaying = false;
+    stopCurrentCommentaryAudio();
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
+    commentaryBusyUntil = Math.max(commentaryBusyUntil, Date.now() + COMMENTARY_END_BUFFER_MS);
+}
+
+function normalizeCommentaryPayload(payload) {
+    if (typeof payload === 'string') {
+        return {
+            text: payload,
+            audioUrl: '',
+            ttsMode: getCommentaryTtsMode(),
+            voiceId: '',
+            duration: 0
+        };
+    }
+
+    const resolvedMode = payload?.ttsMode === 'aws'
+        ? 'aws'
+        : payload?.ttsMode === 'browser'
+            ? 'browser'
+            : getCommentaryTtsMode();
+
+    return {
+        text: payload?.text || payload?.welcomeMessage || payload?.commentary || '',
+        audioUrl: payload?.audioUrl || '',
+        ttsMode: resolvedMode,
+        voiceId: payload?.voiceId || '',
+        duration: Number(payload?.duration || 0)
+    };
+}
+
+function getCommentaryExpectedDurationMs(payload) {
+    const commentary = normalizeCommentaryPayload(payload);
+    if (Number.isFinite(commentary.duration) && commentary.duration > 0) {
+        return commentary.duration * 1000;
+    }
+    return estimateCommentaryDurationMs(commentary.text);
+}
+
+function reserveCommentaryWindow(payload, extraBufferMs = COMMENTARY_END_BUFFER_MS) {
+    const durationMs = getCommentaryExpectedDurationMs(payload);
+    const holdUntil = Date.now() + Math.max(0, durationMs) + extraBufferMs;
+    commentaryBusyUntil = Math.max(commentaryBusyUntil, holdUntil);
+}
+
+function markCommentaryPlaybackStarted(payload) {
+    isCommentaryPlaying = true;
+    reserveCommentaryWindow(payload);
+}
+
+function markCommentaryPlaybackFinished() {
+    isCommentaryPlaying = false;
+    commentaryBusyUntil = Math.max(commentaryBusyUntil, Date.now() + COMMENTARY_END_BUFFER_MS);
+}
+
+function getCommentaryBusyDelayMs(now = Date.now()) {
+    return Math.max(0, commentaryBusyUntil - now);
+}
+
+function isCommentaryRequestAllowed(now = Date.now()) {
+    return commentaryRequestCount === 0 && !isCommentaryPlaying && getCommentaryBusyDelayMs(now) <= 0;
+}
+
+async function requestCommentary(endpoint, body, options = {}) {
+    commentaryRequestCount += 1;
+    try {
+        const response = await callBridge(endpoint, body, options);
+        const commentary = normalizeCommentaryPayload(response);
+        console.log(`[Commentary] ${endpoint} response handled`, {
+            hasResponse: !!response,
+            ttsMode: commentary.ttsMode,
+            hasAudioUrl: !!commentary.audioUrl,
+            durationSeconds: commentary.duration,
+            textLength: commentary.text.length,
+            autoPlay: options.autoPlay !== false,
+            requestCount: commentaryRequestCount
+        });
+        if (commentary.text) {
+            reserveCommentaryWindow(commentary);
+            if (options.autoPlay !== false) {
+                await displayCommentary(response);
+            }
+        } else {
+            commentaryBusyUntil = Math.max(commentaryBusyUntil, Date.now() + COMMENTARY_END_BUFFER_MS);
+        }
+        return response;
+    } finally {
+        commentaryRequestCount = Math.max(0, commentaryRequestCount - 1);
+    }
 }
 
 async function callBridge(endpoint, body, options = {}) {
@@ -161,6 +319,7 @@ async function callBridge(endpoint, body, options = {}) {
             body.lang = localStorage.getItem('user_language') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
         }
         body.agentImagePolicy = document.getElementById('cfg-commentator-image-policy')?.value || localStorage.getItem('agent_image_policy') || 'always';
+        body.ttsMode = body.ttsMode || getCommentaryTtsMode();
     }
     
     try {
@@ -225,8 +384,11 @@ function estimateCommentaryDurationMs(text) {
     return Math.min(10000, estimateMs);
 }
 
-function waitForCommentaryDuration(text) {
-    const estimateMs = estimateCommentaryDurationMs(text);
+function waitForCommentaryDuration(text, durationMs = 0) {
+    const explicitDurationMs = Number(durationMs);
+    const estimateMs = Number.isFinite(explicitDurationMs) && explicitDurationMs > 0
+        ? explicitDurationMs
+        : estimateCommentaryDurationMs(text);
     if (!estimateMs) {
         return Promise.resolve();
     }
@@ -293,7 +455,7 @@ async function primeSpeechSynthesis(force = false) {
     isSpeechPrimed = true;
 }
 
-function displayCommentary(text) {
+function displayCommentary(payload) {
     const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
     if (!isCommentatorEnabled) return Promise.resolve();
 
@@ -301,12 +463,24 @@ function displayCommentary(text) {
     const txtNode = document.getElementById('commentator-text');
     if (!bubble || !txtNode) return Promise.resolve();
 
-    txtNode.textContent = text;
+    const commentary = normalizeCommentaryPayload(payload);
+    if (!commentary.text) {
+        return Promise.resolve();
+    }
+
+    console.log('[Commentary] Displaying commentary payload', {
+        ttsMode: commentary.ttsMode,
+        hasAudioUrl: !!commentary.audioUrl,
+        durationSeconds: commentary.duration,
+        text: commentary.text
+    });
+
+    txtNode.textContent = commentary.text;
     bubble.style.display = 'block';
 
     if (commentaryHideTimeout) clearTimeout(commentaryHideTimeout);
     
-    const p = speakCommentary(text);
+    const p = speakCommentary(commentary);
 
     commentaryHideTimeout = setTimeout(() => {
         bubble.style.display = 'none';
@@ -315,9 +489,200 @@ function displayCommentary(text) {
     return p;
 }
 
-function speakCommentary(text) {
+function playAwsCommentaryAudio(audioUrl, fallbackText, durationSeconds = 0) {
     const volumeSlider = document.getElementById('cfg-commentator-volume');
     const ttsVolume = volumeSlider ? parseInt(volumeSlider.value) : 100; // 0 to 100
+    if (!audioUrl) {
+        console.warn('[TTS] AWS mode requested without audioUrl. Falling back to browser TTS.');
+        return speakBrowserCommentary(fallbackText, durationSeconds);
+    }
+
+    const requestNonce = ++commentarySpeechNonce;
+    return new Promise((resolve) => {
+        let settled = false;
+        let playbackStarted = false;
+        let startupTimeoutHandle = null;
+        let durationTimeoutHandle = null;
+        let blobObjectUrl = null;
+        const fallbackDurationMs = Number.isFinite(Number(durationSeconds)) && Number(durationSeconds) > 0
+            ? Number(durationSeconds) * 1000
+            : estimateCommentaryDurationMs(fallbackText);
+        const clearTimers = () => {
+            if (startupTimeoutHandle) {
+                clearTimeout(startupTimeoutHandle);
+                startupTimeoutHandle = null;
+            }
+            if (durationTimeoutHandle) {
+                clearTimeout(durationTimeoutHandle);
+                durationTimeoutHandle = null;
+            }
+            if (blobObjectUrl) {
+                URL.revokeObjectURL(blobObjectUrl);
+                blobObjectUrl = null;
+            }
+        };
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            clearTimers();
+            resolve();
+        };
+
+        const fallbackToBrowser = () => {
+            if (requestNonce !== commentarySpeechNonce) {
+                finish();
+                return;
+            }
+            console.warn('[TTS] Switching to browser commentary fallback.', {
+                requestNonce,
+                commentarySpeechNonce,
+                fallbackTextLength: fallbackText?.length || 0,
+                durationSeconds
+            });
+            stopCurrentCommentaryAudio();
+            speakBrowserCommentary(fallbackText, durationSeconds).then(finish);
+        };
+
+        try {
+            stopCurrentCommentaryAudio();
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
+            const audio = getCommentaryAudioElement();
+            audio.volume = Math.max(0, Math.min(1, ttsVolume / 100));
+            audio.muted = false;
+            console.log('[TTS] Preparing AWS Polly playback', {
+                requestNonce,
+                audioUrl,
+                durationSeconds,
+                volume: audio.volume,
+                unlocked: isAudioUnlocked,
+                readyState: audio.readyState,
+                networkState: audio.networkState
+            });
+            markCommentaryPlaybackStarted({
+                text: fallbackText,
+                audioUrl,
+                ttsMode: 'aws',
+                duration: durationSeconds
+            });
+            startupTimeoutHandle = setTimeout(() => {
+                if (!playbackStarted) {
+                    console.warn('[TTS] AWS Polly audio did not start in time. Falling back to browser TTS.');
+                    markCommentaryPlaybackFinished();
+                    fallbackToBrowser();
+                }
+            }, 4000);
+
+            audio.onended = () => {
+                console.log('[TTS] AWS Polly playback ended.', {
+                    requestNonce,
+                    currentTime: audio.currentTime,
+                    duration: audio.duration
+                });
+                if (requestNonce === commentarySpeechNonce) {
+                    stopCurrentCommentaryAudio();
+                }
+                markCommentaryPlaybackFinished();
+                finish();
+            };
+            audio.onerror = (evt) => {
+                const error = audio.error;
+                console.warn('[TTS] AWS Polly audio playback failed. Falling back to browser TTS.', {
+                    requestNonce,
+                    code: error ? error.code : 'unknown',
+                    message: error ? error.message : 'No error message',
+                    readyState: audio.readyState,
+                    networkState: audio.networkState,
+                    src: audio.src ? (audio.src.length > 100 ? audio.src.substring(0, 100) + '...' : audio.src) : 'none'
+                });
+                markCommentaryPlaybackFinished();
+                fallbackToBrowser();
+            };
+            audio.onloadedmetadata = () => {
+                console.log('[TTS] AWS Polly metadata loaded.', {
+                    requestNonce,
+                    duration: audio.duration,
+                    readyState: audio.readyState,
+                    networkState: audio.networkState
+                });
+            };
+            audio.oncanplay = () => {
+                console.log('[TTS] AWS Polly can play.', {
+                    requestNonce,
+                    readyState: audio.readyState,
+                    networkState: audio.networkState
+                });
+            };
+            const handlePlaybackStarted = () => {
+                playbackStarted = true;
+                console.log('[TTS] AWS Polly playback started.', {
+                    requestNonce,
+                    currentTime: audio.currentTime,
+                    duration: audio.duration,
+                    src: audio.currentSrc || audio.src
+                });
+                if (startupTimeoutHandle) {
+                    clearTimeout(startupTimeoutHandle);
+                    startupTimeoutHandle = null;
+                }
+                const effectiveDurationMs = (audio.duration && Number.isFinite(audio.duration) && audio.duration > 0)
+                    ? audio.duration * 1000
+                    : fallbackDurationMs;
+
+                if (effectiveDurationMs > 0 && !durationTimeoutHandle) {
+                    durationTimeoutHandle = setTimeout(() => {
+                        if (requestNonce !== commentarySpeechNonce || settled) {
+                            return;
+                        }
+                        console.warn('[TTS] AWS Polly audio exceeded expected duration. Finalizing playback window.', {
+                            effectiveDurationMs,
+                            duration: audio.duration,
+                            fallbackDurationMs
+                        });
+                        stopCurrentCommentaryAudio();
+                        markCommentaryPlaybackFinished();
+                        finish();
+                    }, effectiveDurationMs + COMMENTARY_SAFETY_TIMEOUT_BUFFER_MS);
+                }
+            };
+            audio.onplay = handlePlaybackStarted;
+            audio.onplaying = handlePlaybackStarted;
+
+            console.log('[TTS] Setting AWS Polly source URL', { requestNonce, audioUrl: audioUrl.substring(0, 100) + '...' });
+            audio.src = audioUrl;
+            audio.load();
+
+            const playPromise = audio.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+                playPromise.then(() => {
+                    console.log('[TTS] AWS Polly play() resolved.', {
+                        requestNonce,
+                        currentTime: audio.currentTime,
+                        paused: audio.paused
+                    });
+                }).catch((err) => {
+                    console.warn('[TTS] AWS Polly play() rejected. Falling back to browser TTS.', err);
+                    if (requestNonce === commentarySpeechNonce) {
+                        markCommentaryPlaybackFinished();
+                        fallbackToBrowser();
+                    }
+                });
+            }
+        } catch (err) {
+            console.warn('[TTS] AWS Polly setup failed. Falling back to browser TTS.', err);
+            markCommentaryPlaybackFinished();
+            fallbackToBrowser();
+        }
+    });
+}
+
+function speakBrowserCommentary(text, expectedDurationSeconds = 0) {
+    const volumeSlider = document.getElementById('cfg-commentator-volume');
+    const ttsVolume = volumeSlider ? parseInt(volumeSlider.value) : 100; // 0 to 100
+    const expectedDurationMs = Number.isFinite(Number(expectedDurationSeconds)) && Number(expectedDurationSeconds) > 0
+        ? Number(expectedDurationSeconds) * 1000
+        : 0;
     
     // Safety sanitization: remove formatting characters and emojis client-side before speaking
     let sanitizedText = text || "";
@@ -332,19 +697,20 @@ function speakCommentary(text) {
     }
 
     if (ttsVolume === 0) {
-        const estimateMs = estimateCommentaryDurationMs(sanitizedText);
+        const estimateMs = expectedDurationMs || estimateCommentaryDurationMs(sanitizedText);
         console.log(`[TTS] Local audio is muted (Volume 0%). Simulating speaking delay of ${estimateMs}ms for physical device sync.`);
-        return waitForCommentaryDuration(sanitizedText);
+        return waitForCommentaryDuration(sanitizedText, expectedDurationMs);
     }
 
     if (!window.speechSynthesis) {
         console.warn("[TTS] window.speechSynthesis is not supported in this browser!");
-        return Promise.resolve();
+        return waitForCommentaryDuration(sanitizedText, expectedDurationMs);
     }
     console.log(`[TTS] speakCommentary trigger: "${sanitizedText}" | Current setting volume: ${ttsVolume}%`);
     const requestNonce = ++commentarySpeechNonce;
     return new Promise((resolve) => {
         try {
+            stopCurrentCommentaryAudio();
             console.log("[TTS] Cancelling existing speech queue...");
             window.speechSynthesis.cancel();
             
@@ -352,10 +718,12 @@ function speakCommentary(text) {
             let speechStarted = false;
             let retriedAfterColdStart = false;
             let settled = false;
+            markCommentaryPlaybackStarted({ text: sanitizedText, ttsMode: 'browser' });
 
             const finish = async () => {
                 if (settled) return;
                 settled = true;
+                markCommentaryPlaybackFinished();
                 resolve();
             };
 
@@ -385,12 +753,12 @@ function speakCommentary(text) {
                             window.speechSynthesis.speak(utterance);
                         } catch (retryErr) {
                             console.warn("[TTS] Speech synthesis retry failed:", retryErr);
-                            waitForCommentaryDuration(sanitizedText).then(finish);
+                            waitForCommentaryDuration(sanitizedText, expectedDurationMs).then(finish);
                         }
                     }, 120);
                     return;
                 }
-                waitForCommentaryDuration(sanitizedText).then(finish);
+                waitForCommentaryDuration(sanitizedText, expectedDurationMs).then(finish);
             };
 
             const voices = window.speechSynthesis.getVoices();
@@ -491,14 +859,32 @@ function speakCommentary(text) {
                     window.speechSynthesis.speak(utterance);
                 } catch (e) {
                     console.warn("[TTS] Speech synthesis speak failed:", e);
-                    waitForCommentaryDuration(sanitizedText).then(finish);
+                    waitForCommentaryDuration(sanitizedText, expectedDurationMs).then(finish);
                 }
             }, 100);
         } catch (e) {
             console.warn("[TTS] Speech synthesis failed:", e);
-            waitForCommentaryDuration(sanitizedText).then(resolve);
+            waitForCommentaryDuration(sanitizedText, expectedDurationMs).then(resolve);
         }
     });
+}
+
+function speakCommentary(payload) {
+    const commentary = normalizeCommentaryPayload(payload);
+    if (!commentary.text) {
+        return Promise.resolve();
+    }
+
+    console.log('[TTS] speakCommentary dispatch', {
+        ttsMode: commentary.ttsMode,
+        hasAudioUrl: !!commentary.audioUrl,
+        durationSeconds: commentary.duration
+    });
+
+    if (commentary.ttsMode === 'aws' && commentary.audioUrl) {
+        return playAwsCommentaryAudio(commentary.audioUrl, commentary.text, commentary.duration);
+    }
+    return speakBrowserCommentary(commentary.text);
 }
 
 function addTickerMsg(msg, playerClass) { const el = document.createElement('div'); el.className = `ticker-msg ${playerClass}`; el.textContent = `> ${msg}`; ticker.appendChild(el); ticker.scrollTop = ticker.scrollHeight; if (ticker.children.length > 5) ticker.removeChild(ticker.firstChild); }
@@ -528,16 +914,42 @@ function logClientDebug(level, scope, message, details = null) {
 }
 
 let isAudioUnlocked = false;
+let audioUnlockPromise = null;
 async function masterAudioUnlock() {
     if (isAudioUnlocked) return;
-    const unlockSrc = getVideoUrl('win/heroacademy.mp4');
-    for (const v of [p1Cinema, p2Cinema, resultCinema]) {
-        v.muted = false; v.volume = 1.0; v.src = unlockSrc; v.load();
-        try { await v.play(); v.pause(); v.currentTime = 0; } catch(e) {}
+    if (audioUnlockPromise) {
+        return audioUnlockPromise;
     }
-    await primeSpeechSynthesis();
-    isAudioUnlocked = true; audioHint.textContent = '🔊 Audio Active'; audioHint.classList.add('unlocked');
-    setTimeout(() => audioHint.style.display = 'none', 3000);
+
+    audioUnlockPromise = (async () => {
+        try {
+            const unlockAudio = getCommentaryAudioElement();
+            unlockAudio.pause();
+            unlockAudio.src = SILENT_AUDIO_DATA_URI;
+            unlockAudio.volume = 0;
+            const playPromise = unlockAudio.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+                await playPromise;
+            }
+            unlockAudio.pause();
+            unlockAudio.currentTime = 0;
+            console.log('[TTS] Master audio unlock succeeded.');
+        } catch (e) {
+            console.warn('[TTS] Master audio unlock failed.', e);
+        }
+
+        await primeSpeechSynthesis();
+        isAudioUnlocked = true;
+        audioHint.textContent = '🔊 Audio Active';
+        audioHint.classList.add('unlocked');
+        setTimeout(() => audioHint.style.display = 'none', 3000);
+    })();
+
+    try {
+        await audioUnlockPromise;
+    } finally {
+        audioUnlockPromise = null;
+    }
 }
 document.addEventListener('click', masterAudioUnlock, { once: true });
 emergencyUnmute.addEventListener('click', (e) => { e.stopPropagation(); resultCinema.muted = false; resultCinema.volume = 1.0; resultCinema.play(); emergencyUnmute.style.display = 'none'; });
@@ -547,15 +959,19 @@ function resetViewerState() {
     if (winnerTimeoutHandle) clearTimeout(winnerTimeoutHandle); winnerTimeoutHandle = null;
     if (resultTimeoutHandle) clearTimeout(resultTimeoutHandle); resultTimeoutHandle = null;
     if (commentaryHideTimeout) clearTimeout(commentaryHideTimeout); commentaryHideTimeout = null;
-    commentarySpeechNonce += 1;
+    if (castTimeoutHandle) clearTimeout(castTimeoutHandle); castTimeoutHandle = null;
+    stopCommentaryPlayback();
     const commentaryBubble = document.getElementById('commentator-bubble');
     if (commentaryBubble) commentaryBubble.style.display = 'none';
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
     isMatchOver = false; isWinnerLogicActive = false; hasMatchStarted = false;
     p1Active = false; p2Active = false; p1ScoreVal = 0; p2ScoreVal = 0;
     lastP1ScoreVal = 0; lastP2ScoreVal = 0;
+    pendingCasts = [];
     spokenTimeTimemarks.clear();
     lastCustomCommentaryTime = 0; lastPeriodicCommentaryTime = 0; prevMatchActive = false;
+    commentaryRequestCount = 0;
+    isCommentaryPlaying = false;
+    commentaryBusyUntil = 0;
     activeCinematicsCount = 0;
     resultOverlay.style.display = 'none'; emergencyUnmute.style.display = 'none';
     if (skipResultBtn) skipResultBtn.style.display = 'none';
@@ -637,7 +1053,7 @@ async function startMatch() {
 
             const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
             const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
-            let resp = await callBridge('/api/live-status', {
+            let resp = await requestCommentary('/api/live-status', {
                 sessionId: dynamicSessionId,
                 eventType: 'RESET',
                 isReset: true,
@@ -649,7 +1065,7 @@ async function startMatch() {
             let welcomeText = resp?.welcomeMessage || resp?.commentary || "";
             if (!welcomeText) {
                 console.warn('[Battle] Initial welcome commentary did not return in time. Retrying once before countdown...');
-                resp = await callBridge('/api/live-status', {
+                resp = await requestCommentary('/api/live-status', {
                     sessionId: dynamicSessionId,
                     eventType: 'RESET',
                     isReset: true,
@@ -660,10 +1076,7 @@ async function startMatch() {
                 }, { timeoutMs: 60000 });
                 welcomeText = resp?.welcomeMessage || resp?.commentary || "";
             }
-            if (welcomeText) {
-                // 3. Wait for the entire welcoming hype commentary to be spoken before countdown
-                await displayCommentary(welcomeText);
-            } else {
+            if (!welcomeText) {
                 console.warn('[Battle] Initial welcome commentary still missing; continuing match startup without intro.');
             }
         }
@@ -715,6 +1128,59 @@ async function startMatch() {
     }
 }
 startBtn.addEventListener('click', startMatch);
+
+function schedulePendingCastCommentary(delayMs) {
+    if (castTimeoutHandle) {
+        clearTimeout(castTimeoutHandle);
+    }
+    castTimeoutHandle = setTimeout(flushPendingCastCommentary, delayMs);
+}
+
+async function flushPendingCastCommentary() {
+    castTimeoutHandle = null;
+    if (pendingCasts.length === 0) {
+        return;
+    }
+
+    if (!isCommentaryRequestAllowed()) {
+        schedulePendingCastCommentary(Math.max(300, getCommentaryBusyDelayMs() + COMMENTARY_REQUEST_RETRY_BUFFER_MS));
+        return;
+    }
+
+    const currentCasts = [...pendingCasts];
+    pendingCasts = [];
+
+    let detail = "";
+    if (currentCasts.length === 1) {
+        const cast = currentCasts[0];
+        detail = `${cast.playerID === 'player1' ? 'Player 1' : 'Player 2'} successfully activated ${cast.actionName}`;
+    } else {
+        const p1Cast = currentCasts.find(c => c.playerID === 'player1');
+        const p2Cast = currentCasts.find(c => c.playerID === 'player2');
+        if (p1Cast && p2Cast) {
+            detail = `Incredible! Both Player 1 (who cast ${p1Cast.actionName}) and Player 2 (who cast ${p2Cast.actionName}) successfully activated their techniques at the exact same time!`;
+        } else {
+            detail = `Multiple techniques activated simultaneously: ` + currentCasts.map(c => `${c.playerID === 'player1' ? 'Player 1' : 'Player 2'} (${c.actionName})`).join(', ');
+        }
+    }
+
+    const openclawSessionId = getOpenclawActiveSessionId();
+    const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+    const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
+
+    await requestCommentary('/api/live-status', {
+        sessionId: openclawSessionId,
+        eventType: 'CAST',
+        detail: detail,
+        p1Score: p1ScoreVal,
+        p2Score: p2ScoreVal,
+        p1Total: p1TotalActions,
+        p2Total: p2TotalActions,
+        timeLeft: Math.max(p1Time, p2Time),
+        lang: commentaryLang,
+        foulLanguage: isFoulEnabled
+    });
+}
 
 function getVideoUrl(subPath) {
     const hostname = window.location.hostname;
@@ -803,7 +1269,7 @@ async function showWinner() {
         const openclawSessionId = getOpenclawActiveSessionId();
         const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
         const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
-        callBridge('/api/battle-result', {
+        requestCommentary('/api/battle-result', {
             sessionId: openclawSessionId,
             winner: winnerName,
             p1Score: p1ScoreVal,
@@ -812,10 +1278,6 @@ async function showWinner() {
             p2Total: p2TotalActions,
             lang: commentaryLang,
             foulLanguage: isFoulEnabled
-        }).then(res => {
-            if (res && res.commentary) {
-                displayCommentary(res.commentary);
-            }
         });
     }
 }
@@ -869,57 +1331,9 @@ function setupSyncCallbacks() {
             // Push this cast to pending casts
             pendingCasts.push({ playerID, actionName, videoSrc });
 
-            // Clear existing timeout so we debounce and aggregate near-simultaneous scores
-            if (castTimeoutHandle) {
-                clearTimeout(castTimeoutHandle);
-            }
-
             // Wait slightly for the grace window (or a minimum fallback delay of 50ms) to see if the other player also scores
             const delayMs = graceSeconds > 0 ? (graceSeconds * 1000) : 50;
-
-            castTimeoutHandle = setTimeout(() => {
-                const currentCasts = [...pendingCasts];
-                pendingCasts = [];
-                castTimeoutHandle = null;
-
-                if (currentCasts.length === 0) return;
-
-                let detail = "";
-                if (currentCasts.length === 1) {
-                    const cast = currentCasts[0];
-                    detail = `${cast.playerID === 'player1' ? 'Player 1' : 'Player 2'} successfully activated ${cast.actionName}`;
-                } else {
-                    // Both players scored within the grace period!
-                    const p1Cast = currentCasts.find(c => c.playerID === 'player1');
-                    const p2Cast = currentCasts.find(c => c.playerID === 'player2');
-                    if (p1Cast && p2Cast) {
-                        detail = `Incredible! Both Player 1 (who cast ${p1Cast.actionName}) and Player 2 (who cast ${p2Cast.actionName}) successfully activated their techniques at the exact same time!`;
-                    } else {
-                        detail = `Multiple techniques activated simultaneously: ` + currentCasts.map(c => `${c.playerID === 'player1' ? 'Player 1' : 'Player 2'} (${c.actionName})`).join(', ');
-                    }
-                }
-
-                const openclawSessionId = getOpenclawActiveSessionId();
-                const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
-                const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
-
-                callBridge('/api/live-status', {
-                    sessionId: openclawSessionId,
-                    eventType: 'CAST',
-                    detail: detail,
-                    p1Score: p1ScoreVal,
-                    p2Score: p2ScoreVal,
-                    p1Total: p1TotalActions,
-                    p2Total: p2TotalActions,
-                    timeLeft: Math.max(p1Time, p2Time),
-                    lang: commentaryLang,
-                    foulLanguage: isFoulEnabled
-                }).then(res => {
-                    if (res && res.commentary) {
-                        displayCommentary(res.commentary);
-                    }
-                });
-            }, delayMs);
+            schedulePendingCastCommentary(delayMs);
         }
 
         let hasEnded = false;
@@ -976,8 +1390,8 @@ function setupSyncCallbacks() {
         }
         prevMatchActive = isMatchActive;
 
-        const minInterphraseDuration = 4500; // Cooling buffer to allow current speech to finish
-        const canSpeak = (now - lastCustomCommentaryTime > minInterphraseDuration);
+        const minInterphraseDuration = 4500;
+        const canSpeak = isCommentaryRequestAllowed(now) && (now - lastCustomCommentaryTime > minInterphraseDuration);
 
         let triggerTimeCritical = false;
         let eventTypeToSend = 'PERIODIC';
@@ -999,7 +1413,7 @@ function setupSyncCallbacks() {
             const openclawSessionId = getOpenclawActiveSessionId();
             const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
             const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
-            callBridge('/api/live-status', {
+            requestCommentary('/api/live-status', {
                 sessionId: openclawSessionId,
                 eventType: eventTypeToSend,
                 detail: detailToSend,
@@ -1010,10 +1424,6 @@ function setupSyncCallbacks() {
                 timeLeft: activeTime,
                 lang: commentaryLang,
                 foulLanguage: isFoulEnabled
-            }).then(res => {
-                if (res && res.commentary) {
-                    displayCommentary(res.commentary);
-                }
             });
         }
         // Fallback periodic commentary if nothing exciting has happened for 35 seconds
@@ -1023,7 +1433,7 @@ function setupSyncCallbacks() {
             const openclawSessionId = getOpenclawActiveSessionId();
             const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
             const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
-            callBridge('/api/live-status', {
+            requestCommentary('/api/live-status', {
                 sessionId: openclawSessionId,
                 eventType: 'PERIODIC',
                 p1Score: p1ScoreVal,
@@ -1033,10 +1443,6 @@ function setupSyncCallbacks() {
                 timeLeft: activeTime,
                 lang: commentaryLang,
                 foulLanguage: isFoulEnabled
-            }).then(res => {
-                if (res && res.commentary) {
-                    displayCommentary(res.commentary);
-                }
             });
         }
     };
@@ -1052,6 +1458,7 @@ const commentatorVolumeSlider = document.getElementById('cfg-commentator-volume'
 const commentatorVolumeVal = document.getElementById('val-commentator-volume');
 const commentatorWebcamCheckbox = document.getElementById('cfg-commentator-webcam');
 const commentatorImagePolicySelector = document.getElementById('cfg-commentator-image-policy');
+const commentaryTtsModeSelector = document.getElementById('cfg-commentary-tts-mode');
 
 // Always accessible quick controls & inline commentator bubble controls
 const quickVolumeSlider = document.getElementById('quick-volume-slider');
@@ -1098,8 +1505,11 @@ function updateAllVolumeControls(val) {
     }
     
     localStorage.setItem('cfg-commentator-volume', val);
+    if (activeCommentaryAudio) {
+        activeCommentaryAudio.volume = Math.max(0, Math.min(1, intVal / 100));
+    }
     
-    if (intVal === 0) {
+    if (intVal === 0 && getCommentaryTtsMode() !== 'aws') {
         if (window.speechSynthesis) window.speechSynthesis.cancel();
     }
 }
@@ -1114,7 +1524,7 @@ if (enableCommentatorCheckbox) {
         if (!enableCommentatorCheckbox.checked) {
             const bubble = document.getElementById('commentator-bubble');
             if (bubble) bubble.style.display = 'none';
-            if (window.speechSynthesis) window.speechSynthesis.cancel();
+            stopCommentaryPlayback();
         }
     });
 }
@@ -1203,9 +1613,23 @@ if (bubbleMuteBtn) {
 // Pre-load and cache SpeechSynthesis voices to guarantee compatibility with Firefox & Chrome
 const commentaryVoiceSelector = document.getElementById('cfg-commentary-voice');
 const commentaryLangSelector = document.getElementById('cfg-commentary-lang');
+const commentaryVoiceHint = document.getElementById('cfg-commentary-voice-hint');
 
 function updateVoiceSelectorOptions() {
-    if (!commentaryVoiceSelector || !window.speechSynthesis) return;
+    if (!commentaryVoiceSelector) return;
+    if (getCommentaryTtsMode() === 'aws') {
+        const pollyVoice = getPollyVoiceConfig();
+        commentaryVoiceSelector.innerHTML = `<option value="aws:${pollyVoice.voiceId}">☁️ AWS Polly Girl Voice — ${pollyVoice.label}</option>`;
+        commentaryVoiceSelector.value = `aws:${pollyVoice.voiceId}`;
+        commentaryVoiceSelector.disabled = true;
+        commentaryVoiceSelector.style.opacity = '0.7';
+        commentaryVoiceSelector.title = `AWS Polly mode uses the female voice ${pollyVoice.voiceId}`;
+        if (commentaryVoiceHint) {
+            commentaryVoiceHint.textContent = `AWS Polly mode uses female voice ${pollyVoice.voiceId} for ${getCommentaryLanguage()}.`;
+        }
+        return;
+    }
+    if (!window.speechSynthesis) return;
     
     const targetLang = commentaryLangSelector?.value || 'en';
     const voices = window.speechSynthesis.getVoices();
@@ -1273,6 +1697,13 @@ function updateVoiceSelectorOptions() {
     } else {
         commentaryVoiceSelector.value = 'auto';
     }
+
+    commentaryVoiceSelector.disabled = false;
+    commentaryVoiceSelector.style.opacity = '1';
+    commentaryVoiceSelector.title = 'Choose a browser-installed voice';
+    if (commentaryVoiceHint) {
+        commentaryVoiceHint.textContent = 'Browser TTS mode uses voices installed in this browser or OS.';
+    }
 }
 
 if (commentaryLangSelector) {
@@ -1283,7 +1714,20 @@ if (commentaryLangSelector) {
 
 if (commentaryVoiceSelector) {
     commentaryVoiceSelector.addEventListener('change', () => {
-        localStorage.setItem('cfg-commentary-voice', commentaryVoiceSelector.value);
+        if (getCommentaryTtsMode() === 'browser') {
+            localStorage.setItem('cfg-commentary-voice', commentaryVoiceSelector.value);
+        }
+    });
+}
+
+if (commentaryTtsModeSelector) {
+    const savedTtsMode = localStorage.getItem('cfg-commentary-tts-mode');
+    commentaryTtsModeSelector.value = savedTtsMode === 'aws' ? 'aws' : 'browser';
+    commentaryTtsModeSelector.addEventListener('change', () => {
+        const nextMode = commentaryTtsModeSelector.value === 'aws' ? 'aws' : 'browser';
+        localStorage.setItem('cfg-commentary-tts-mode', nextMode);
+        stopCommentaryPlayback();
+        updateVoiceSelectorOptions();
     });
 }
 
@@ -1299,6 +1743,8 @@ if (window.speechSynthesis) {
     setTimeout(() => {
         updateVoiceSelectorOptions();
     }, 500);
+} else {
+    updateVoiceSelectorOptions();
 }
 
 // Score Grace Window Configuration Load & Listeners

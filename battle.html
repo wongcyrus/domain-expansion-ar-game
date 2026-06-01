@@ -92,10 +92,18 @@
                 </select>
             </div>
             <div>
+                <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">TTS MODE</label>
+                <select id="cfg-commentary-tts-mode" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
+                    <option value="browser" selected>🌐 Browser TTS</option>
+                    <option value="aws">☁️ AWS Polly</option>
+                </select>
+            </div>
+            <div>
                 <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">SELECT SPECIFIC VOICE</label>
                 <select id="cfg-commentary-voice" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
                     <option value="auto" selected>✨ Auto-Select (Optimized Female)</option>
                 </select>
+                <div id="cfg-commentary-voice-hint" style="font-size: 10px; color: #AAAAAA; margin-top: 5px;"></div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
                 <input type="checkbox" id="cfg-foul-language" style="width: 16px; height: 16px; cursor: pointer;">
@@ -264,6 +272,6 @@
         <div id="commentator-text">Waiting for sorcery battle...</div>
     </div>
 
-    <script src="static/js/battle.js?v=2.4"></script>
+    <script src="static/js/battle.js?v=2.5"></script>
 </body>
 </html>
