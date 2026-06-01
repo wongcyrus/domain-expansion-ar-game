@@ -419,9 +419,15 @@ app.post('/api/live-status', async (req, res) => {
                 agentImagePolicy: agentImagePolicy || "always",
                 ttsMode: ttsMode || "browser"
             };
+            const authHeader = req.headers['authorization'];
+            const forwardHeaders = { 'Content-Type': 'application/json' };
+            if (authHeader) {
+                forwardHeaders['Authorization'] = authHeader;
+            }
+
             const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/live-status`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: forwardHeaders,
                 body: JSON.stringify(payload)
             });
             if (response.ok) {
@@ -556,9 +562,15 @@ app.post('/api/battle-result', async (req, res) => {
                 agentImagePolicy: agentImagePolicy || "always",
                 ttsMode: ttsMode || "browser"
             };
+            const authHeader = req.headers['authorization'];
+            const forwardHeaders = { 'Content-Type': 'application/json' };
+            if (authHeader) {
+                forwardHeaders['Authorization'] = authHeader;
+            }
+
             const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/battle-result`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: forwardHeaders,
                 body: JSON.stringify(payload)
             });
             if (response.ok) {
