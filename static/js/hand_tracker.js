@@ -1202,11 +1202,23 @@ class HandTracker {
         // Sync to Battle Viewer (Always broadcast if in battle mode)
         if (this.battleSync) {
             this.battleSync.broadcast('PLAY_VIDEO_SYNC', absSrc);
-            // If in battle mode, we skip local playback to keep player view clean
-            if (this.battleRole !== 'none') {
-                if (this.integratedContainer) this.integratedContainer.classList.add('hidden');
-                return;
+        }
+
+        // Handle local playback
+        if (this.battleRole !== 'none') {
+            // In battle mode, we hide the integrated player to keep the camera view clear for AR
+            if (this.integratedContainer) this.integratedContainer.classList.add('hidden');
+            
+            // BUT we still allow the Popup Window to play (if open)
+            if (this.videoMode === 'popup') {
+                if (this.playerWindow && !this.playerWindow.closed && this.isPlayerReady) {
+                    this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc: absSrc }, '*');
+                } else if (this.autoOpen) {
+                    this.pendingVideoAction = action;
+                    this.openPopupPlayer();
+                }
             }
+            return;
         }
 
         if (this.videoMode === 'integrated' || this.videoMode === 'integrated_silent') {
@@ -1336,11 +1348,8 @@ class HandTracker {
                     this.atmosphereOverlay.style.background = 'transparent';
                 }
 
-                // Play Cinematic Video (ONLY IF NOT IN BATTLE MODE)
-                // In Battle Mode, this is now handled by the scoring logic above
-                if (this.battleRole === 'none') {
-                    this.playVideo(stableDomain);
-                }
+                // Play Cinematic Video
+                this.playVideo(stableDomain);
 
                 // Update cooldown based on video duration (Case 1) or manual slider (Case 2)
                 if (this.disableApi) {
@@ -1514,9 +1523,10 @@ class HandTracker {
     }
 
     playResultVideo(isWin) {
+        // Result videos are handled differently in battle mode:
+        // Integrated player is hidden, but Popup player is encouraged!
         if (this.battleRole !== 'none') {
-            console.log('[Game] Battle mode: Skipping local result video');
-            return;
+            if (this.integratedContainer) this.integratedContainer.classList.add('hidden');
         }
 
         const folder = isWin ? 'win' : 'lose';
@@ -1542,7 +1552,18 @@ class HandTracker {
         if (this.resultVideoPlayer && this.resultVideoContainer) {
             this.resultVideoPlayer.src = absSrc;
             this.resultVideoPlayer.muted = false;
-            this.resultVideoContainer.style.display = 'block';
+            
+            if (this.battleRole === 'none') {
+                this.resultVideoContainer.style.display = 'block';
+                this.resultVideoPlayer.play().catch(e => console.warn('[Game] Result play failed:', e));
+            } else {
+                this.resultVideoContainer.style.display = 'none';
+            }
+
+            // Also send to popup player if active
+            if (this.videoMode === 'popup' && this.playerWindow && !this.playerWindow.closed && this.isPlayerReady) {
+                this.playerWindow.postMessage({ type: 'PLAY_VIDEO', videoSrc: absSrc }, '*');
+            }
             
             // Hide buttons during video (Wait time according to table)
             if (this.restartGameBtn) this.restartGameBtn.style.display = 'none';
@@ -1555,12 +1576,10 @@ class HandTracker {
                 hasEnded = true;
                 if (this.restartGameBtn) this.restartGameBtn.style.display = 'block';
                 if (this.exitGameBtn) this.exitGameBtn.style.display = 'block';
+                if (this.resultVideoContainer) this.resultVideoContainer.style.display = 'none';
             };
-
             this.resultVideoPlayer.onended = endResult;
             setTimeout(endResult, duration + 1000); // Fallback
-
-            this.resultVideoPlayer.play().catch(e => console.warn('[Game] Result panel play failed:', e));
         }
     }
 
