@@ -190,8 +190,8 @@ class CognitoAuth {
             /* Floating Sorcerer Status Badge */
             .sorcerer-badge {
                 position: fixed;
-                top: 15px;
-                right: 15px;
+                top: 205px;
+                right: 25px;
                 background: rgba(20, 10, 35, 0.8);
                 backdrop-filter: blur(8px);
                 border: 1px solid rgba(138, 43, 226, 0.5);
@@ -200,14 +200,25 @@ class CognitoAuth {
                 display: flex;
                 align-items: center;
                 gap: 10px;
+                justify-content: flex-end;
+                max-width: min(280px, calc(100vw - 50px));
                 font-family: sans-serif;
                 font-size: 0.85rem;
-                z-index: 9999;
+                z-index: 80;
                 color: #fff;
                 box-shadow: 0 0 10px rgba(138, 43, 226, 0.2);
             }
 
+            .sorcerer-badge-name {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-weight: 600;
+            }
+
             .sorcerer-badge-orb {
+                flex-shrink: 0;
                 width: 8px;
                 height: 8px;
                 background: #00ff66;
@@ -215,12 +226,34 @@ class CognitoAuth {
                 box-shadow: 0 0 8px #00ff66;
             }
 
+            .sorcerer-badge-divider {
+                opacity: 0.45;
+                flex-shrink: 0;
+            }
+
             .sorcerer-logout {
                 color: #ff3366;
                 text-decoration: none;
                 font-weight: 700;
                 cursor: pointer;
-                margin-left: 5px;
+                flex-shrink: 0;
+            }
+
+            @media (max-width: 768px) {
+                .sorcerer-badge {
+                    top: 88px;
+                    right: 10px;
+                    padding: 6px 12px;
+                    font-size: 0.75rem;
+                    max-width: calc(100vw - 20px);
+                }
+            }
+
+            @media (max-width: 1024px) and (orientation: landscape) {
+                .sorcerer-badge {
+                    top: 68px;
+                    right: 10px;
+                }
             }
 
             @keyframes fadeIn {
@@ -358,12 +391,25 @@ class CognitoAuth {
         const badge = document.createElement("div");
         badge.id = badgeId;
         badge.className = "sorcerer-badge";
-        badge.innerHTML = `
-            <div class="sorcerer-badge-orb"></div>
-            <span>${username}</span>
-            <span>|</span>
-            <span class="sorcerer-logout" onclick="window.cognitoAuth.logout()">Logout</span>
-        `;
+
+        const orb = document.createElement("div");
+        orb.className = "sorcerer-badge-orb";
+
+        const name = document.createElement("span");
+        name.className = "sorcerer-badge-name";
+        name.title = username;
+        name.textContent = username;
+
+        const divider = document.createElement("span");
+        divider.className = "sorcerer-badge-divider";
+        divider.textContent = "|";
+
+        const logout = document.createElement("span");
+        logout.className = "sorcerer-logout";
+        logout.textContent = "Logout";
+        logout.addEventListener("click", () => window.cognitoAuth.logout());
+
+        badge.append(orb, name, divider, logout);
 
         document.body.appendChild(badge);
     }
