@@ -292,3 +292,26 @@ Our Battle Arena features a highly interactive and fully-equipped **AI Commentat
     *   **How it works**: When enabled, the host spectator pre-generates a single, randomized technique list and broadcasts it to both players. Both Player 1 and Player 2 will be asked to perform the **exact same technique/gesture** at the exact same time, making solo testing, calibration, and near-simultaneous score testing incredibly easy!
     *   **Lockstep Progression**: To guarantee that players stay 100% synchronized on the exact same technique, the game utilizes a lockstep progression mechanism. When the spectator resumes the match (`MATCH_RESUME`), both players advance to the next technique in their shared list simultaneously, regardless of whether one or both of them successfully scored.
     *   **Persistence**: Automatically saved to `localStorage` for tournament stability.
+
+---
+
+### 9. Browser Opening Sequence Rule (Crucial for Battle Sync) | 瀏覽器啟動順序規則（對戰同步之關鍵）
+To guarantee that matches cleanly initialize in an unstarted / inactive state and prevent the "always active/started" state bug on page load, you must strictly follow this opening sequence:
+
+1.  **FIRST: Open the Spectator / Battle Viewer Screen (`battle.html?net_mode=online&room=BTL2`)**  
+    *   This acts as the master host. Opening the viewer first registers a clean session with the signaling bridge and initializes the match state cleanly with `hasMatchStarted = false`.
+2.  **SECOND/THIRD: Open the Player 1 and Player 2 Screens (`index.html`)**  
+    *   With the spectator already listening, players will cleanly join, exchange WebRTC camera streams, and await the spectator's manual countdown start signal.
+
+If the players are opened first, lingering previous sessions or early state sync frames can trigger a premature game-start state on load.
+
+---
+
+為確保對戰在開始前處於未啟動（Inactive / Unstarted）狀態，並避免載入時提早判定為已開始的同步 Bug，請務必嚴格遵守以下瀏覽器開啟順序：
+
+1.  **第一步：先開啟觀戰/仲裁主畫面 (`battle.html?net_mode=online&room=BTL2`)**  
+    *   觀戰畫面身為對戰的主控端。先開啟觀戰畫面能向信令伺服器註冊一個乾淨的 Room 機制，並將對戰狀態初始化為未啟動 (`hasMatchStarted = false`)。
+2.  **第二步與第三步：再開啟 玩家 1 與 玩家 2 畫面 (`index.html`)**  
+    *   在主控觀戰端已就緒的狀態下，玩家端能乾淨地連入對話、建立 WebRTC 即時影像串流，並靜候觀戰端手動點擊按鈕來進行對戰倒數。
+
+*若先開啟玩家畫面，瀏覽器中快取的舊對戰工作階段或初期傳送的狀態封包可能會導致載入時自動判定為開始，因而提早啟動。*

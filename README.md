@@ -104,9 +104,18 @@ The game supports two types of multi-monitor setup for professional battles:
 
 - **Setup**:
   1. Start the backend server (see [Docker Setup](#-docker-setup)).
-  2. In the Viewer (`battle.html`), select **ONLINE** mode. It will show a **Room Code** (Default: `BTL1`).
-  3. On players' devices, go to Settings, select **ONLINE** mode, enter the Room Code, and click **JOIN**.
+  2. **Open the Viewer (`battle.html`) FIRST**, and select **ONLINE** mode. It will show a **Room Code** (Default: `BTL1`).
+  3. **Open the players' screens (`index.html`) SECOND/THIRD**. Go to Settings, select **ONLINE** mode, enter the Room Code, and click **JOIN**.
 - **P2P Privacy**: Video streams travel **directly between devices (Peer-to-Peer)** via WebRTC. The server only handles small text signals (scores/triggers) and never sees your camera.
+
+> [!IMPORTANT]
+> **Browser Opening Order Rule (Crucial for Battle Sync)**  
+> Always load the **Spectator/Battle Viewer (`battle.html`) FIRST**, and then open the **Players (`index.html`) SECOND/THIRD**.  
+> This ensures that the room state is cleanly initialized as unstarted (`hasMatchStarted = false`). If player trackers are opened first, lingering previous sessions or early state sync frames can trigger a premature game-start state on load.  
+> 
+> **瀏覽器開啟順序規則（對戰同步之關鍵）**  
+> 務必**先開啟觀戰/仲裁畫面（`battle.html`）**，隨後**再開啟兩位玩家畫面（`index.html`）**。  
+> 如此可確保對戰狀態在開始前被完全初始為「未開始」狀態（`hasMatchStarted = false`）。若先開啟玩家畫面，瀏覽器中快取的舊對戰工作階段或初期傳送的狀態封包可能會導致載入時自動判定為開始，因而提早啟動。
 
 ## Settings Ownership Rules | 設定歸屬規則
 

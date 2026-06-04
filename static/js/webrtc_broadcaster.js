@@ -414,7 +414,7 @@ class BattleModeSync {
         const signalingState = pc.signalingState || '';
 
         if (signalingState === 'closed') return false;
-        if (connectionState && ['connected', 'connecting'].includes(connectionState)) return true;
+        if (connectionState && ['connected', 'connecting', 'new'].includes(connectionState)) return true;
         if (iceConnectionState && ['connected', 'completed', 'checking'].includes(iceConnectionState)) return true;
 
         return false;
@@ -491,8 +491,16 @@ class BattleModeSync {
 
     async handleAnswer(answer) {
         if (this.localPC) {
-            await this.localPC.setRemoteDescription(new RTCSessionDescription(answer));
-            await this.flushPendingIceCandidates('__broadcaster__', this.localPC);
+            if (this.localPC.signalingState !== 'have-local-offer') {
+                console.warn(`[BattleSync] Received answer but signalingState is ${this.localPC.signalingState} (expected 'have-local-offer'). Skipping duplicate answer.`);
+                return;
+            }
+            try {
+                await this.localPC.setRemoteDescription(new RTCSessionDescription(answer));
+                await this.flushPendingIceCandidates('__broadcaster__', this.localPC);
+            } catch (e) {
+                console.warn('[BattleSync] Error setting remote description for answer:', e);
+            }
         }
     }
 

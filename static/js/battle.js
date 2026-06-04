@@ -1,4 +1,4 @@
-console.log('[Battle] JS version 2.5 loaded');
+console.log('[Battle] JS version 2.8 loaded');
 
 let sync = null;
 const p1Video = document.getElementById('p1-video'), p2Video = document.getElementById('p2-video'), p1Waiting = document.getElementById('p1-waiting'), p2Waiting = document.getElementById('p2-waiting');
@@ -381,7 +381,7 @@ function estimateCommentaryDurationMs(text) {
     const estimateMs = isChinese
         ? Math.max(2000, (normalizedText.length * 250) + 500)
         : Math.max(2000, (normalizedText.length * 80) + 800);
-    return Math.min(10000, estimateMs);
+    return Math.min(30000, estimateMs);
 }
 
 function waitForCommentaryDuration(text, durationMs = 0) {
@@ -720,9 +720,18 @@ function speakBrowserCommentary(text, expectedDurationSeconds = 0) {
             let settled = false;
             markCommentaryPlaybackStarted({ text: sanitizedText, ttsMode: 'browser' });
 
+            const estimatedMs = expectedDurationMs || estimateCommentaryDurationMs(sanitizedText);
+            const safetyTimeoutHandle = setTimeout(() => {
+                if (!settled) {
+                    console.warn('[TTS] Browser SpeechSynthesis exceeded estimated duration. Force-completing playback to prevent game hang.', { estimatedMs });
+                    finish();
+                }
+            }, estimatedMs + 4000);
+
             const finish = async () => {
                 if (settled) return;
                 settled = true;
+                clearTimeout(safetyTimeoutHandle);
                 markCommentaryPlaybackFinished();
                 resolve();
             };
@@ -884,7 +893,7 @@ function speakCommentary(payload) {
     if (commentary.ttsMode === 'aws' && commentary.audioUrl) {
         return playAwsCommentaryAudio(commentary.audioUrl, commentary.text, commentary.duration);
     }
-    return speakBrowserCommentary(commentary.text);
+    return speakBrowserCommentary(commentary.text, commentary.duration);
 }
 
 function addTickerMsg(msg, playerClass) { const el = document.createElement('div'); el.className = `ticker-msg ${playerClass}`; el.textContent = `> ${msg}`; ticker.appendChild(el); ticker.scrollTop = ticker.scrollHeight; if (ticker.children.length > 5) ticker.removeChild(ticker.firstChild); }
@@ -1023,37 +1032,62 @@ async function startMatch() {
             startBtn.style.cursor = 'pointer';
             return;
         }
+
+        // 1. Instantly signal players to prepare and close overlays so they don't see results of last match
         sync.broadcast('CLOSE_OVERLAYS', { isStarting: true });
-        await masterAudioUnlock(); resetViewerState();
+        
+        try {
+            await masterAudioUnlock();
+        } catch (audioErr) {
+            console.warn('[Battle] Master audio unlock warning:', audioErr);
+        }
+        
+        try {
+            resetViewerState();
+        } catch (stateErr) {
+            console.warn('[Battle] Viewer state reset warning:', stateErr);
+        }
 
         // Generate a clean, unique active session ID for this match
         const baseSessionId = getOpenclawBaseSessionId();
         const dynamicSessionId = `${baseSessionId}_${Date.now()}`;
         localStorage.setItem('openclawActiveSessionId', dynamicSessionId);
 
-        // Register the new dynamic room session ID with OpenClaw bridge
-        const signalingUrl = sync.signalingUrl || window.location.origin;
-        await callBridge('/api/register-room', {
-            sessionId: dynamicSessionId,
-            roomCode: currentRoomCode,
-            signalingUrl: signalingUrl
-        });
+        // 2. Safe registration with bridge
+        try {
+            const signalingUrl = sync.signalingUrl || window.location.origin;
+            await callBridge('/api/register-room', {
+                sessionId: dynamicSessionId,
+                roomCode: currentRoomCode,
+                signalingUrl: signalingUrl
+            });
+        } catch (regErr) {
+            console.warn('[Battle] OpenClaw room registration failed, but proceeding anyway:', regErr);
+        }
 
-        // Reset OpenClaw session and prime with the selected system rules once
+        // 3. Setup optional commentator and webcam snap components gracefully
         const isCommentatorEnabled = document.getElementById('cfg-enable-commentator')?.checked !== false;
+        
         if (isCommentatorEnabled) {
             const isWebcamEnabled = document.getElementById('cfg-commentator-webcam')?.checked !== false;
             if (isWebcamEnabled && sync) {
-                // 1. Trigger single-shot start frame webcam capture from Player View
-                sync.broadcast('CAPTURE_WEBCAM_FRAME', { phase: 'START', sessionId: dynamicSessionId });
-                
-                // 2. Wait for player devices to capture and upload both player snapshots with polling (max 4.5s)
-                await waitForSnapshots(dynamicSessionId, 4500);
+                try {
+                    // Trigger single-shot start frame webcam capture from Player View
+                    sync.broadcast('CAPTURE_WEBCAM_FRAME', { phase: 'START', sessionId: dynamicSessionId });
+                    
+                    // Wait for player devices to capture and upload both player snapshots with polling (max 3s)
+                    await waitForSnapshots(dynamicSessionId, 3000);
+                } catch (snapErr) {
+                    console.warn('[Battle] Optional snapshot polling failed, proceeding:', snapErr);
+                }
             }
 
+            // Trigger introductory welcome commentary in parallel / non-blocking with countdown
             const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
             const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
-            let resp = await requestCommentary('/api/live-status', {
+            
+            // Fire requestCommentary with low timeout so it does not block the countdown or players from playing
+            requestCommentary('/api/live-status', {
                 sessionId: dynamicSessionId,
                 eventType: 'RESET',
                 isReset: true,
@@ -1061,36 +1095,32 @@ async function startMatch() {
                 p2Score: 0,
                 lang: commentaryLang,
                 foulLanguage: isFoulEnabled
-            }, { timeoutMs: 60000 });
-            let welcomeText = resp?.welcomeMessage || resp?.commentary || "";
-            if (!welcomeText) {
-                console.warn('[Battle] Initial welcome commentary did not return in time. Retrying once before countdown...');
-                resp = await requestCommentary('/api/live-status', {
-                    sessionId: dynamicSessionId,
-                    eventType: 'RESET',
-                    isReset: true,
-                    p1Score: 0,
-                    p2Score: 0,
-                    lang: commentaryLang,
-                    foulLanguage: isFoulEnabled
-                }, { timeoutMs: 60000 });
-                welcomeText = resp?.welcomeMessage || resp?.commentary || "";
-            }
-            if (!welcomeText) {
-                console.warn('[Battle] Initial welcome commentary still missing; continuing match startup without intro.');
-            }
+            }, { timeoutMs: 6000 }).catch(commErr => {
+                console.warn('[Battle] Failed to fetch intro commentary:', commErr);
+            });
         }
 
+        // 4. Run Countdown overlay
         const countdownVal = parseInt(inCountdown.value) || 0;
         if (countdownVal > 0) {
             countdownOverlay.style.display = 'flex';
-            for (let i = countdownVal; i > 0; i--) { countdownText.textContent = i; countdownText.style.animation = 'none'; void countdownText.offsetWidth; countdownText.style.animation = 'winner-pop 0.5s'; await new Promise(r => setTimeout(r, 1000)); }
-            countdownText.textContent = "GO!"; await new Promise(r => setTimeout(r, 500)); countdownOverlay.style.display = 'none';
+            for (let i = countdownVal; i > 0; i--) {
+                countdownText.textContent = i;
+                countdownText.style.animation = 'none';
+                void countdownText.offsetWidth;
+                countdownText.style.animation = 'winner-pop 0.5s';
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            countdownText.textContent = "GO!";
+            await new Promise(r => setTimeout(r, 500));
+            countdownOverlay.style.display = 'none';
         }
+
+        // 5. Build techniques list
         const syncGestureCheckbox = document.getElementById('cfg-sync-gesture');
         const isSyncedMode = syncGestureCheckbox ? syncGestureCheckbox.checked : false;
         let actionList = null;
-
+        
         if (isSyncedMode) {
             // Get the exhaustive, complete list of domains and techniques
             const allActions = [
@@ -1101,18 +1131,28 @@ async function startMatch() {
             ];
             // Shuffle them once for this match and crop to the round length count
             const shuffled = allActions.sort(() => Math.random() - 0.5);
-            actionList = shuffled.slice(0, Math.min(parseInt(inCount.value) || 11, shuffled.length));
-            console.log(`[Battle] Generated synchronized technique target list for both players:`, actionList);
+            const rawCount = parseInt(inCount.value);
+            const countLimit = (!isNaN(rawCount) && rawCount > 0) ? rawCount : 11;
+            actionList = shuffled.slice(0, Math.min(countLimit, shuffled.length));
+            console.log(`[Battle] Generated synchronized technique target list for players:`, actionList);
+        } else {
+            console.log(`[Battle] Synced Same Gesture Mode is UNCHECKED. Action list will be generated locally by each player.`);
         }
 
+        // 6. Broadcast START_BATTLE with safe fallback values
+        const difficultyVal = parseInt(inDifficulty.value) || 8;
+        const countVal = parseInt(inCount.value) || 11;
+        
         sync.broadcast('START_BATTLE', { 
-            difficulty: parseInt(inDifficulty.value), 
-            count: parseInt(inCount.value),
+            difficulty: difficultyVal, 
+            count: countVal,
             openclawSessionId: dynamicSessionId,
-            actionList: actionList // Send synchronized technique list to players
+            actionList: actionList
         });
+        
         hasMatchStarted = true;
-        startBtn.style.background = '#4CAF50'; startBtn.textContent = 'GAME RUNNING';
+        startBtn.style.background = '#4CAF50';
+        startBtn.textContent = 'GAME RUNNING';
         setTimeout(() => { 
             startBtn.disabled = false;
             startBtn.style.background = '#FF5252'; 
@@ -1120,9 +1160,25 @@ async function startMatch() {
             startBtn.style.cursor = 'pointer';
         }, 3000);
     } catch (err) {
-        console.error('[Battle] Failed to start match:', err);
+        console.error('[Battle] Critical failure in startMatch logic:', err);
+        // Fallback: Even if something exploded, make a last-ditch effort to trigger the battle for players
+        try {
+            if (sync) {
+                const difficultyVal = parseInt(inDifficulty.value) || 8;
+                const countVal = parseInt(inCount.value) || 11;
+                sync.broadcast('START_BATTLE', { 
+                    difficulty: difficultyVal, 
+                    count: countVal,
+                    openclawSessionId: `fallback_${Date.now()}`,
+                    actionList: null
+                });
+            }
+        } catch (broadcastErr) {
+            console.error('[Battle] Last-ditch START_BATTLE broadcast failed:', broadcastErr);
+        }
+        
         startBtn.disabled = false;
-        startBtn.textContent = 'START BATTLE (FAILED)';
+        startBtn.textContent = 'START BATTLE (RECOVERED)';
         startBtn.style.background = '#FF5252';
         startBtn.style.cursor = 'pointer';
     }
@@ -1183,9 +1239,11 @@ async function flushPendingCastCommentary() {
 }
 
 function getVideoUrl(subPath) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const forceLocal = urlParams.get('local_video') === 'true';
     const hostname = window.location.hostname;
     const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
-    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || isIp || window.location.protocol === 'file:';
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || isIp || window.location.protocol === 'file:' || forceLocal;
     const GITHUB_PAGES_BASE = "https://wongcyrus.github.io/domain-expansion-ar-game/";
     return isLocal ? `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, '')}/static/video/${subPath}` : `${GITHUB_PAGES_BASE}static/video/${subPath}`;
 }
@@ -1349,9 +1407,12 @@ function setupSyncCallbacks() {
         setTimeout(endLogic, duration + 1000);
     };
     sync.onStateReceived = (playerID, state) => {
-        const { domain, score, timer, isGameActive, totalActions } = state;
-        if (isGameActive) {
-            hasMatchStarted = true;
+        let { domain, score, timer, isGameActive, totalActions } = state;
+        if (!hasMatchStarted) {
+            score = 0;
+            domain = null;
+            timer = 0;
+            isGameActive = false;
         }
 
         if (playerID === 'player1') {

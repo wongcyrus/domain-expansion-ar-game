@@ -3,6 +3,8 @@
  * Uses MediaPipe Hands to detect gestures and send actions to a configured API
  */
 
+console.log('[HandTracker] JS version 3.6 loaded');
+
 class HandTracker {
     constructor() {
         console.log('[Game] Constructor started.');
@@ -756,6 +758,24 @@ class HandTracker {
             this.hudRole.style.color = this.battleRole === 'player1' ? '#4A90E2' : '#FFFF00';
         }
 
+        // Hide/show game toggle floating button based on battle role
+        if (this.gameToggleBtn) {
+            if (this.battleRole !== 'none') {
+                this.gameToggleBtn.classList.add('hidden');
+            } else {
+                this.gameToggleBtn.classList.remove('hidden');
+            }
+        }
+
+        // Hide/show Settings Panel manual start buttons based on battle role
+        if (this.startGameBtn) {
+            if (this.battleRole !== 'none') {
+                this.startGameBtn.classList.add('hidden');
+            } else {
+                this.startGameBtn.classList.remove('hidden');
+            }
+        }
+
         // --- Start Online Refactor ---
         const needsReinit = !this.battleSync || 
                            this.battleSync.role !== this.battleRole || 
@@ -796,6 +816,10 @@ class HandTracker {
                 this.gameScore = 0;
                 this.gameTarget = null;
                 this.hideOverlays();
+                if (this.isPreparingMatch && this.gameHud) {
+                    this.gameHud.classList.remove('hidden');
+                }
+                this.updateGameHUD(); // Show "PREPARING..." visual cue
                 
                 // Signal viewer that we are clean
                 this.syncBattleState();
@@ -1172,9 +1196,11 @@ class HandTracker {
     }
 
     getVideoUrl(subPath) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const forceLocal = urlParams.get('local_video') === 'true';
         const hostname = window.location.hostname;
         const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
-        const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || isIp || window.location.protocol === 'file:';
+        const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || isIp || window.location.protocol === 'file:' || forceLocal;
         const GITHUB_PAGES_BASE = "https://wongcyrus.github.io/domain-expansion-ar-game/";
         
         if (isLocal) {
@@ -1256,7 +1282,9 @@ class HandTracker {
             const domainColor = this.domainGame.domainColors[stableDomain];
 
             // Check Mini-Game Match
+            let scoredThisFrame = false;
             if (this.isGameActive && stableDomain === this.gameTarget) {
+                scoredThisFrame = true;
                 console.log('[MiniGame] Success:', stableDomain);
                 this.gameScore++;
                 this.gameTarget = null; // Prevent double scoring
@@ -1271,10 +1299,8 @@ class HandTracker {
 
                 this.playSuccessSound();
 
-                // IN BATTLE MODE: We play the video ONLY ON SUCCESS SCORE
-                if (this.battleRole !== 'none') {
-                    this.playVideo(stableDomain);
-                }
+                // Play cinematic video on success score in all modes!
+                this.playVideo(stableDomain);
 
                 // Show visual feedback for success
                 if (this.successFeedback) {
@@ -1322,7 +1348,12 @@ class HandTracker {
             if (domainColor) this.domainDisplay.style.color = domainColor;
             this.domainDisplay.style.opacity = "1.0";
 
-            if (this.lastVFXDomain !== stableDomain) {
+            // Determine if we should trigger VFX / Action
+            // If in an active game, we ONLY trigger VFX / Action if they just scored.
+            // If NOT in an active game, we trigger VFX / Action whenever lastVFXDomain changes.
+            const shouldTriggerVFX = this.isGameActive ? scoredThisFrame : (this.lastVFXDomain !== stableDomain);
+
+            if (shouldTriggerVFX) {
                 this.lastVFXDomain = stableDomain;
                 
                 // Trigger API Action if NOT in an active game and not preparing a match (Sandbox / Testing mode)
@@ -1348,8 +1379,10 @@ class HandTracker {
                     this.atmosphereOverlay.style.background = 'transparent';
                 }
 
-                // Play Cinematic Video
-                this.playVideo(stableDomain);
+                // Play Cinematic Video if we didn't already play it in the scoring block
+                if (!scoredThisFrame) {
+                    this.playVideo(stableDomain);
+                }
 
                 // Update cooldown based on video duration (Case 1) or manual slider (Case 2)
                 if (this.disableApi) {
@@ -1401,6 +1434,8 @@ class HandTracker {
         
         // 1. Explicitly stop any existing round/timers first
         this.isGameActive = false;
+        this.isPaused = false; // Reset paused state
+        this.isPreparingMatch = false; // Reset preparing state
         if (this.gameTimerInterval) clearInterval(this.gameTimerInterval);
         if (this.gameActionInterval) clearTimeout(this.gameActionInterval);
         this.gameTimerInterval = null;
@@ -1409,7 +1444,12 @@ class HandTracker {
 
         // Apply config overrides if provided
         if (config) {
-            if (config.difficulty) this.gameDifficulty = config.difficulty;
+            if (config.difficulty) {
+                const diffVal = parseInt(config.difficulty);
+                if (!isNaN(diffVal) && diffVal > 0) {
+                    this.gameDifficulty = diffVal;
+                }
+            }
         }
 
         // 2. Force hide Game Over and Result screens
@@ -1422,19 +1462,39 @@ class HandTracker {
         this.gameScore = 0;
 
         // 3. Prepare action list (Synced list from Host OR Shuffle locally)
-        let shuffled;
-        if (config && config.actionList && Array.isArray(config.actionList)) {
+        let shuffled = null;
+        if (config && config.actionList && Array.isArray(config.actionList) && config.actionList.length > 0) {
             shuffled = [...config.actionList];
             this.isSyncedGestureMode = true;
             console.log('[MiniGame] Using synchronized action list received from Spectator host:', shuffled);
         } else {
             this.isSyncedGestureMode = false;
-            const allActions = Object.keys(this.domainGame.displayNamesMap['en']);
+            const allActions = [
+                "Unlimited Void", "Malevolent Shrine", "Self-Embodiment of Perfection", 
+                "Authentic Mutual Love", "Idle Death Gamble", "Yuji Itadori", 
+                "Chimera Shadow Garden", "Time Cell Moon Palace", "Lapse Blue", 
+                "Reversal Red", "Hollow Purple"
+            ];
             shuffled = allActions.sort(() => Math.random() - 0.5);
             // Respect round length if configured
             if (config && config.count) {
-                shuffled = shuffled.slice(0, Math.min(config.count, shuffled.length));
+                const countVal = parseInt(config.count);
+                if (!isNaN(countVal) && countVal > 0) {
+                    shuffled = shuffled.slice(0, Math.min(countVal, shuffled.length));
+                }
             }
+        }
+        
+        // Guarantee the list is not empty to prevent instant round completes
+        if (!shuffled || shuffled.length === 0) {
+            console.warn('[MiniGame] Shuffled action list is empty, loading fallback technique list');
+            const allActions = [
+                "Unlimited Void", "Malevolent Shrine", "Self-Embodiment of Perfection", 
+                "Authentic Mutual Love", "Idle Death Gamble", "Yuji Itadori", 
+                "Chimera Shadow Garden", "Time Cell Moon Palace", "Lapse Blue", 
+                "Reversal Red", "Hollow Purple"
+            ];
+            shuffled = allActions.sort(() => Math.random() - 0.5);
         }
         
         this.gameActionList = shuffled;
@@ -1490,15 +1550,30 @@ class HandTracker {
         this.playResultVideo(isWin);
         
         if (this.gameHud) this.gameHud.classList.add('hidden');
-        if (this.startGameBtn) this.startGameBtn.classList.remove('hidden');
+        if (this.startGameBtn) {
+            if (this.battleRole !== 'none') {
+                this.startGameBtn.classList.add('hidden');
+            } else {
+                this.startGameBtn.classList.remove('hidden');
+            }
+        }
         if (this.stopGameBtn) this.stopGameBtn.classList.add('hidden');
         if (this.gameTargetName) this.gameTargetName.textContent = '---';
+
+        if (this.restartGameBtn) {
+            this.restartGameBtn.style.display = (this.battleRole !== 'none') ? 'none' : 'block';
+        }
 
         // Reset main HUD button
         if (this.gameToggleBtn) {
             this.gameToggleBtn.textContent = '🎮';
             this.gameToggleBtn.style.background = '#FFFF00';
             this.gameToggleBtn.style.color = '#000';
+            if (this.battleRole !== 'none') {
+                this.gameToggleBtn.classList.add('hidden');
+            } else {
+                this.gameToggleBtn.classList.remove('hidden');
+            }
         }
 
         // Final broadcast of result state
@@ -1574,7 +1649,9 @@ class HandTracker {
             const endResult = () => {
                 if (hasEnded) return;
                 hasEnded = true;
-                if (this.restartGameBtn) this.restartGameBtn.style.display = 'block';
+                if (this.restartGameBtn) {
+                    this.restartGameBtn.style.display = (this.battleRole !== 'none') ? 'none' : 'block';
+                }
                 if (this.exitGameBtn) this.exitGameBtn.style.display = 'block';
                 if (this.resultVideoContainer) this.resultVideoContainer.style.display = 'none';
             };
@@ -1627,9 +1704,13 @@ class HandTracker {
     }
     updateGameHUD() {
         if (this.gameTargetName) {
-            const lang = this.domainGame.lang || 'zh';
-            const displayName = this.domainGame.displayNamesMap[lang][this.gameTarget] || this.gameTarget || '---';
-            this.gameTargetName.textContent = displayName;
+            if (this.isPreparingMatch && !this.isGameActive) {
+                this.gameTargetName.textContent = (this.domainGame.lang === 'zh') ? '準備中...' : 'PREPARING...';
+            } else {
+                const lang = this.domainGame.lang || 'zh';
+                const displayName = this.domainGame.displayNamesMap[lang][this.gameTarget] || this.gameTarget || '---';
+                this.gameTargetName.textContent = displayName;
+            }
         }
         if (this.gameScoreEl) this.gameScoreEl.textContent = this.gameScore;
         if (this.gameTimerEl) this.gameTimerEl.textContent = `${this.gameTimeLeft}s`;
