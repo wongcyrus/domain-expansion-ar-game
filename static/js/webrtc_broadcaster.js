@@ -195,7 +195,6 @@ class BattleModeSync {
                     }
                     if (config.defaultSessionKey) {
                         localStorage.setItem('robot_session_key', config.defaultSessionKey);
-                        localStorage.setItem('openclawSessionId', config.defaultSessionKey);
                     }
                 }
             }

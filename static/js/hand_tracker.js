@@ -627,10 +627,7 @@ class HandTracker {
             const dataUrl = capCanvas.toDataURL('image/jpeg', 0.7);
             const base64Str = dataUrl.split('base64,')[1];
             
-            const openclawSessionId = sessionIdOverride || localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('openclawSessionId') || 'mcpserver';
-            if (sessionIdOverride) {
-                localStorage.setItem('openclawActiveSessionId', sessionIdOverride);
-            }
+            const openclawSessionId = sessionIdOverride || localStorage.getItem('robot_session_key') || 'mcpserver';
             
             this.remoteLog('INFO', `[Single-Shot] Capturing & uploading webcam frame for session=${openclawSessionId}`);
             
@@ -1874,8 +1871,6 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
             if (config.defaultSessionKey) {
                 localStorage.setItem('robot_session_key', config.defaultSessionKey);
-                localStorage.setItem('openclawSessionId', config.defaultSessionKey);
-                localStorage.setItem('openclawActiveSessionId', config.defaultSessionKey);
             }
         }
     } catch (configErr) {

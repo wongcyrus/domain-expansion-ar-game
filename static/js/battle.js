@@ -21,6 +21,19 @@ const countdownOverlay = document.getElementById('countdown-overlay'), countdown
 const urlParams = new URLSearchParams(window.location.search);
 let currentNetMode = urlParams.get('net_mode') || 'local';
 let currentRoomCode = urlParams.get('room') || 'BTL1';
+
+// Ensure robust default for robot session key
+if (!localStorage.getItem('robot_session_key')) {
+    localStorage.setItem('robot_session_key', 'mcpserver');
+}
+
+// Support session key from URL params
+const urlSessionId = urlParams.get('session_key') || urlParams.get('session_id') || urlParams.get('sessionId') || urlParams.get('robot_session_key') || urlParams.get('robot_session_id') || urlParams.get('robotSessionId');
+if (urlSessionId) {
+    localStorage.setItem('robot_session_key', urlSessionId);
+}
+
+
 let p1Time = 0, p2Time = 0, p1Active = false, p2Active = false, p1ScoreVal = 0, p2ScoreVal = 0, isMatchOver = false, winnerTimeoutHandle = null, hasMatchStarted = false, prevMatchActive = false;
 let p1TotalActions = 11, p2TotalActions = 11;
 let activeCinematicsCount = 0;
@@ -95,9 +108,9 @@ async function updateSyncMode() {
                 localStorage.setItem('robot_api_endpoint', config.robotApiEndpoint);
             }
             if (config.defaultSessionKey) {
-                localStorage.setItem('robot_session_key', config.defaultSessionKey);
-                localStorage.setItem('openclawSessionId', config.defaultSessionKey);
-                localStorage.setItem('openclawActiveSessionId', config.defaultSessionKey);
+                if (!localStorage.getItem('robot_session_key')) {
+                    localStorage.setItem('robot_session_key', config.defaultSessionKey);
+                }
             }
         }
     } catch (configErr) {
@@ -120,7 +133,7 @@ if (inDynamicView) inDynamicView.addEventListener('change', () => { updateLayout
 if (baseLayoutSelect) baseLayoutSelect.addEventListener('change', updateLayout);
 
 settingsToggle.addEventListener('click', () => { settingsPanel.style.display = (settingsPanel.style.display === 'flex' ? 'none' : 'flex'); });
-saveCfgBtn.addEventListener('click', () => { settingsPanel.style.display = 'none'; });
+if (saveCfgBtn) saveCfgBtn.addEventListener('click', () => { settingsPanel.style.display = 'none'; });
 inCountdown.addEventListener('input', () => { document.getElementById('val-countdown').textContent = `${inCountdown.value}s`; });
 inDifficulty.addEventListener('input', () => { document.getElementById('val-difficulty').textContent = `${inDifficulty.value}s`; });
 inCount.addEventListener('input', () => { document.getElementById('val-count').textContent = inCount.value; });
@@ -163,11 +176,11 @@ const POLLY_VOICE_BY_LANG = {
 const SILENT_AUDIO_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
 
 function getOpenclawActiveSessionId() {
-    return localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'mcpserver';
+    return localStorage.getItem('robot_session_key') || 'mcpserver';
 }
 
 function getOpenclawBaseSessionId() {
-    return localStorage.getItem('robot_session_key') || localStorage.getItem('openclawSessionId') || 'mcpserver';
+    return localStorage.getItem('robot_session_key') || 'mcpserver';
 }
 
 function getCommentaryLanguage() {
@@ -313,12 +326,13 @@ async function requestCommentary(endpoint, body, options = {}) {
 async function callBridge(endpoint, body, options = {}) {
     const apiEndpoint = window.location.origin;
     const timeoutMs = options.timeoutMs || 30000;
-    // Auto-inject preferred user language and image upload policy
+    // Auto-inject preferred user language, image upload policy, and commentary agent type
     if (body && typeof body === 'object') {
         if (!body.lang) {
             body.lang = localStorage.getItem('user_language') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
         }
         body.agentImagePolicy = document.getElementById('cfg-commentator-image-policy')?.value || localStorage.getItem('agent_image_policy') || 'always';
+        body.agent_type = document.getElementById('cfg-commentary-engine')?.value || localStorage.getItem('cfg-commentary-engine') || 'agentcore_runtime';
         body.ttsMode = body.ttsMode || getCommentaryTtsMode();
     }
     
@@ -1789,6 +1803,15 @@ if (commentaryTtsModeSelector) {
         localStorage.setItem('cfg-commentary-tts-mode', nextMode);
         stopCommentaryPlayback();
         updateVoiceSelectorOptions();
+    });
+}
+
+const commentaryEngineSelector = document.getElementById('cfg-commentary-engine');
+if (commentaryEngineSelector) {
+    const savedEngine = localStorage.getItem('cfg-commentary-engine') || 'agentcore_runtime';
+    commentaryEngineSelector.value = savedEngine;
+    commentaryEngineSelector.addEventListener('change', () => {
+        localStorage.setItem('cfg-commentary-engine', commentaryEngineSelector.value);
     });
 }
 

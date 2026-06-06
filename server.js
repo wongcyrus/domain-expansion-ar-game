@@ -417,7 +417,8 @@ app.post('/api/live-status', async (req, res) => {
                 foulLanguage: !!foulLanguage,
                 isReset: eventType === "RESET",
                 agentImagePolicy: agentImagePolicy || "always",
-                ttsMode: ttsMode || "browser"
+                ttsMode: ttsMode || "browser",
+                agent_type: req.body.agent_type || "agentcore_runtime"
             };
             const authHeader = req.headers['authorization'];
             const forwardHeaders = { 'Content-Type': 'application/json' };
@@ -560,7 +561,8 @@ app.post('/api/battle-result', async (req, res) => {
                 foulLanguage: !!foulLanguage,
                 isReset: true,
                 agentImagePolicy: agentImagePolicy || "always",
-                ttsMode: ttsMode || "browser"
+                ttsMode: ttsMode || "browser",
+                agent_type: req.body.agent_type || "agentcore_runtime"
             };
             const authHeader = req.headers['authorization'];
             const forwardHeaders = { 'Content-Type': 'application/json' };

@@ -44,6 +44,7 @@
         </div>
     </div>
     <div id="battle-settings-panel" style="position: fixed; top: 100px; right: 25px; background: rgba(10,10,10,0.95); border: 1px solid rgba(255,255,255,0.15); padding: 20px; border-radius: 16px; z-index: 200; display: none; flex-direction: column; gap: 15px; width: 280px; max-height: calc(100vh - 140px); overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.75); backdrop-filter: blur(20px); scrollbar-width: thin; scrollbar-color: #4A90E2 rgba(0,0,0,0.3);">
+        <button id="close-settings-x" onclick="document.getElementById('battle-settings-panel').style.display='none'" style="position: absolute; top: 15px; right: 15px; background: none; border: none; color: #AAA; font-size: 1.5rem; cursor: pointer; transition: color 0.2s; line-height: 1; outline: none; padding: 5px; z-index: 10;" onmouseover="this.style.color='#FFF'" onmouseout="this.style.color='#AAA'">×</button>
         <h4 style="margin: 0; color: #4A90E2; font-size: 0.9rem;">MATCH CONFIG</h4>
         
         <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 10px;">
@@ -82,6 +83,14 @@
 
         <h4 style="margin: 10px 0 0; color: #FF5252; font-size: 0.9rem;">🎙️ AI COMMENTATOR</h4>
         <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 10px;">
+            <div>
+                <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">COMMENTARY AGENT / ENGINE</label>
+                <select id="cfg-commentary-engine" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
+                    <option value="strands_local">🧬 Strands Local</option>
+                    <option value="agentcore_runtime" selected>🤖 AgentCore Runtime</option>
+                    <option value="openclaw">🌐 OpenClaw</option>
+                </select>
+            </div>
             <div>
                 <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">COMMENTARY LANGUAGE</label>
                 <select id="cfg-commentary-lang" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
@@ -157,8 +166,6 @@
                 <label for="cfg-sync-gesture" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">👥 <b>SYNCED SAME GESTURE MODE</b></label>
             </div>
         </div>
-
-        <button id="save-battle-cfg" style="background: #4A90E2; border: none; color: white; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);">CLOSE SETTINGS</button>
     </div>
     </div>
     <div id="countdown-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); z-index: 1500; display: none; align-items: center; justify-content: center; pointer-events: none;"><div id="countdown-text" style="font-size: 15rem; font-weight: 900; color: #FFFF00; text-shadow: 0 0 50px rgba(255,255,0,0.8); font-style: italic; animation: winner-pop 0.5s infinite alternate;">3</div></div>
@@ -272,6 +279,6 @@
         <div id="commentator-text">Waiting for sorcery battle...</div>
     </div>
 
-    <script src="static/js/battle.js?v=2.8"></script>
+    <script src="static/js/battle.js?v=2.9"></script>
 </body>
 </html>
