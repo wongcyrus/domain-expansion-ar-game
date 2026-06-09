@@ -20,7 +20,7 @@ function loadAwsCliCredentials() {
             const content = fs.readFileSync(credentialsPath, 'utf8');
             const lines = content.split(/\r?\n/);
             const profile = process.env.AWS_PROFILE || 'default';
-            
+
             let inTargetProfile = false;
             let accessKeyId = null;
             let secretAccessKey = null;
@@ -31,7 +31,7 @@ function loadAwsCliCredentials() {
                 if (!line || line.startsWith('#') || line.startsWith(';')) {
                     continue;
                 }
-                
+
                 if (line.startsWith('[') && line.endsWith(']')) {
                     const currentProfile = line.slice(1, -1).trim();
                     inTargetProfile = (currentProfile === profile);
@@ -84,7 +84,7 @@ function getAwsCredentials() {
 
 // --- AWS API Gateway Endpoint Detection for local testing ---
 let mcpServerUrl = process.env.MCP_SERVER_URL || null;
-let awsApiEndpoint = process.env.AWS_API_ENDPOINT || process.env.awsApiEndpoint || process.env.MCP_SERVER_URL || null;
+let awsApiEndpoint = process.env.AWS_API_ENDPOINT || process.env.awsApiEndpoint || null;
 if (!awsApiEndpoint) {
     try {
         const outputJsonPath = path.join(__dirname, '../cdk/output.json');
@@ -252,22 +252,12 @@ async function awsSignedFetch(urlStr, options = {}) {
 // Helper to call registered tools on the AWS MCP Server URL using SigV4 signed requests
 async function triggerMcpTool(mcpServerUrl, toolName, args) {
     const payload = {
-        body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "tools/call",
-            params: {
-                name: toolName,
-                arguments: args
-            }
-        }),
-        headers: {
-            "content-type": "application/json"
-        },
-        requestContext: {
-            http: {
-                method: "POST"
-            }
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+            name: toolName,
+            arguments: args
         }
     };
     try {
@@ -321,7 +311,7 @@ function loadOpenClawConfig() {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             port = config.gateway?.port || 18789;
             token = config.gateway?.auth?.token || '';
-            
+
             console.log(`[OpenClaw Config] Loaded successfully. Port: ${port}, Token found: ${!!token}, AgentID: ${agentId}`);
         }
     } catch (err) {
@@ -360,7 +350,7 @@ function getWebcamFrame(sessionId) {
 function translateDetail(detail) {
     if (!detail) return '';
     let result = detail;
-    
+
     // Replace technique names with character ownership metadata
     result = result.replace(/Chimera Shadow Garden/gi, '領域展開「嵌合暗翳庭」（伏黑惠）');
     result = result.replace(/Authentic Love/gi, '領域展開「真贋相愛」（乙骨憂太）');
@@ -392,13 +382,13 @@ async function callOpenClawGateway(sessionId, agentId, promptText, attachImages 
     const { port, token } = loadOpenClawConfig();
     const openclawHost = process.env.OPENCLAW_HOST || '127.0.0.1';
     const url = `http://${openclawHost}:${port}/v1/chat/completions`;
-    
+
     // Resolve webcam image if any (bypass for reset commands to match raw web UI text behavior)
     const latestFrame = attachImages ? getWebcamFrame(sessionId) : null;
     const currentSession = gameSessions.get(sessionId);
     const hasImages = !!(latestFrame || (attachImages && currentSession && (currentSession.latestWebcamFrameP1 || currentSession.latestWebcamFrameP2)));
     console.log(`[Bridge] callOpenClawGateway sessionId=${sessionId}, promptText=${promptText}, image attached=${hasImages}`);
-    
+
     let contentBlock;
     if (promptText === "/reset") {
         contentBlock = "/reset"; // Clean, plain string - no image, no array wrapper
@@ -450,7 +440,7 @@ async function callOpenClawGateway(sessionId, agentId, promptText, attachImages 
         'Content-Type': 'application/json',
         'x-openclaw-session-key': `agent:${agentId}:domain-expansion-ar-game:${sessionId}`
     };
-    
+
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
@@ -470,23 +460,23 @@ async function callOpenClawGateway(sessionId, agentId, promptText, attachImages 
 
         const data = await response.json();
         const rawCommentary = data.choices?.[0]?.message?.content || "";
-        
+
         let cleaned = rawCommentary;
-        
+
         // 1. Remove bracketed posture commands if any e.g. [huishou]
         cleaned = cleaned.replace(/\[([a-zA-Z0-9_-]+)\]/g, "");
-        
+
         // 2. Remove markdown syntax formatting characters (stars, underscores, backticks, tildes)
         cleaned = cleaned.replace(/[\*_`~]/g, "");
-        
+
         // 3. Remove all visual emojis and extended pictographics
         cleaned = cleaned.replace(/\p{Extended_Pictographic}/gu, "");
-        
+
         // 4. Remove any double/excessive spaces or newlines
         cleaned = cleaned.replace(/\s+/g, " ");
-        
+
         cleaned = cleaned.trim();
-        
+
         return cleaned || "Incredible intensity! The Jujutsu sorcerers are giving it everything they have!";
     } catch (err) {
         console.error(`[OpenClaw Gateway Fetch Failed]:`, err.message);
@@ -520,7 +510,14 @@ app.post('/api/trigger-technique', async (req, res) => {
             });
 
             if (response.ok) {
-                const data = await response.json();
+                const rawText = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (e) {
+                    console.error(`[AWS Bridge Proxy] Failed to parse JSON response: "${rawText}"`, e.message);
+                    throw new Error(`Unexpected end of JSON input from AWS Lambda. Raw response was: "${rawText}"`);
+                }
                 return res.json(data);
             } else {
                 const errorText = await response.text();
@@ -534,7 +531,7 @@ app.post('/api/trigger-technique', async (req, res) => {
     } else if (mcpServerUrl) {
         try {
             console.log(`[AWS Bridge Proxy] Handling trigger-technique directly via MCP Server: technique=${technique}, robotId=${robotId}, role=${role}`);
-            
+
             // 1. Resolve target robots
             let targets = [];
             if (robotId === "all") {
@@ -578,16 +575,11 @@ app.post('/api/trigger-technique', async (req, res) => {
                 "hollow_purple": { stance: "kick", speech: "虚式、茈", language: "ja" }
             };
 
-            const promises = [];
+            const speakPromises = [];
             for (const target of targets) {
-                const mcpToolName = techniqueToMcpTool[technique] || `robot_${technique}`;
-                // Trigger physical action
-                promises.push(triggerMcpTool(mcpServerUrl, mcpToolName, { robot_id: target }));
-
-                // Trigger speak action if mapped speech exists
                 const actionInfo = jjkActionMap[technique];
                 if (actionInfo && actionInfo.speech) {
-                    promises.push(triggerMcpTool(mcpServerUrl, "robot_speak", {
+                    speakPromises.push(triggerMcpTool(mcpServerUrl, "robot_speak", {
                         robot_id: target,
                         text: actionInfo.speech,
                         language: actionInfo.language || "ja"
@@ -595,7 +587,19 @@ app.post('/api/trigger-technique', async (req, res) => {
                 }
             }
 
-            await Promise.all(promises);
+            if (speakPromises.length > 0) {
+                await Promise.all(speakPromises);
+                // 1-second delay between speech trigger and action trigger
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+
+            const actionPromises = [];
+            for (const target of targets) {
+                const mcpToolName = techniqueToMcpTool[technique] || `robot_${technique}`;
+                actionPromises.push(triggerMcpTool(mcpServerUrl, mcpToolName, { robot_id: target }));
+            }
+
+            await Promise.all(actionPromises);
             return res.json({ ok: true, message: `Technique ${technique} triggered successfully on targets: ${targets.join(', ')}` });
 
         } catch (err) {
@@ -612,12 +616,12 @@ app.post('/api/enhance-portrait', (req, res) => {
     const { sessionId, templateId } = req.body;
     const resolvedSessionId = sessionId || "main";
     console.log(`[Bridge-Local] Enhance portrait requested: sessionId=${resolvedSessionId}, templateId=${templateId}`);
-    
+
     const session = gameSessions.get(resolvedSessionId);
     if (!session) {
         return res.status(404).json({ error: "Session not found" });
     }
-    
+
     // Simulate Rekognition validation: fail if webcam snaps are missing
     if (!session.latestWebcamFrameP1 || !session.latestWebcamFrameP2) {
         console.warn(`[Bridge-Local] Snapshots missing for local mock generation. P1 present: ${!!session.latestWebcamFrameP1}, P2 present: ${!!session.latestWebcamFrameP2}`);
@@ -635,24 +639,24 @@ app.post('/api/enhance-portrait', (req, res) => {
             }
         });
     }
-    
+
     session.enhancedImageUrl = "PENDING";
     gameSessions.set(resolvedSessionId, session);
-    
+
     // Simulate background SQS -> Lambda style fusion worker delay (3 seconds)
     setTimeout(() => {
-        const resolvedTemplateId = (templateId === "random" || !templateId) 
-            ? (Math.random() > 0.5 ? "infinite_clash" : "sendai_clash") 
+        const resolvedTemplateId = (templateId === "random" || !templateId)
+            ? (Math.random() > 0.5 ? "infinite_clash" : "sendai_clash")
             : templateId;
-            
+
         // Serve local template file as elegant, zero-dependency offline mock asset
         const localMockUrl = `/static/img/templates/${resolvedTemplateId}.jpg`;
-        
+
         session.enhancedImageUrl = localMockUrl;
         gameSessions.set(resolvedSessionId, session);
         console.log(`[Bridge-Local] Background SQS mock processing completed for session=${resolvedSessionId}. Enhanced URL: ${localMockUrl}`);
     }, 3000);
-    
+
     res.json({
         success: true,
         status: "PENDING",
@@ -669,12 +673,12 @@ app.post('/api/enhance-portrait', (req, res) => {
 app.get('/api/check-enhancement', (req, res) => {
     const { sessionId } = req.query;
     const resolvedSessionId = sessionId || "main";
-    
+
     const session = gameSessions.get(resolvedSessionId);
     if (!session) {
         return res.json({ success: true, status: "NONE", url: "" });
     }
-    
+
     const enhancedUrl = session.enhancedImageUrl || "";
     let status = "NONE";
     if (enhancedUrl === "PENDING") {
@@ -684,7 +688,7 @@ app.get('/api/check-enhancement', (req, res) => {
     } else if (enhancedUrl) {
         status = "COMPLETE";
     }
-    
+
     res.json({
         success: true,
         status: status,
@@ -813,7 +817,14 @@ app.post('/api/live-status', async (req, res) => {
                 body: JSON.stringify(payload)
             });
             if (response.ok) {
-                const data = await response.json();
+                const rawText = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (e) {
+                    console.error(`[AWS Bridge Proxy] Failed to parse JSON response: "${rawText}"`, e.message);
+                    throw new Error(`Unexpected end of JSON input from AWS Lambda. Raw response was: "${rawText}"`);
+                }
                 const resolvedCommentary = data.welcomeMessage || data.commentary || "";
                 console.log(`[AWS Bridge Proxy] Received AWS Commentary: "${resolvedCommentary}" ttsMode=${data.ttsMode || 'browser'} hasAudioUrl=${!!data.audioUrl}`);
                 if (eventType === "RESET") {
@@ -852,9 +863,9 @@ app.post('/api/live-status', async (req, res) => {
     // 1. Handle New Game Session RESET event
     if (eventType === "RESET") {
         console.log(`[Bridge] Resetting OpenClaw session for sessionId=${resolvedSessionId}`);
-        
+
         const systemPrompt = getSystemPrompt(isZh, foulLanguage);
-        
+
         let openingInstruction = "";
         if (isZh) {
             openingInstruction = `【重要系統指示：請直接以你的「釘崎野薔薇（Kugisaki Nobara）」人設，對玩家 P1、P2 發表最傲嬌、最震撼嘅開局廣東話解說旁白（1至2句）！你必須在第一句明確介紹自己（例如說出「本大小姐係釘崎野薔薇！」或「我係釘崎野薔薇」），否則沒有人知道是你！請注意：對戰尚未開始，玩家正處於準備階段，在你的開場白說完之後才會正式進入對戰倒數。因此，你的解說必須是開戰前的嗆聲、熱身或宣戰，千萬不要說「對戰已經開始」之類的話！如果系統同時提供咗 P1、P2 嘅玩家即時畫面，請先觀察兩位玩家當下清楚可見嘅表情、姿勢、氣勢、服裝或準備狀態，並自然融入至少一兩個具體可見細節去開場挑釁或炒熱氣氛；只可以講肉眼睇到嘅內容，唔好亂作。直接進入角色解說，不要複述或確認本指令！】\n\n【附加指令】：\n${systemPrompt}`;
@@ -883,8 +894,8 @@ app.post('/api/live-status', async (req, res) => {
     // 2. Handle subsequent live status game updates
     let promptText = "";
     if (isZh) {
-        const toneDirective = foulLanguage 
-            ? "（粗口垃圾話模式已開啟！請使用廣東話粗口/挑釁詞調侃玩家）" 
+        const toneDirective = foulLanguage
+            ? "（粗口垃圾話模式已開啟！請使用廣東話粗口/挑釁詞調侃玩家）"
             : "（請保持文明，不可使用粗口髒話）";
         if (eventType === "CAST" && detail) {
             promptText = `[對戰更新] ${translateDetail(detail)}。目前完成進度：P1 完成了 ${p1Score} 次，P2 完成了 ${p2Score} 次。${toneDirective} 請立刻提供下一句極簡短的廣東話解說旁白！`;
@@ -892,8 +903,8 @@ app.post('/api/live-status', async (req, res) => {
             promptText = `[對戰更新] 目前完成進度：P1 完成了 ${p1Score} 次，P2 完成了 ${p2Score} 次。${toneDirective} 請立刻提供下一句極簡短的廣東話解說旁白！`;
         }
     } else {
-        const toneDirective = foulLanguage 
-            ? "(Trash-talk mode is active! Feel free to lightly roast the players)" 
+        const toneDirective = foulLanguage
+            ? "(Trash-talk mode is active! Feel free to lightly roast the players)"
             : "(Swearing is OFF. Keep commentary intense but clean)";
         if (eventType === "CAST" && detail) {
             promptText = `[GAME UPDATE] ${detail}. Current Standing: P1 Score = ${p1Score}, P2 Score = ${p2Score}. ${toneDirective} Please provide your next short, high-energy commentary!`;
@@ -957,7 +968,14 @@ app.post('/api/battle-result', async (req, res) => {
                 body: JSON.stringify(payload)
             });
             if (response.ok) {
-                const data = await response.json();
+                const rawText = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (e) {
+                    console.error(`[AWS Bridge Proxy] Failed to parse JSON response: "${rawText}"`, e.message);
+                    throw new Error(`Unexpected end of JSON input from AWS Lambda. Raw response was: "${rawText}"`);
+                }
                 console.log(`[AWS Bridge Proxy] Received AWS Battle Result: "${data.commentary}" ttsMode=${data.ttsMode || 'browser'} hasAudioUrl=${!!data.audioUrl}`);
                 return res.json({
                     ok: true,
@@ -977,7 +995,7 @@ app.post('/api/battle-result', async (req, res) => {
             console.error(`[AWS Bridge Proxy Exception]:`, err.message);
         }
     }
-    
+
     let promptText = "";
     const isZh = lang && lang.toLowerCase().startsWith('zh');
 
@@ -1178,7 +1196,7 @@ io.on('connection', (socket) => {
         state.gameCount = parseInt(count) || 11;
         state.sessionId = sessionId;
         state.winner = null;
-        
+
         state.p1.score = 0;
         state.p1.timeLeft = state.gameDifficulty;
         state.p1.currentDomain = null;
@@ -1194,9 +1212,9 @@ io.on('connection', (socket) => {
         // Shuffle domain techniques list for synced same gesture mode
         if (syncedGestureMode) {
             const allActions = [
-                "Unlimited Void", "Malevolent Shrine", "Self-Embodiment of Perfection", 
-                "Authentic Mutual Love", "Idle Death Gamble", "Yuji Itadori", 
-                "Chimera Shadow Garden", "Time Cell Moon Palace", "Lapse Blue", 
+                "Unlimited Void", "Malevolent Shrine", "Self-Embodiment of Perfection",
+                "Authentic Mutual Love", "Idle Death Gamble", "Yuji Itadori",
+                "Chimera Shadow Garden", "Time Cell Moon Palace", "Lapse Blue",
                 "Reversal Red", "Hollow Purple"
             ];
             const shuffled = allActions.sort(() => Math.random() - 0.5);
@@ -1360,7 +1378,7 @@ io.on('connection', (socket) => {
         state.matchStatus = 'idle';
         state.winner = null;
         state.shuffledActionList = null;
-        
+
         state.p1.score = 0; state.p1.timeLeft = 0; state.p1.currentDomain = null; state.p1.finished = false; state.p1.attempted = 0;
         state.p2.score = 0; state.p2.timeLeft = 0; state.p2.currentDomain = null; state.p2.finished = false; state.p2.attempted = 0;
         state.lastUpdated = Date.now();
@@ -1375,7 +1393,7 @@ io.on('connection', (socket) => {
             if (rooms.get(socket.roomCode).size === 0) {
                 rooms.delete(socket.roomCode);
             }
-            
+
             const state = getOrCreateRoomState(socket.roomCode);
             if (socket.role === 'player1') {
                 state.p1.active = false;
