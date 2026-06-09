@@ -13,10 +13,10 @@ A standalone AR experience for triggering Domain Expansions and Techniques using
 - **迷你遊戲模式**: 在限時內挑戰完成手勢並獲取分數！
 - **Static Local Battle Mode**: Same-browser battle works with pure client-side tab communication (`BroadcastChannel` + WebRTC), even on a static host.
 - **靜態本地對戰模式**: 同一瀏覽器內的對戰可透過純前端分頁通訊（`BroadcastChannel` + WebRTC）運行，即使只是靜態網站託管也可使用。
-- **Server-Assisted Advanced Features**: AI commentator, webcam snapshot upload, AI portrait fusion, and internet multiplayer require backend APIs / signaling.
-- **伺服器增強功能**: AI 解說、相機快照上傳、AI 人像融合與跨網路多人連線仍然需要後端 API / 信令服務。
-- **Configurable Endpoint**: Save your Robot API URL locally.
-- **可配置端點**: 在本地保存您的機器人 API 網址。
+- **Server-Assisted Advanced Features**: AI commentator, webcam snapshot upload, AI portrait fusion, server-side technique triggering (`/api/trigger-technique`), and internet multiplayer require backend APIs / signaling.
+- **伺服器增強功能**: AI 解說、相機快照上傳、AI 人像融合、伺服器端術式觸發（`/api/trigger-technique`）與跨網路多人連線需要後端 API / 信令服務。
+- **Configurable Endpoint & Offline Fallback**: In serverless mode, techniques are orchestrated on the server side. In local offline/static mode, the client gracefully falls back to direct client-side calling of the configured local Robot API.
+- **可配置端點與離線回退**: 在無伺服器模式下，術式由伺服器端統一協調；在本地離線/靜態模式下，前端會自動降級並直接調用配置的本地機器人 API。
 - **High-Quality VFX**: Full particle and atmospheric effects included.
 - **高畫質視覺效果**: 包含完整的粒子與環境特效。
 - **Hand-Centered Interaction**: Techniques follow your hand movements.
