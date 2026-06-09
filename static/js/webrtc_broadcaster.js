@@ -13,7 +13,12 @@ class ServerlessSocket {
         this.pingTimer = null;
         this.reconnectTimer = null;
         this.explicitDisconnect = false;
-        this.connect();
+        this.isConnected = false;
+        setTimeout(() => {
+            if (!this.explicitDisconnect) {
+                this.connect();
+            }
+        }, 0);
     }
 
     connect() {
@@ -23,6 +28,7 @@ class ServerlessSocket {
 
         this.ws.onopen = () => {
             console.log(`[ServerlessSocket] WebSocket open, assigned id: ${this.id}`);
+            this.isConnected = true;
             this.trigger('connect');
             this.startHeartbeat();
         };
@@ -42,6 +48,7 @@ class ServerlessSocket {
 
         this.ws.onclose = () => {
             console.log('[ServerlessSocket] WebSocket closed');
+            this.isConnected = false;
             this.stopHeartbeat();
             this.trigger('disconnect');
 
@@ -80,6 +87,16 @@ class ServerlessSocket {
             this.listeners[event] = [];
         }
         this.listeners[event].push(callback);
+
+        if (event === 'connect' && this.isConnected) {
+            setTimeout(() => {
+                try {
+                    callback();
+                } catch (err) {
+                    console.error(`[ServerlessSocket] Error executing deferred listener for event ${event}:`, err);
+                }
+            }, 0);
+        }
     }
 
     emit(event, data) {
@@ -108,6 +125,7 @@ class ServerlessSocket {
 
     disconnect() {
         this.explicitDisconnect = true;
+        this.isConnected = false;
         this.stopHeartbeat();
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
@@ -149,6 +167,9 @@ class BattleModeSync {
         this.onPlayVideoSync = null;  // Callback for viewer
         this.onViewerJoin = null;     // Callback for player
         this.onCaptureWebcamFrame = null; // Callback for player to take a snapshot
+        this.onStateUpdateReceived = null; // New callback for receiving the complete MatchState object
+        this.onLocalStateAction = null;    // New callback for local offline state action coordination
+        this.onUserJoined = null;          // Callback for user joined (to sync state)
         
         this.init();
     }
@@ -258,6 +279,16 @@ class BattleModeSync {
             if (this.role === 'viewer' && (role === 'player1' || role === 'player2')) {
                 this.broadcast('VIEWER_JOIN', null, id);
             }
+            if (this.onUserJoined) {
+                this.onUserJoined(id, role);
+            }
+        });
+
+        this.socket.on('state_update', (state) => {
+            console.log('[BattleSync] MatchState updated:', state);
+            if (this.onStateUpdateReceived) {
+                this.onStateUpdateReceived(state);
+            }
         });
     }
 
@@ -291,6 +322,10 @@ class BattleModeSync {
 
                     if (this.hasUsablePeerConnection(existingPc)) {
                         break;
+                    }
+
+                    if (this.onUserJoined) {
+                        this.onUserJoined(targetID, senderID);
                     }
 
                     if (Date.now() - lastJoinRequest < 5000) {
@@ -350,6 +385,16 @@ class BattleModeSync {
             case 'PLAY_VIDEO_SYNC':
                 if (this.role === 'viewer' && this.onPlayVideoSync) {
                     this.onPlayVideoSync(senderID, data);
+                }
+                break;
+            case 'STATE_ACTION':
+                if (this.onLocalStateAction) {
+                    this.onLocalStateAction(data.event, data.payload, senderID);
+                }
+                break;
+            case 'STATE_UPDATE_LOCAL':
+                if (this.onStateUpdateReceived) {
+                    this.onStateUpdateReceived(data);
                 }
                 break;
         }
@@ -580,6 +625,18 @@ class BattleModeSync {
     sendState(state) {
         if (this.isPlayer()) {
             this.broadcast('GAME_STATE', state);
+        }
+    }
+
+    emitStateAction(event, payload) {
+        const isServerless = (this.socket && typeof ServerlessSocket !== 'undefined' && this.socket instanceof ServerlessSocket);
+        if (this.mode === 'online' && this.socket && !isServerless) {
+            this.socket.emit(event, payload);
+        } else {
+            this.broadcast('STATE_ACTION', { event, payload });
+            if (this.onLocalStateAction) {
+                this.onLocalStateAction(event, payload, this.role);
+            }
         }
     }
 

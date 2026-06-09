@@ -227,6 +227,40 @@ app.post('/api/register-room', (req, res) => {
     res.json({ ok: true });
 });
 
+app.post('/api/trigger-technique', async (req, res) => {
+    if (awsApiEndpoint) {
+        try {
+            console.log(`[AWS Bridge Proxy] Forwarding trigger-technique request to AWS REST API...`);
+            const authHeader = req.headers['authorization'];
+            const forwardHeaders = { 'Content-Type': 'application/json' };
+            if (authHeader) {
+                forwardHeaders['Authorization'] = authHeader;
+            }
+
+            const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/trigger-technique`, {
+                method: 'POST',
+                headers: forwardHeaders,
+                body: JSON.stringify(req.body)
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                return res.json(data);
+            } else {
+                const errorText = await response.text();
+                console.error(`[AWS Bridge Proxy Error] Status: ${response.status} Body: ${errorText}`);
+                return res.status(response.status).send(errorText);
+            }
+        } catch (err) {
+            console.error(`[AWS Bridge Proxy Exception]:`, err.message);
+            return res.status(500).json({ error: err.message });
+        }
+    } else {
+        // No AWS API Endpoint active locally. Return 404 so browser falls back to direct local simulator.
+        return res.status(404).json({ error: "AWS Serverless API Endpoint not configured. Falling back to local/direct simulator mode." });
+    }
+});
+
 app.post('/api/enhance-portrait', (req, res) => {
     const { sessionId, templateId } = req.body;
     const resolvedSessionId = sessionId || "main";
@@ -676,6 +710,64 @@ app.get('/health', (req, res) => {
 });
 
 const rooms = new Map(); // roomCode -> Set of socketIds
+const roomsState = new Map(); // roomCode -> MatchState object
+
+function getOrCreateRoomState(roomCode) {
+    if (!roomsState.has(roomCode)) {
+        roomsState.set(roomCode, {
+            roomCode: roomCode,
+            sessionId: "",
+            matchStatus: "idle", // idle | preparing | counting_down | playing | paused | ended
+            countdownTimer: 3,
+            gameDifficulty: 8,
+            gameCount: 11,
+            shuffledActionList: null,
+            winner: null,
+            p1: { score: 0, timeLeft: 0, currentDomain: null, active: false, finished: false, attempted: 0 },
+            p2: { score: 0, timeLeft: 0, currentDomain: null, active: false, finished: false, attempted: 0 },
+            lastUpdated: Date.now()
+        });
+    }
+    return roomsState.get(roomCode);
+}
+
+function evaluateVictory(state) {
+    const p1 = state.p1;
+    const p2 = state.p2;
+
+    if (p1.attempted >= state.gameCount) p1.finished = true;
+    if (p2.attempted >= state.gameCount) p2.finished = true;
+
+    const normalEnd = p1.finished && p2.finished;
+    let earlyWin = false;
+    let winner = null;
+
+    const maxP2Score = p2.score + Math.max(0, state.gameCount - p2.attempted);
+    const maxP1Score = p1.score + Math.max(0, state.gameCount - p1.attempted);
+
+    if (p1.finished && !p2.finished && p1.score > maxP2Score) {
+        earlyWin = true;
+        winner = 'PLAYER 1';
+    } else if (p2.finished && !p1.finished && p2.score > maxP1Score) {
+        earlyWin = true;
+        winner = 'PLAYER 2';
+    } else if (normalEnd) {
+        if (p1.score === p2.score) {
+            winner = 'DRAW';
+        } else if (p1.score > p2.score) {
+            winner = 'PLAYER 1';
+        } else {
+            winner = 'PLAYER 2';
+        }
+    }
+
+    if (normalEnd || earlyWin) {
+        state.matchStatus = 'ended';
+        state.winner = winner;
+        return true;
+    }
+    return false;
+}
 
 io.on('connection', (socket) => {
     console.log(`[Server] User connected: ${socket.id}`);
@@ -691,26 +783,243 @@ io.on('connection', (socket) => {
         rooms.get(roomCode).add(socket.id);
 
         console.log(`[Server] ${socket.id} joined room ${roomCode} as ${role}`);
-        
-        // Notify others in the room
+
+        // Update player connection status in state object
+        const state = getOrCreateRoomState(roomCode);
+        if (role === 'player1') {
+            state.p1.active = true;
+        } else if (role === 'player2') {
+            state.p2.active = true;
+        } else if (role === 'viewer') {
+            console.log(`[Server] Viewer connected to room ${roomCode}. Resetting room state to idle.`);
+            state.matchStatus = 'idle';
+            state.winner = null;
+            state.shuffledActionList = null;
+            state.p1.score = 0; state.p1.timeLeft = 0; state.p1.currentDomain = null; state.p1.finished = false; state.p1.attempted = 0;
+            state.p2.score = 0; state.p2.timeLeft = 0; state.p2.currentDomain = null; state.p2.finished = false; state.p2.attempted = 0;
+            state.lastUpdated = Date.now();
+        }
+
+        // Notify room of the updated state and the new user
+        io.to(roomCode).emit('state_update', state);
         socket.to(roomCode).emit('user_joined', { id: socket.id, role });
     });
 
     socket.on('signal', ({ type, data, to }) => {
         const payload = {
             from: socket.id,
-            role: socket.role, // Include role for easy identification
+            role: socket.role,
             type,
             data
         };
 
         if (to) {
-            // Unicast to specific user
             io.to(to).emit('signal', payload);
         } else {
-            // Broadcast to whole room (excluding sender)
             socket.to(socket.roomCode).emit('signal', payload);
         }
+    });
+
+    // Reactive State: Viewer requests to start pre-match preparation
+    socket.on('start_battle_request', ({ difficulty, count, syncedGestureMode, sessionId }) => {
+        const roomCode = socket.roomCode;
+        if (!roomCode) return;
+
+        const state = getOrCreateRoomState(roomCode);
+        state.matchStatus = 'preparing';
+        state.gameDifficulty = parseInt(difficulty) || 8;
+        state.gameCount = parseInt(count) || 11;
+        state.sessionId = sessionId;
+        state.winner = null;
+        
+        state.p1.score = 0;
+        state.p1.timeLeft = state.gameDifficulty;
+        state.p1.currentDomain = null;
+        state.p1.finished = false;
+        state.p1.attempted = 0;
+
+        state.p2.score = 0;
+        state.p2.timeLeft = state.gameDifficulty;
+        state.p2.currentDomain = null;
+        state.p2.finished = false;
+        state.p2.attempted = 0;
+
+        // Shuffle domain techniques list for synced same gesture mode
+        if (syncedGestureMode) {
+            const allActions = [
+                "Unlimited Void", "Malevolent Shrine", "Self-Embodiment of Perfection", 
+                "Authentic Mutual Love", "Idle Death Gamble", "Yuji Itadori", 
+                "Chimera Shadow Garden", "Time Cell Moon Palace", "Lapse Blue", 
+                "Reversal Red", "Hollow Purple"
+            ];
+            const shuffled = allActions.sort(() => Math.random() - 0.5);
+            state.shuffledActionList = shuffled.slice(0, Math.min(state.gameCount, shuffled.length));
+        } else {
+            state.shuffledActionList = null;
+        }
+
+        state.lastUpdated = Date.now();
+
+        // Broadcast updated state to all connected room sockets
+        io.to(roomCode).emit('state_update', state);
+
+        // Safely trigger camera snapshots and overlay cleaning via standard signal bridge
+        io.to(roomCode).emit('signal', { type: 'CLOSE_OVERLAYS', data: { isStarting: true } });
+        io.to(roomCode).emit('signal', { type: 'CAPTURE_WEBCAM_FRAME', data: { phase: 'START', sessionId: sessionId } });
+    });
+
+    // Reactive State: Viewer completes welcome commentary intro
+    socket.on('match_welcome_complete', () => {
+        const roomCode = socket.roomCode;
+        if (!roomCode) return;
+
+        const state = getOrCreateRoomState(roomCode);
+        state.matchStatus = 'counting_down';
+        state.lastUpdated = Date.now();
+
+        io.to(roomCode).emit('state_update', state);
+    });
+
+    // Reactive State: Countdown finishes, start playing
+    socket.on('countdown_finished', () => {
+        const roomCode = socket.roomCode;
+        if (!roomCode) return;
+
+        const state = getOrCreateRoomState(roomCode);
+        state.matchStatus = 'playing';
+        state.lastUpdated = Date.now();
+
+        io.to(roomCode).emit('state_update', state);
+
+        // Tell player client instances to launch their mini game round
+        io.to(roomCode).emit('signal', {
+            type: 'START_BATTLE',
+            data: {
+                difficulty: state.gameDifficulty,
+                count: state.gameCount,
+                openclawSessionId: state.sessionId,
+                actionList: state.shuffledActionList
+            }
+        });
+    });
+
+    // Reactive State: Player ticks down their target timer locally
+    socket.on('player_tick', ({ timeLeft }) => {
+        const roomCode = socket.roomCode;
+        const role = socket.role;
+        if (!roomCode || !role) return;
+
+        const state = getOrCreateRoomState(roomCode);
+        if (state.matchStatus !== 'playing') {
+            console.warn(`[Server] Discarding player_tick because matchStatus is: ${state.matchStatus}`);
+            return;
+        }
+        if (role === 'player1') {
+            state.p1.timeLeft = timeLeft;
+        } else if (role === 'player2') {
+            state.p2.timeLeft = timeLeft;
+        }
+        state.lastUpdated = Date.now();
+
+        // Emit updated state to room so viewer updates individual timer bars
+        io.to(roomCode).emit('state_update', state);
+    });
+
+    // Reactive State: Player timeout on an action
+    socket.on('player_timeout', () => {
+        const roomCode = socket.roomCode;
+        const role = socket.role;
+        if (!roomCode || !role) return;
+
+        const state = getOrCreateRoomState(roomCode);
+        if (state.matchStatus !== 'playing') {
+            console.warn(`[Server] Discarding player_timeout because matchStatus is: ${state.matchStatus}`);
+            return;
+        }
+        if (role === 'player1') {
+            state.p1.attempted += 1;
+            state.p1.timeLeft = state.gameDifficulty;
+            state.p1.currentDomain = null;
+        } else if (role === 'player2') {
+            state.p2.attempted += 1;
+            state.p2.timeLeft = state.gameDifficulty;
+            state.p2.currentDomain = null;
+        }
+        state.lastUpdated = Date.now();
+
+        evaluateVictory(state);
+        io.to(roomCode).emit('state_update', state);
+    });
+
+    // Reactive State: Player submits a successful gesture
+    socket.on('submit_gesture_success', ({ score, timeLeft, currentDomain, videoSrc }) => {
+        const roomCode = socket.roomCode;
+        const role = socket.role;
+        if (!roomCode || !role) return;
+
+        const state = getOrCreateRoomState(roomCode);
+        if (state.matchStatus !== 'playing') {
+            console.warn(`[Server] Discarding submit_gesture_success because matchStatus is: ${state.matchStatus}`);
+            return;
+        }
+        if (role === 'player1') {
+            state.p1.score = score;
+            state.p1.timeLeft = timeLeft;
+            state.p1.currentDomain = currentDomain;
+            state.p1.attempted += 1;
+        } else if (role === 'player2') {
+            state.p2.score = score;
+            state.p2.timeLeft = timeLeft;
+            state.p2.currentDomain = currentDomain;
+            state.p2.attempted += 1;
+        }
+        state.lastUpdated = Date.now();
+
+        // Pause match while showing technique cinematic
+        state.matchStatus = 'paused';
+
+        const won = evaluateVictory(state);
+        io.to(roomCode).emit('state_update', state);
+
+        // Trigger cinematic overlay on viewer/players
+        io.to(roomCode).emit('signal', { type: 'PLAY_VIDEO_SYNC', data: videoSrc, from: role });
+
+        if (won) {
+            // Instantly tell player clients the match is over to freeze hand detection
+            io.to(roomCode).emit('signal', { type: 'MATCH_OVER', data: null });
+        }
+    });
+
+    // Reactive State: Cinematic ends, resume playing
+    socket.on('cinematic_finished', () => {
+        const roomCode = socket.roomCode;
+        if (!roomCode) return;
+
+        const state = getOrCreateRoomState(roomCode);
+        if (state.matchStatus === 'paused') {
+            state.matchStatus = 'playing';
+            state.lastUpdated = Date.now();
+            io.to(roomCode).emit('state_update', state);
+            io.to(roomCode).emit('signal', { type: 'MATCH_RESUME', data: null });
+        }
+    });
+
+    // Reactive State: Viewer clears/resets the game session
+    socket.on('room_reset_request', () => {
+        const roomCode = socket.roomCode;
+        if (!roomCode) return;
+
+        const state = getOrCreateRoomState(roomCode);
+        state.matchStatus = 'idle';
+        state.winner = null;
+        state.shuffledActionList = null;
+        
+        state.p1.score = 0; state.p1.timeLeft = 0; state.p1.currentDomain = null; state.p1.finished = false; state.p1.attempted = 0;
+        state.p2.score = 0; state.p2.timeLeft = 0; state.p2.currentDomain = null; state.p2.finished = false; state.p2.attempted = 0;
+        state.lastUpdated = Date.now();
+
+        io.to(roomCode).emit('state_update', state);
+        io.to(roomCode).emit('signal', { type: 'CLOSE_OVERLAYS', data: { isStarting: false } });
     });
 
     socket.on('disconnect', () => {
@@ -719,6 +1028,23 @@ io.on('connection', (socket) => {
             if (rooms.get(socket.roomCode).size === 0) {
                 rooms.delete(socket.roomCode);
             }
+            
+            const state = getOrCreateRoomState(socket.roomCode);
+            if (socket.role === 'player1') {
+                state.p1.active = false;
+            } else if (socket.role === 'player2') {
+                state.p2.active = false;
+            } else if (socket.role === 'viewer') {
+                // Self-Healing Viewer Refresh Clean-up: If the Viewer disconnects/refreshes, wipe match state
+                state.matchStatus = 'idle';
+                state.winner = null;
+                state.shuffledActionList = null;
+                state.p1.score = 0; state.p1.timeLeft = 0; state.p1.currentDomain = null; state.p1.finished = false; state.p1.attempted = 0;
+                state.p2.score = 0; state.p2.timeLeft = 0; state.p2.currentDomain = null; state.p2.finished = false; state.p2.attempted = 0;
+                io.to(socket.roomCode).emit('signal', { type: 'CLOSE_OVERLAYS', data: { isStarting: false } });
+            }
+
+            io.to(socket.roomCode).emit('state_update', state);
             socket.to(socket.roomCode).emit('user_left', { id: socket.id, role: socket.role });
         }
         console.log(`[Server] User disconnected: ${socket.id}`);

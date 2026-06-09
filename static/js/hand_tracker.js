@@ -627,7 +627,7 @@ class HandTracker {
             const dataUrl = capCanvas.toDataURL('image/jpeg', 0.7);
             const base64Str = dataUrl.split('base64,')[1];
             
-            const openclawSessionId = sessionIdOverride || localStorage.getItem('robot_session_key') || 'mcpserver';
+            const openclawSessionId = sessionIdOverride || localStorage.getItem('openclawActiveSessionId') || localStorage.getItem('robot_session_key') || 'mcpserver';
             
             this.remoteLog('INFO', `[Single-Shot] Capturing & uploading webcam frame for session=${openclawSessionId}`);
             
@@ -773,6 +773,25 @@ class HandTracker {
             }
         }
 
+        // Update Online Status UI
+        if (this.onlineStatus) {
+            if (this.battleNetMode === 'online') {
+                if (this.battleRole === 'none') {
+                    this.onlineStatus.textContent = 'Disconnected (Select Player Role)';
+                    this.onlineStatus.style.color = '#ff5252';
+                } else if (!this.onlineRoomCode || this.onlineRoomCode.length !== 4) {
+                    this.onlineStatus.textContent = 'Disconnected (Enter Room Code)';
+                    this.onlineStatus.style.color = '#ff5252';
+                } else {
+                    this.onlineStatus.textContent = `Joined: ${this.onlineRoomCode}`;
+                    this.onlineStatus.style.color = '#4CAF50';
+                }
+            } else {
+                this.onlineStatus.textContent = 'Disconnected (Local Mode)';
+                this.onlineStatus.style.color = '#AAA';
+            }
+        }
+
         // --- Start Online Refactor ---
         const needsReinit = !this.battleSync || 
                            this.battleSync.role !== this.battleRole || 
@@ -817,9 +836,6 @@ class HandTracker {
                     this.gameHud.classList.remove('hidden');
                 }
                 this.updateGameHUD(); // Show "PREPARING..." visual cue
-                
-                // Signal viewer that we are clean
-                this.syncBattleState();
             };
 
             this.battleSync.onMatchOver = () => {
@@ -854,8 +870,116 @@ class HandTracker {
             };
 
             this.battleSync.onViewerJoin = () => {
-                console.log('[Battle] Viewer joined, syncing current state');
-                this.syncBattleState();
+                console.log('[Battle] Viewer joined');
+            };
+
+            this.battleSync.onStateUpdateReceived = (state) => {
+                console.log('[Battle] State update received:', state);
+                if (this.battleRole === 'none') return;
+                
+                const myState = this.battleRole === 'player1' ? state.p1 : state.p2;
+                
+                // 1. Handle transition to 'idle'
+                if (state.matchStatus === 'idle') {
+                    if (this.isGameActive || this.isPreparingMatch) {
+                        console.log('[Battle] State is idle, stopping mini game');
+                        this.stopMiniGame('Room Reset', true);
+                        this.hideOverlays();
+                    }
+                    return;
+                }
+                
+                // 2. Handle 'preparing' status
+                if (state.matchStatus === 'preparing') {
+                    this.isGameActive = false;
+                    this.isPreparingMatch = true;
+                    this.gameScore = 0;
+                    this.gameTarget = null;
+                    if (this.gameTimerInterval) {
+                        clearInterval(this.gameTimerInterval);
+                        this.gameTimerInterval = null;
+                    }
+                    this.hideOverlays();
+                    if (this.gameHud) {
+                        this.gameHud.classList.remove('hidden');
+                    }
+                    this.updateGameHUD();
+                    return;
+                }
+                
+                // 3. Handle pause state transition
+                if (state.matchStatus === 'paused') {
+                    if (!this.isPaused) {
+                        console.log('[Battle] Match PAUSED by server');
+                        this.isPaused = true;
+                        if (this.gameTimerInterval) {
+                            clearInterval(this.gameTimerInterval);
+                            this.gameTimerInterval = null;
+                        }
+                    }
+                } else if (state.matchStatus === 'playing') {
+                    if (this.isPaused) {
+                        console.log('[Battle] Match RESUMED by server state update');
+                        this.isPaused = false;
+                        if (this.isGameActive) {
+                            if (this.gameTarget === null || this.isSyncedGestureMode) {
+                                this.nextGameAction();
+                            } else {
+                                this.startGameTimer();
+                            }
+                        }
+                    }
+                }
+                
+                // 4. Handle self-healing/reconnection state recovery
+                if ((state.matchStatus === 'playing' || state.matchStatus === 'paused') && !this.isGameActive) {
+                    console.log('[Battle] Active match in progress, attempting state recovery...');
+                    
+                    const config = {
+                        difficulty: state.gameDifficulty,
+                        count: state.gameCount,
+                        openclawSessionId: state.sessionId,
+                        actionList: state.shuffledActionList
+                    };
+                    
+                    this.isGameActive = true;
+                    this.isPreparingMatch = false;
+                    this.isPaused = (state.matchStatus === 'paused');
+                    this.gameScore = myState.score;
+                    
+                    // Recover remaining action list
+                    if (state.shuffledActionList) {
+                        this.isSyncedGestureMode = true;
+                        const remainingCount = state.gameCount - myState.attempted;
+                        this.gameActionList = state.shuffledActionList.slice(0, remainingCount);
+                    } else {
+                        this.isSyncedGestureMode = false;
+                        const allActions = [
+                            "Unlimited Void", "Malevolent Shrine", "Self-Embodiment of Perfection", 
+                            "Authentic Mutual Love", "Idle Death Gamble", "Yuji Itadori", 
+                            "Chimera Shadow Garden", "Time Cell Moon Palace", "Lapse Blue", 
+                            "Reversal Red", "Hollow Purple"
+                        ];
+                        const shuffled = allActions.sort(() => Math.random() - 0.5);
+                        const remainingCount = state.gameCount - myState.attempted;
+                        this.gameActionList = shuffled.slice(0, remainingCount);
+                    }
+                    
+                    if (this.gameHud) this.gameHud.classList.remove('hidden');
+                    this.hideOverlays();
+                    
+                    if (this.gameActionList.length > 0) {
+                        this.gameTarget = this.gameActionList.pop();
+                        this.gameTimeLeft = myState.timeLeft > 0 ? myState.timeLeft : state.gameDifficulty;
+                        this.updateGameHUD();
+                        
+                        if (!this.isPaused) {
+                            this.startGameTimer();
+                        }
+                    } else {
+                        this.stopMiniGame('Round Complete', false);
+                    }
+                }
             };
 
             // Ensure players ignore each other's game states/technique events
@@ -1222,8 +1346,8 @@ class HandTracker {
 
         const absSrc = this.getVideoUrl(file);
 
-        // Sync to Battle Viewer (Always broadcast if in battle mode)
-        if (this.battleSync) {
+        // Sync to Battle Viewer (Only broadcast if in battle mode AND the match is active)
+        if (this.battleSync && this.isGameActive) {
             this.battleSync.broadcast('PLAY_VIDEO_SYNC', absSrc);
         }
 
@@ -1283,21 +1407,44 @@ class HandTracker {
             if (this.isGameActive && stableDomain === this.gameTarget) {
                 scoredThisFrame = true;
                 console.log('[MiniGame] Success:', stableDomain);
-                this.gameScore++;
-                this.gameTarget = null; // Prevent double scoring
                 
-                // Force immediate sync on score to prevent race conditions at match end
-                this.syncBattleState();
-                
-                if (this.gameTimerInterval) {
-                    clearInterval(this.gameTimerInterval);
-                    this.gameTimerInterval = null;
+                if (this.battleRole !== 'none') {
+                    const newScore = this.gameScore + 1;
+                    const videoMap = {
+                        "Unlimited Void": "domain_unlimited_void.mp4", "Malevolent Shrine": "domain_malevolent_shrine.mp4",
+                        "Self-Embodiment of Perfection": "domain_self_embodiment.mp4", "Authentic Mutual Love": "domain_authentic_love.mp4",
+                        "Idle Death Gamble": "domain_idle_death_gamble.mp4", "Yuji Itadori": "domain_yuji_itadori.mp4",
+                        "Chimera Shadow Garden": "domain_chimera_shadow_garden.mp4", "Time Cell Moon Palace": "domain_time_cell_moon_palace.mp4",
+                        "Lapse Blue": "technique_lapse_blue.mp4", "Reversal Red": "technique_reversal_red.mp4", "Hollow Purple": "technique_hollow_purple.mp4"
+                    };
+                    const file = videoMap[stableDomain];
+                    const videoSrc = file ? this.getVideoUrl(file) : '';
+
+                    this.battleSync.emitStateAction('submit_gesture_success', {
+                        score: newScore,
+                        timeLeft: this.gameTimeLeft,
+                        currentDomain: stableDomain,
+                        videoSrc: videoSrc
+                    });
+
+                    this.gameScore = newScore;
+                    this.gameTarget = null;
+                    if (this.gameTimerInterval) {
+                        clearInterval(this.gameTimerInterval);
+                        this.gameTimerInterval = null;
+                    }
+                    this.playSuccessSound();
+                } else {
+                    this.gameScore++;
+                    this.gameTarget = null; // Prevent double scoring
+                    this.syncBattleState();
+                    if (this.gameTimerInterval) {
+                        clearInterval(this.gameTimerInterval);
+                        this.gameTimerInterval = null;
+                    }
+                    this.playSuccessSound();
+                    this.playVideo(stableDomain);
                 }
-
-                this.playSuccessSound();
-
-                // Play cinematic video on success score in all modes!
-                this.playVideo(stableDomain);
 
                 // Show visual feedback for success
                 if (this.successFeedback) {
@@ -1348,7 +1495,13 @@ class HandTracker {
             // Determine if we should trigger VFX / Action
             // If in an active game, we ONLY trigger VFX / Action if they just scored.
             // If NOT in an active game, we trigger VFX / Action whenever lastVFXDomain changes.
-            const shouldTriggerVFX = this.isGameActive ? scoredThisFrame : (this.lastVFXDomain !== stableDomain);
+            // In online/offline battle mode (battleRole !== 'none'), we NEVER trigger VFX / Action unless the game is active.
+            let shouldTriggerVFX = false;
+            if (this.battleRole !== 'none') {
+                shouldTriggerVFX = this.isGameActive && scoredThisFrame;
+            } else {
+                shouldTriggerVFX = this.isGameActive ? scoredThisFrame : (this.lastVFXDomain !== stableDomain);
+            }
 
             if (shouldTriggerVFX) {
                 this.lastVFXDomain = stableDomain;
@@ -1664,25 +1817,26 @@ class HandTracker {
 
             this.gameTimeLeft--;
             this.updateGameHUD();
+
+            if (this.battleRole !== 'none') {
+                this.battleSync.emitStateAction('player_tick', { timeLeft: this.gameTimeLeft });
+            }
+
             if (this.gameTimeLeft <= 0) {
                 clearInterval(this.gameTimerInterval);
                 this.gameTimerInterval = null;
+                
+                if (this.battleRole !== 'none') {
+                    this.battleSync.emitStateAction('player_timeout', {});
+                }
                 this.nextGameAction(); // Move to next even if failed
             }
         }, 1000);
     }
 
     syncBattleState(stableDomain = null) {
-        if (!this.battleSync) return;
-        const displayName = stableDomain ? (this.domainGame.displayNames[stableDomain] || stableDomain) : 
-                           (this.gameTarget ? (this.domainGame.displayNames[this.gameTarget] || this.gameTarget) : null);
-        this.battleSync.sendState({
-            domain: displayName,
-            score: this.gameScore,
-            timer: this.gameTimeLeft,
-            isGameActive: this.isGameActive,
-            totalActions: this.gameActionList ? (this.gameActionList.length + (this.gameTarget ? 1 : 0)) : 0
-        });
+        // Obsolete under the event-driven centralized server-authoritative state engine.
+        // Kept as a no-op for backward compatibility.
     }
 
     nextGameAction() {
@@ -1749,7 +1903,7 @@ class HandTracker {
     }
 
     async triggerRobotAction(robotId, action, options = {}) {
-        const { bypassCooldown = false } = options;
+        const { bypassCooldown = false, forceLocalFallback = false } = options;
 
         if (this.disableApi) {
             console.log('[API] Robot API is disabled. Skipping call.');
@@ -1772,27 +1926,55 @@ class HandTracker {
             this.lastActionTime = now;
         }
 
-        // Dynamic Player-to-Robot mapping:
-        // When robotId is "all", split actions to player-specific target robot groups
-        if (robotId === "all") {
-            if (this.battleRole === "player1") {
-                console.log("[API] Role is Player 1: Concurrently triggering Robots 1, 2, and 3");
-                return Promise.all([
-                    this.triggerRobotAction("robot_1", action, { bypassCooldown: true }),
-                    this.triggerRobotAction("robot_2", action, { bypassCooldown: true }),
-                    this.triggerRobotAction("robot_3", action, { bypassCooldown: true })
-                ]);
-            } else if (this.battleRole === "player2") {
-                console.log("[API] Role is Player 2: Concurrently triggering Robots 4, 5, and 6");
-                return Promise.all([
-                    this.triggerRobotAction("robot_4", action, { bypassCooldown: true }),
-                    this.triggerRobotAction("robot_5", action, { bypassCooldown: true }),
-                    this.triggerRobotAction("robot_6", action, { bypassCooldown: true })
-                ]);
-            }
-        }
-
+        // Try the secure AWS Serverless backend route first
         try {
+            if (forceLocalFallback) {
+                throw new Error('Skipping serverless check due to forced local fallback');
+            }
+
+            console.log(`[API] Serverless Backend Orchestration: technique="${action}" for robotId="${robotId}"`);
+            const response = await fetch('/api/trigger-technique', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    technique: action,
+                    robotId: robotId,
+                    role: this.battleRole || 'none'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Serverless endpoint returned status ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('[API] Serverless response:', result);
+            if (this.lastResp) this.lastResp.textContent = `${response.status} ${result.success ? 'OK' : 'ERR'}`;
+            return result;
+        } catch (err) {
+            console.warn('⚠️ Serverless Backend route unavailable. Falling back to local offline direct simulator calling:', err);
+
+            // ==========================================
+            // Backwards-Compatible Fallback (Offline/Local)
+            // ==========================================
+            if (robotId === "all") {
+                if (this.battleRole === "player1") {
+                    console.log("[API] Fallback: Role is Player 1: Concurrently triggering Robots 1, 2, and 3");
+                    return Promise.all([
+                        this.triggerRobotAction("robot_1", action, { bypassCooldown: true, forceLocalFallback: true }),
+                        this.triggerRobotAction("robot_2", action, { bypassCooldown: true, forceLocalFallback: true }),
+                        this.triggerRobotAction("robot_3", action, { bypassCooldown: true, forceLocalFallback: true })
+                    ]);
+                } else if (this.battleRole === "player2") {
+                    console.log("[API] Fallback: Role is Player 2: Concurrently triggering Robots 4, 5, and 6");
+                    return Promise.all([
+                        this.triggerRobotAction("robot_4", action, { bypassCooldown: true, forceLocalFallback: true }),
+                        this.triggerRobotAction("robot_5", action, { bypassCooldown: true, forceLocalFallback: true }),
+                        this.triggerRobotAction("robot_6", action, { bypassCooldown: true, forceLocalFallback: true })
+                    ]);
+                }
+            }
+
             let url = this.apiEndpoint.trim();
             const parts = url.split('?');
             let base = parts[0].replace(/\/+$/, "");
@@ -1801,21 +1983,17 @@ class HandTracker {
             const idPattern = /\/(robot_\d+|all)$/;
             if (base.match(idPattern)) base = base.replace(idPattern, '/' + robotId);
             else base = base + '/' + robotId;
-            
-            // Clean session key
+
             const cleanKey = this.sessionKey.trim().replace(/^"|"$/g, '');
             const finalUrl = `${base}${query}${query ? '&' : '?'}session_key=${encodeURIComponent(cleanKey)}`;
-            
-            console.log(`[API] URL: ${finalUrl}`);
-            const response = await fetch(finalUrl, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ action: action }) 
+
+            console.log(`[API] Fallback Direct URL: ${finalUrl}`);
+            const response = await fetch(finalUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
             });
             if (this.lastResp) this.lastResp.textContent = `${response.status} ${response.status === 200 ? 'OK' : 'ERR'}`;
-        } catch (err) { 
-            console.error('❌ API failed:', err); 
-            if (this.lastResp) this.lastResp.textContent = 'NET ERR';
         }
     }
 
@@ -1838,6 +2016,22 @@ class HandTracker {
             this.battleNetModeSelect.addEventListener('change', () => {
                 this.toggleOnlineUI();
                 this.updateBattleSync();
+            });
+        }
+
+        if (this.onlineRoomCodeInput) {
+            this.onlineRoomCodeInput.addEventListener('input', () => {
+                const code = this.onlineRoomCodeInput.value.trim().toUpperCase();
+                if (code.length === 4) {
+                    this.onlineRoomCode = code;
+                    localStorage.setItem('online_room_code', code);
+                    this.updateBattleSync();
+                } else {
+                    if (this.onlineStatus) {
+                        this.onlineStatus.textContent = 'Disconnected (Enter Room Code)';
+                        this.onlineStatus.style.color = '#ff5252';
+                    }
+                }
             });
         }
 

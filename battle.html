@@ -40,59 +40,70 @@
                 <span id="quick-volume-val" style="font-size: 10px; font-weight: bold; color: #FFFF00; font-family: monospace; min-width: 28px; text-align: right;">100%</span>
             </div>
             
+            <!-- Quick Language Selector on Main Screen -->
+            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                <span id="quick-lang-icon" style="font-size: 14px;" title="UI Language">🌐</span>
+                <select id="quick-lang-select" style="background: rgba(0,0,0,0.6); color: #FFF; border: 1px solid rgba(255,255,255,0.2); padding: 2px 4px; border-radius: 4px; font-size: 10px; font-weight: bold; flex: 1; cursor: pointer; outline: none; height: 22px;">
+                    <option value="zh-HK">廣東話 (Cantonese)</option>
+                    <option value="zh-TW">繁體中文 (Traditional Chinese)</option>
+                    <option value="en">English</option>
+                    <option value="ja">日本語</option>
+                </select>
+            </div>
+            
             <div id="battle-settings-toggle" style="font-size: 0.8rem; cursor: pointer; color: #AAA; text-decoration: underline;">⚙️ Match Settings</div>
         </div>
     </div>
     <div id="battle-settings-panel" style="position: fixed; top: 100px; right: 25px; background: rgba(10,10,10,0.95); border: 1px solid rgba(255,255,255,0.15); padding: 20px; border-radius: 16px; z-index: 200; display: none; flex-direction: column; gap: 15px; width: 280px; max-height: calc(100vh - 140px); overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.75); backdrop-filter: blur(20px); scrollbar-width: thin; scrollbar-color: #4A90E2 rgba(0,0,0,0.3);">
         <button id="close-settings-x" onclick="document.getElementById('battle-settings-panel').style.display='none'" style="position: absolute; top: 15px; right: 15px; background: none; border: none; color: #AAA; font-size: 1.5rem; cursor: pointer; transition: color 0.2s; line-height: 1; outline: none; padding: 5px; z-index: 10;" onmouseover="this.style.color='#FFF'" onmouseout="this.style.color='#AAA'">×</button>
-        <h4 style="margin: 0; color: #4A90E2; font-size: 0.9rem;">MATCH CONFIG</h4>
+        <h4 id="title-match-config" style="margin: 0; color: #4A90E2; font-size: 0.9rem;">MATCH CONFIG</h4>
         
         <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 10px;">
             <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                    <label style="font-size: 11px; color: #888;">NETWORK MODE</label>
+                    <label id="label-net-mode" style="font-size: 11px; color: #888;">NETWORK MODE</label>
                     <span id="val-net-mode" style="font-size: 12px; font-weight: bold; color: #FFFF00;">LOCAL</span>
                 </div>
                 <select id="cfg-net-mode" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
-                    <option value="local">LOCAL (Same Browser)</option>
-                    <option value="online">ONLINE (Internet)</option>
+                    <option id="net-mode-local" value="local">LOCAL (Same Browser)</option>
+                    <option id="net-mode-online" value="online">ONLINE (Internet)</option>
                 </select>
             </div>
 
             <div id="room-code-display" style="display: none; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px dashed #555; text-align: center;">
-                <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">ROOM CODE</label>
+                <label id="label-room-code" style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">ROOM CODE</label>
                 <span id="room-code-val" style="font-size: 1.5rem; font-weight: 900; letter-spacing: 5px; color: #FFFF00;">----</span>
             </div>
         </div>
 
-        <h4 style="margin: 10px 0 0; color: #4A90E2; font-size: 0.9rem;">VIEW CONFIG</h4>
+        <h4 id="title-view-config" style="margin: 10px 0 0; color: #4A90E2; font-size: 0.9rem;">VIEW CONFIG</h4>
         <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 10px;">
             <div>
-                <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">BASE CAMERA LAYOUT</label>
+                <label id="label-base-layout" style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">BASE CAMERA LAYOUT</label>
                 <select id="cfg-base-layout" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
-                    <option value="side-by-side">Side-by-Side (Classic)</option>
-                    <option value="vertical-stack">Vertical Stack</option>
+                    <option id="layout-side-by-side" value="side-by-side">Side-by-Side (Classic)</option>
+                    <option id="layout-vertical-stack" value="vertical-stack">Vertical Stack</option>
                 </select>
             </div>
 
             <div style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" id="cfg-dynamic-view" style="width: 16px; height: 16px; cursor: pointer;" checked>
-                <label for="cfg-dynamic-view" style="font-size: 11px; color: #EEE; cursor: pointer;">🔄 AUTO OVERLAY/QUAD</label>
+                <label id="label-dynamic-view" for="cfg-dynamic-view" style="font-size: 11px; color: #EEE; cursor: pointer;">🔄 AUTO OVERLAY/QUAD</label>
             </div>
         </div>
 
-        <h4 style="margin: 10px 0 0; color: #FF5252; font-size: 0.9rem;">🎙️ AI COMMENTATOR</h4>
+        <h4 id="title-ai-commentator" style="margin: 10px 0 0; color: #FF5252; font-size: 0.9rem;">🎙️ AI COMMENTATOR</h4>
         <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 10px;">
             <div>
-                <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">COMMENTARY AGENT / ENGINE</label>
+                <label id="label-commentary-engine" style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">COMMENTARY AGENT / ENGINE</label>
                 <select id="cfg-commentary-engine" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
                     <option value="strands_local">🧬 Strands Local</option>
-                    <option value="agentcore_runtime" selected>🤖 AgentCore Runtime</option>
-                    <option value="openclaw">🌐 OpenClaw</option>
+                    <option value="agentcore_runtime">🤖 AgentCore Runtime</option>
+                    <option value="openclaw" selected>🌐 OpenClaw</option>
                 </select>
             </div>
             <div>
-                <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">COMMENTARY LANGUAGE</label>
+                <label id="label-commentary-lang" style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">COMMENTARY LANGUAGE</label>
                 <select id="cfg-commentary-lang" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
                     <option value="zh-HK" selected>🇭🇰 廣東話 (Cantonese)</option>
                     <option value="zh-TW">🇹🇼 繁體中文 (Traditional Chinese)</option>
@@ -101,71 +112,76 @@
                 </select>
             </div>
             <div>
-                <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">TTS MODE</label>
+                <label id="label-tts-mode" style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">TTS MODE</label>
                 <select id="cfg-commentary-tts-mode" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
-                    <option value="browser" selected>🌐 Browser TTS</option>
-                    <option value="aws">☁️ AWS Polly</option>
+                    <option value="browser">🌐 Browser TTS</option>
+                    <option value="aws" selected>☁️ AWS Polly</option>
                 </select>
             </div>
             <div>
-                <label style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">SELECT SPECIFIC VOICE</label>
+                <label id="label-specific-voice" style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">SELECT SPECIFIC VOICE</label>
                 <select id="cfg-commentary-voice" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
-                    <option value="auto" selected>✨ Auto-Select (Optimized Female)</option>
+                    <option id="opt-voice-auto" value="auto" selected>✨ Auto-Select (Optimized Female)</option>
                 </select>
                 <div id="cfg-commentary-voice-hint" style="font-size: 10px; color: #AAAAAA; margin-top: 5px;"></div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
                 <input type="checkbox" id="cfg-foul-language" style="width: 16px; height: 16px; cursor: pointer;">
-                <label for="cfg-foul-language" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">🤬 <b>TRASH TALK / FOUL LANGUAGE</b></label>
+                <label id="label-foul-language" for="cfg-foul-language" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">🤬 <b>TRASH TALK / FOUL LANGUAGE</b></label>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px;">
                 <input type="checkbox" id="cfg-enable-commentator" style="width: 16px; height: 16px; cursor: pointer;" checked>
-                <label for="cfg-enable-commentator" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">📺 <b>ENABLE COMMENTATOR</b></label>
+                <label id="label-enable-commentator" for="cfg-enable-commentator" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">📺 <b>ENABLE COMMENTATOR</b></label>
             </div>
             <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 5px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <label for="cfg-commentator-volume" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">🔊 <b>COMMENTATOR TTS VOLUME</b></label>
+                    <label id="label-commentator-volume" for="cfg-commentator-volume" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">🔊 <b>COMMENTATOR TTS VOLUME</b></label>
                     <span id="val-commentator-volume" style="font-size: 11px; font-weight: bold; color: #FFFF00;">100%</span>
                 </div>
                 <input type="range" id="cfg-commentator-volume" value="100" min="0" max="100" style="width: 100%; cursor: pointer;">
             </div>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
                 <input type="checkbox" id="cfg-commentator-webcam" style="width: 16px; height: 16px; cursor: pointer;" checked>
-                <label for="cfg-commentator-webcam" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">📷 <b>CAPTURE WEBCAM SNAPSHOTS</b></label>
+                <label id="label-commentator-webcam" for="cfg-commentator-webcam" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">📷 <b>CAPTURE WEBCAM SNAPSHOTS</b></label>
             </div>
             <div>
-                <label for="cfg-commentator-image-policy" style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">AI SNAPSHOT SEND MODE</label>
+                <label id="label-image-policy" for="cfg-commentator-image-policy" style="font-size: 10px; color: #888; display: block; margin-bottom: 5px;">AI SNAPSHOT SEND MODE</label>
                 <select id="cfg-commentator-image-policy" style="width: 100%; background: #222; color: #FFF; border: 1px solid #444; padding: 5px; border-radius: 4px;">
-                    <option value="always" selected>📸 Always send both players' images</option>
-                    <option value="start_end">🎬 Send only at match start & end</option>
-                    <option value="never">🚫 Never send player images</option>
+                    <option id="policy-always" value="always">📸 Always send both players' images</option>
+                    <option id="policy-start-end" value="start_end" selected>🎬 Send only at match start & end</option>
+                    <option id="policy-never" value="never">🚫 Never send player images</option>
                 </select>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px;">
                 <input type="checkbox" id="cfg-enable-ai-portrait" style="width: 16px; height: 16px; cursor: pointer;" checked>
-                <label for="cfg-enable-ai-portrait" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">✨ <b>AI DOMAIN PORTRAIT FUSION</b></label>
+                <label id="label-enable-ai-portrait" for="cfg-enable-ai-portrait" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">✨ <b>AI DOMAIN PORTRAIT FUSION</b></label>
             </div>
         </div>
 
-        <h4 style="margin: 10px 0 0; color: #4A90E2; font-size: 0.9rem;">GAME RULES</h4>
+        <h4 id="title-game-rules" style="margin: 10px 0 0; color: #4A90E2; font-size: 0.9rem;">GAME RULES</h4>
         <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid #333; display: flex; flex-direction: column; gap: 8px;">
-            <div><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;"><label style="font-size: 10px; color: #888;">COUNTDOWN</label><span id="val-countdown" style="font-size: 11px; font-weight: bold; color: #FFFF00;">3s</span></div><input type="range" id="cfg-countdown" value="3" min="0" max="10" style="width: 100%;"></div>
-            <div><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;"><label style="font-size: 10px; color: #888;">DIFFICULTY</label><span id="val-difficulty" style="font-size: 11px; font-weight: bold; color: #FFFF00;">5s</span></div><input type="range" id="cfg-difficulty" value="5" min="3" max="15" style="width: 100%;"></div>
-            <div><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;"><label style="font-size: 10px; color: #888;">TECHNIQUES</label><span id="val-count" style="font-size: 11px; font-weight: bold; color: #FFFF00;">11</span></div><input type="range" id="cfg-count" value="11" min="1" max="11" style="width: 100%;"></div>
+            <div><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;"><label id="label-countdown" style="font-size: 10px; color: #888;">COUNTDOWN</label><span id="val-countdown" style="font-size: 11px; font-weight: bold; color: #FFFF00;">3s</span></div><input type="range" id="cfg-countdown" value="3" min="0" max="10" style="width: 100%;"></div>
+            <div><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;"><label id="label-difficulty" style="font-size: 10px; color: #888;">DIFFICULTY</label><span id="val-difficulty" style="font-size: 11px; font-weight: bold; color: #FFFF00;">5s</span></div><input type="range" id="cfg-difficulty" value="5" min="3" max="15" style="width: 100%;"></div>
+            <div><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;"><label id="label-count" style="font-size: 10px; color: #888;">TECHNIQUES</label><span id="val-count" style="font-size: 11px; font-weight: bold; color: #FFFF00;">11</span></div><input type="range" id="cfg-count" value="11" min="1" max="11" style="width: 100%;"></div>
             
             <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px; display: flex; flex-direction: column; gap: 4px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <label for="cfg-score-grace" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">⏳ <b>SCORE GRACE (BUFFER) WINDOW</b></label>
+                    <label id="label-score-grace" for="cfg-score-grace" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">⏳ <b>SCORE GRACE (BUFFER) WINDOW</b></label>
                     <span id="val-score-grace" style="font-size: 11px; font-weight: bold; color: #FFFF00;">1.0s</span>
                 </div>
                 <input type="range" id="cfg-score-grace" value="1.0" min="0.0" max="5.0" step="0.5" style="width: 100%; cursor: pointer;">
             </div>
 
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px;">
-                <input type="checkbox" id="cfg-sync-gesture" style="width: 16px; height: 16px; cursor: pointer;" checked>
-                <label for="cfg-sync-gesture" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">👥 <b>SYNCED SAME GESTURE MODE</b></label>
+                <input type="checkbox" id="cfg-sync-gesture" style="width: 16px; height: 16px; cursor: pointer;">
+                <label id="label-sync-gesture" for="cfg-sync-gesture" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">👥 <b>SYNCED SAME GESTURE MODE</b></label>
             </div>
         </div>
+        
+        <!-- Premium Reset Defaults Button -->
+        <button id="btn-reset-defaults" style="margin-top: 10px; width: 100%; background: linear-gradient(135deg, #FF5252, #D32F2F); color: #FFF; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(255, 82, 82, 0.4); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; letter-spacing: 1px;" onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 20px rgba(255, 82, 82, 0.6)';" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 15px rgba(255, 82, 82, 0.4)';" onmousedown="this.style.transform='scale(0.98)';">
+            🔄 RESET ALL DEFAULTS
+        </button>
     </div>
     </div>
     <div id="countdown-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); z-index: 1500; display: none; align-items: center; justify-content: center; pointer-events: none;"><div id="countdown-text" style="font-size: 15rem; font-weight: 900; color: #FFFF00; text-shadow: 0 0 50px rgba(255,255,0,0.8); font-style: italic; animation: winner-pop 0.5s infinite alternate;">3</div></div>
@@ -201,7 +217,7 @@
         
         <!-- Centralized Scroll of Honor AI Style Fusion Dashboard -->
         <div id="central-scroll-of-honor" style="width: 80%; max-width: 600px; margin: 20px auto; background: rgba(20, 20, 30, 0.85); border: 2px solid rgba(255,215,0,0.3); border-radius: 16px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); backdrop-filter: blur(10px); display: none; flex-direction: column; gap: 15px;">
-            <div style="font-size: 1.4rem; font-weight: bold; color: #FFFF00; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(255,255,0,0.3); text-align: center; font-family: sans-serif;">
+            <div id="label-scroll-title" style="font-size: 1.4rem; font-weight: bold; color: #FFFF00; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(255,255,0,0.3); text-align: center; font-family: sans-serif;">
                 📜 Scroll of Honor (領域展影)
             </div>
             
@@ -274,7 +290,7 @@
 
         <div class="commentator-header" style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 10px;">
             <img src="static/img/commentator_avatar.png" alt="Commentator Avatar" style="width: 48px; height: 48px; border-radius: 50%; border: 2px solid #FF5252; box-shadow: 0 0 10px rgba(255, 82, 82, 0.5);">
-            <div class="commentator-avatar" style="margin-bottom: 0;">🎙️ LIVE COMMENTATOR</div>
+            <div id="label-commentator-bubble-header" class="commentator-avatar" style="margin-bottom: 0;">🎙️ LIVE COMMENTATOR</div>
         </div>
         <div id="commentator-text">Waiting for sorcery battle...</div>
     </div>
