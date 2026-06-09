@@ -6,24 +6,299 @@ const { Server } = require('socket.io');
 const path = require('path');
 const cors = require('cors');
 const os = require('os');
+const crypto = require('crypto');
 
-// --- AWS API Gateway Endpoint Detection for local testing ---
-let awsApiEndpoint = null;
-try {
-    const outputJsonPath = path.join(__dirname, '../cdk/output.json');
-    if (fs.existsSync(outputJsonPath)) {
-        const outputs = JSON.parse(fs.readFileSync(outputJsonPath, 'utf8'));
-        const cdkStack = outputs.CdkStack;
-        if (cdkStack) {
-            const apiKey = Object.keys(cdkStack).find(key => key.includes("DomainExpansionServerlessConstructDomainExpansionRestApiEndpoint"));
-            if (apiKey) {
-                awsApiEndpoint = cdkStack[apiKey];
-                console.log(`\x1b[32m[AWS Bridge Proxy] Detected AWS API Endpoint: ${awsApiEndpoint}\x1b[0m`);
+// Detect if running inside AWS Lambda
+const isLambda = !!(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
+
+// Parse ~/.aws/credentials file for default AWS CLI profiles
+function loadAwsCliCredentials() {
+    try {
+        const homeDir = os.homedir();
+        const credentialsPath = path.join(homeDir, '.aws', 'credentials');
+        if (fs.existsSync(credentialsPath)) {
+            const content = fs.readFileSync(credentialsPath, 'utf8');
+            const lines = content.split(/\r?\n/);
+            const profile = process.env.AWS_PROFILE || 'default';
+            
+            let inTargetProfile = false;
+            let accessKeyId = null;
+            let secretAccessKey = null;
+            let sessionToken = null;
+
+            for (let line of lines) {
+                line = line.trim();
+                if (!line || line.startsWith('#') || line.startsWith(';')) {
+                    continue;
+                }
+                
+                if (line.startsWith('[') && line.endsWith(']')) {
+                    const currentProfile = line.slice(1, -1).trim();
+                    inTargetProfile = (currentProfile === profile);
+                    continue;
+                }
+
+                if (inTargetProfile) {
+                    const parts = line.split('=');
+                    if (parts.length >= 2) {
+                        const key = parts[0].trim().toLowerCase();
+                        const val = parts.slice(1).join('=').trim();
+                        if (key === 'aws_access_key_id') {
+                            accessKeyId = val;
+                        } else if (key === 'aws_secret_access_key') {
+                            secretAccessKey = val;
+                        } else if (key === 'aws_session_token') {
+                            sessionToken = val;
+                        }
+                    }
+                }
+            }
+
+            if (accessKeyId && secretAccessKey) {
+                return { accessKeyId, secretAccessKey, sessionToken, source: `AWS CLI credentials file (~/.aws/credentials [profile: ${profile}])` };
             }
         }
+    } catch (err) {
+        console.warn("[AWS CLI Credentials] Skipped loading credentials file:", err.message);
     }
-} catch (e) {
-    console.warn("[AWS Bridge Proxy] Skipped reading cdk/output.json:", e.message);
+    return null;
+}
+
+// Resolve AWS Credentials from process.env or fallback to ~/.aws/credentials
+function getAwsCredentials() {
+    let accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.aws_access_key_id;
+    let secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.aws_secret_access_key;
+    let sessionToken = process.env.AWS_SESSION_TOKEN || process.env.AWS_SECURITY_TOKEN || process.env.aws_session_token;
+
+    if (accessKeyId && secretAccessKey) {
+        return { accessKeyId, secretAccessKey, sessionToken, source: 'environment variables' };
+    }
+
+    const cliCreds = loadAwsCliCredentials();
+    if (cliCreds) {
+        return cliCreds;
+    }
+
+    return null;
+}
+
+// --- AWS API Gateway Endpoint Detection for local testing ---
+let mcpServerUrl = process.env.MCP_SERVER_URL || null;
+let awsApiEndpoint = process.env.AWS_API_ENDPOINT || process.env.awsApiEndpoint || process.env.MCP_SERVER_URL || null;
+if (!awsApiEndpoint) {
+    try {
+        const outputJsonPath = path.join(__dirname, '../cdk/output.json');
+        if (fs.existsSync(outputJsonPath)) {
+            const outputs = JSON.parse(fs.readFileSync(outputJsonPath, 'utf8'));
+            const cdkStack = outputs.CdkStack;
+            if (cdkStack) {
+                const apiKey = Object.keys(cdkStack).find(key => key.includes("DomainExpansionServerlessConstructDomainExpansionRestApiEndpoint"));
+                if (apiKey) {
+                    awsApiEndpoint = cdkStack[apiKey];
+                    console.log(`\x1b[32m[AWS Bridge Proxy] Detected AWS API Endpoint from cdk/output.json: ${awsApiEndpoint}\x1b[0m`);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[AWS Bridge Proxy] Skipped reading cdk/output.json:", e.message);
+    }
+} else {
+    console.log(`\x1b[32m[AWS Bridge Proxy] Using AWS API Endpoint: ${awsApiEndpoint}\x1b[0m`);
+}
+if (mcpServerUrl) {
+    console.log(`\x1b[32m[AWS Bridge Proxy] Using MCP Server URL: ${mcpServerUrl}\x1b[0m`);
+}
+
+const resolvedCredentials = getAwsCredentials();
+
+console.log(`[Startup] Runtime environment: ${isLambda ? 'AWS Lambda' : 'Local Server'}`);
+if (awsApiEndpoint) {
+    console.log(`[Startup] AWS API Bridge configured: ${awsApiEndpoint}`);
+} else {
+    console.log(`[Startup] AWS API Bridge is currently inactive.`);
+}
+if (mcpServerUrl) {
+    console.log(`[Startup] AWS MCP Server URL configured: ${mcpServerUrl}`);
+} else {
+    console.log(`[Startup] AWS MCP Server URL is currently inactive.`);
+}
+console.log(`[Startup] AWS Signature Version 4 signing: ${resolvedCredentials ? `ENABLED (credentials loaded from ${resolvedCredentials.source})` : 'DISABLED (no credentials found in env or CLI credentials file)'}`);
+
+// Helper to calculate SHA256 hash of a string
+function sha256(string) {
+    return crypto.createHash('sha256').update(string, 'utf8').digest('hex');
+}
+
+// Helper to calculate HMAC-SHA256 of a string with a key
+function hmac(key, string, encoding) {
+    return crypto.createHmac('sha256', key).update(string, 'utf8').digest(encoding);
+}
+
+// Get Signature Version 4 Signing Key
+function getSignatureKey(key, dateStamp, regionName, serviceName) {
+    const kDate = hmac('AWS4' + key, dateStamp);
+    const kRegion = hmac(kDate, regionName);
+    const kService = hmac(kRegion, serviceName);
+    const kSigning = hmac(kService, 'aws4_request');
+    return kSigning;
+}
+
+// Custom AWS Signature V4 request signer & fetcher using environment or CLI credentials
+async function awsSignedFetch(urlStr, options = {}) {
+    const creds = getAwsCredentials();
+    const headers = { ...options.headers };
+
+    // If no credentials are found in either environment or CLI profiles, fallback to standard unsigned fetch
+    if (!creds) {
+        console.log(`[AWS Signature V4] No credentials found in env or CLI credentials file. Sending unsigned ${options.method || 'GET'} request to ${urlStr}`);
+        return fetch(urlStr, options);
+    }
+
+    const { accessKeyId, secretAccessKey, sessionToken } = creds;
+
+    try {
+        const url = new URL(urlStr);
+        const method = options.method || 'GET';
+        const bodyStr = options.body || '';
+        const bodyHash = sha256(bodyStr);
+
+        const amzDate = new Date().toISOString().replace(/[:\-]/g, '').split('.')[0] + 'Z';
+        const dateStamp = amzDate.substring(0, 8);
+
+        // Host header must be lowercase
+        headers['host'] = url.host;
+        headers['x-amz-date'] = amzDate;
+        headers['x-amz-content-sha256'] = bodyHash;
+        if (sessionToken) {
+            headers['x-amz-security-token'] = sessionToken;
+        }
+
+        // Determine AWS Region and Service
+        let region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+        let service = 'execute-api'; // default for API Gateway REST/HTTP APIs
+
+        // Auto-detect region and service from URL if possible
+        const hostParts = url.host.split('.');
+        if (hostParts.includes('execute-api')) {
+            service = 'execute-api';
+            const idx = hostParts.indexOf('execute-api');
+            if (hostParts[idx + 1] && hostParts[idx + 1] !== 'amazonaws') {
+                region = hostParts[idx + 1];
+            }
+        } else if (url.host.endsWith('.on.aws')) {
+            service = 'lambda';
+            // e.g., xxx.lambda-url.us-east-1.on.aws
+            const idx = hostParts.indexOf('lambda-url');
+            if (idx !== -1 && hostParts[idx + 1]) {
+                region = hostParts[idx + 1];
+            }
+        }
+
+        // Canonical Headers: sorted alphabetically, keys lowercase, values trimmed
+        const canonicalHeadersList = Object.keys(headers)
+            .map(key => ({ key: key.toLowerCase(), value: String(headers[key]).trim() }))
+            .sort((a, b) => a.key.localeCompare(b.key));
+
+        const canonicalHeadersStr = canonicalHeadersList
+            .map(item => `${item.key}:${item.value}`)
+            .join('\n') + '\n';
+
+        const signedHeadersStr = canonicalHeadersList
+            .map(item => item.key)
+            .join(';');
+
+        const canonicalUri = url.pathname || '/';
+
+        // Canonical query params must be sorted alphabetically
+        const queryParams = [];
+        url.searchParams.forEach((value, key) => {
+            queryParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        });
+        const canonicalQueryStr = queryParams.sort().join('&');
+
+        const canonicalRequest = [
+            method,
+            canonicalUri,
+            canonicalQueryStr,
+            canonicalHeadersStr,
+            signedHeadersStr,
+            bodyHash
+        ].join('\n');
+
+        const credentialScope = [dateStamp, region, service, 'aws4_request'].join('/');
+        const stringToSign = [
+            'AWS4-HMAC-SHA256',
+            amzDate,
+            credentialScope,
+            sha256(canonicalRequest)
+        ].join('\n');
+
+        const signingKey = getSignatureKey(secretAccessKey, dateStamp, region, service);
+        const signature = hmac(signingKey, stringToSign, 'hex');
+
+        headers['authorization'] = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeadersStr}, Signature=${signature}`;
+
+        console.log(`[AWS Signature V4] Sending signed ${method} request to ${urlStr}`);
+        return fetch(urlStr, {
+            ...options,
+            headers
+        });
+    } catch (err) {
+        console.warn('[AWS Signature V4] Failed to sign request, falling back to standard fetch:', err.message);
+        return fetch(urlStr, options);
+    }
+}
+
+// Helper to call registered tools on the AWS MCP Server URL using SigV4 signed requests
+async function triggerMcpTool(mcpServerUrl, toolName, args) {
+    const payload = {
+        body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: {
+                name: toolName,
+                arguments: args
+            }
+        }),
+        headers: {
+            "content-type": "application/json"
+        },
+        requestContext: {
+            http: {
+                method: "POST"
+            }
+        }
+    };
+    try {
+        console.log(`[AWS Bridge Proxy] Invoking MCP tool "${toolName}" on MCP Server...`);
+        const response = await awsSignedFetch(mcpServerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            console.error(`[AWS Bridge Proxy Error] MCP tool "${toolName}" returned status ${response.status}. Body: ${text}`);
+            return false;
+        }
+        const text = await response.text();
+        let result = null;
+        if (text && text.trim()) {
+            try {
+                result = JSON.parse(text);
+                console.log(`[AWS Bridge Proxy] MCP tool "${toolName}" success:`, JSON.stringify(result));
+            } catch (err) {
+                console.warn(`[AWS Bridge Proxy Warning] MCP tool "${toolName}" response body was not valid JSON: "${text}"`);
+            }
+        } else {
+            console.log(`[AWS Bridge Proxy] MCP tool "${toolName}" success (empty response with status ${response.status})`);
+        }
+        return true;
+    } catch (err) {
+        console.error(`[AWS Bridge Proxy Exception] Failed to call MCP tool "${toolName}":`, err.message);
+        return false;
+    }
 }
 
 const app = express();
@@ -228,16 +503,17 @@ app.post('/api/register-room', (req, res) => {
 });
 
 app.post('/api/trigger-technique', async (req, res) => {
+    const { technique, robotId, role } = req.body;
+
     if (awsApiEndpoint) {
         try {
-            console.log(`[AWS Bridge Proxy] Forwarding trigger-technique request to AWS REST API...`);
+            console.log(`[AWS Bridge Proxy] Forwarding trigger-technique request to AWS REST API (monolithic backend)...`);
             const authHeader = req.headers['authorization'];
             const forwardHeaders = { 'Content-Type': 'application/json' };
             if (authHeader) {
                 forwardHeaders['Authorization'] = authHeader;
             }
-
-            const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/trigger-technique`, {
+            const response = await awsSignedFetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/trigger-technique`, {
                 method: 'POST',
                 headers: forwardHeaders,
                 body: JSON.stringify(req.body)
@@ -255,9 +531,80 @@ app.post('/api/trigger-technique', async (req, res) => {
             console.error(`[AWS Bridge Proxy Exception]:`, err.message);
             return res.status(500).json({ error: err.message });
         }
+    } else if (mcpServerUrl) {
+        try {
+            console.log(`[AWS Bridge Proxy] Handling trigger-technique directly via MCP Server: technique=${technique}, robotId=${robotId}, role=${role}`);
+            
+            // 1. Resolve target robots
+            let targets = [];
+            if (robotId === "all") {
+                if (role === "player1") {
+                    targets = ["robot_1", "robot_2", "robot_3"];
+                } else if (role === "player2") {
+                    targets = ["robot_4", "robot_5", "robot_6"];
+                } else {
+                    targets = ["robot_1"];
+                }
+            } else {
+                targets = [robotId || "robot_1"];
+            }
+
+            // Action configurations mapping
+            const techniqueToMcpTool = {
+                "domain_unlimited_void": "robot_kung_fu",
+                "domain_malevolent_shrine": "robot_right_uppercut",
+                "domain_self_embodiment": "robot_twist",
+                "domain_authentic_love": "robot_wave",
+                "domain_idle_death_gamble": "robot_dance_one",
+                "domain_yuji_itadori": "robot_left_shot_fast",
+                "domain_chimera_shadow_garden": "robot_squat",
+                "domain_time_cell_moon_palace": "robot_twist",
+                "lapse_blue": "robot_left_shot_fast",
+                "reversal_red": "robot_right_shot_fast",
+                "hollow_purple": "robot_left_kick"
+            };
+
+            const jjkActionMap = {
+                "domain_unlimited_void": { stance: "kung_fu", speech: "領域展開、無量空処", language: "ja" },
+                "domain_malevolent_shrine": { stance: "right_uppercut", speech: "領域展開、伏魔御厨子", language: "ja" },
+                "domain_self_embodiment": { stance: "twist", speech: "領域展開、自閉円頓裹", language: "ja" },
+                "domain_authentic_love": { stance: "wave", speech: "領域展開、真贋相愛", language: "ja" },
+                "domain_idle_death_gamble": { stance: "dance", speech: "領域展開、坐殺博徒", language: "ja" },
+                "domain_yuji_itadori": { stance: "punch", speech: "領域展開", language: "ja" },
+                "domain_chimera_shadow_garden": { stance: "squat", speech: "領域展開、嵌合暗翳庭", language: "ja" },
+                "domain_time_cell_moon_palace": { stance: "twist", speech: "領域展開、時胞月宮殿", language: "ja" },
+                "lapse_blue": { stance: "left_shot_fast", speech: "術式順転、蒼", language: "ja" },
+                "reversal_red": { stance: "right_shot_fast", speech: "術式反転、赫", language: "ja" },
+                "hollow_purple": { stance: "kick", speech: "虚式、茈", language: "ja" }
+            };
+
+            const promises = [];
+            for (const target of targets) {
+                const mcpToolName = techniqueToMcpTool[technique] || `robot_${technique}`;
+                // Trigger physical action
+                promises.push(triggerMcpTool(mcpServerUrl, mcpToolName, { robot_id: target }));
+
+                // Trigger speak action if mapped speech exists
+                const actionInfo = jjkActionMap[technique];
+                if (actionInfo && actionInfo.speech) {
+                    promises.push(triggerMcpTool(mcpServerUrl, "robot_speak", {
+                        robot_id: target,
+                        text: actionInfo.speech,
+                        language: actionInfo.language || "ja"
+                    }));
+                }
+            }
+
+            await Promise.all(promises);
+            return res.json({ ok: true, message: `Technique ${technique} triggered successfully on targets: ${targets.join(', ')}` });
+
+        } catch (err) {
+            console.error(`[AWS Bridge Proxy Direct MCP Exception]:`, err.message);
+            return res.status(500).json({ error: err.message });
+        }
     } else {
         // No AWS API Endpoint active locally. Return 404 so browser falls back to direct local simulator.
-        return res.status(404).json({ error: "AWS Serverless API Endpoint not configured. Falling back to local/direct simulator mode." });
+        return res.status(404).json({ error: "AWS Serverless API Endpoint/MCP Server not configured. Falling back to local/direct simulator mode." });
     }
 });
 
@@ -460,7 +807,7 @@ app.post('/api/live-status', async (req, res) => {
                 forwardHeaders['Authorization'] = authHeader;
             }
 
-            const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/live-status`, {
+            const response = await awsSignedFetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/live-status`, {
                 method: 'POST',
                 headers: forwardHeaders,
                 body: JSON.stringify(payload)
@@ -604,7 +951,7 @@ app.post('/api/battle-result', async (req, res) => {
                 forwardHeaders['Authorization'] = authHeader;
             }
 
-            const response = await fetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/battle-result`, {
+            const response = await awsSignedFetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/battle-result`, {
                 method: 'POST',
                 headers: forwardHeaders,
                 body: JSON.stringify(payload)
@@ -1051,6 +1398,11 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`[Server] Signaling server running on port ${PORT}`);
-});
+if (isLambda) {
+    const serverless = require('serverless-http');
+    module.exports.handler = serverless(app);
+} else {
+    server.listen(PORT, () => {
+        console.log(`[Server] Signaling server running on port ${PORT}`);
+    });
+}

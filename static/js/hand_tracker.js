@@ -16,8 +16,6 @@ class HandTracker {
         this.vfxCanvas = document.getElementById('vfx-canvas');
         this.domainGame = new DomainExpansionGame();
         
-        this.endpointInput = document.getElementById('api-endpoint');
-        this.sessionKeyInput = document.getElementById('session-key-input');
         this.languageSelect = document.getElementById('language-select');
         this.saveBtn = document.getElementById('save-settings');
         this.robotIdSelect = document.getElementById('robot-id');
@@ -100,11 +98,6 @@ class HandTracker {
         const urlNetMode = urlParams.get('net_mode');
         const urlRoom = urlParams.get('room');
         const urlRobotId = urlParams.get('robot_id');
-        const urlApi = urlParams.get('api_endpoint');
-        const urlKey = urlParams.get('session_key');
-        
-        this.apiEndpoint = urlApi || localStorage.getItem('robot_api_endpoint') || '';
-        this.sessionKey = urlKey || localStorage.getItem('robot_session_key') || '';
         this.userLang = localStorage.getItem('user_language') || 'zh'; 
         this.savedRobotId = urlRobotId || localStorage.getItem('robot_id') || 'all'; 
         this.videoMode = localStorage.getItem('video_mode') || 'integrated'; 
@@ -122,8 +115,6 @@ class HandTracker {
         this.selectedCameraId = localStorage.getItem(cameraKey) || localStorage.getItem('selected_camera_id') || 'default';
 
         // 3. Set Initial Values
-        if (this.endpointInput) this.endpointInput.value = this.apiEndpoint;
-        if (this.sessionKeyInput) this.sessionKeyInput.value = this.sessionKey;
         if (this.languageSelect) this.languageSelect.value = this.userLang;
         if (this.robotIdSelect) {
             this.updateRobotIdSelectOptions();
@@ -239,15 +230,11 @@ class HandTracker {
         this.setupOnlineListeners();
         if (this.saveBtn) {
             this.saveBtn.addEventListener('click', () => {
-                this.apiEndpoint = this.endpointInput.value.trim();
-                this.sessionKey = this.sessionKeyInput.value.trim();
                 this.userLang = this.languageSelect.value;
                 this.savedRobotId = this.robotIdSelect.value;
                 this.videoMode = this.videoModeSelect.value;
                 this.autoOpen = this.autoOpenPopupCheck.checked;
                 this.disableApi = this.disableApiCheck.checked;
-                localStorage.setItem('robot_api_endpoint', this.apiEndpoint);
-                localStorage.setItem('robot_session_key', this.sessionKey);
                 localStorage.setItem('user_language', this.userLang);
                 localStorage.setItem('robot_id', this.savedRobotId);
                 localStorage.setItem('video_mode', this.videoMode);
@@ -723,13 +710,8 @@ class HandTracker {
 
     updateAPIStatus() {
         if (!this.apiStatus || !this.apiDot) return;
-        if (this.apiEndpoint && this.sessionKey) {
-            this.apiStatus.textContent = 'Configured';
-            this.apiDot.classList.add('active');
-        } else {
-            this.apiStatus.textContent = 'Incomplete';
-            this.apiDot.classList.remove('active');
-        }
+        this.apiStatus.textContent = 'Active (Backend)';
+        this.apiDot.classList.add('active');
     }
 
     updateBattleSync() {
@@ -1099,8 +1081,6 @@ class HandTracker {
                 finalTitle = '領域展開 AR';
                 defaultMode = '印を組んで領域を展開せよ！';
                 currentLang = 'ja';
-                this.setElText('label-api-endpoint', '🔗 ロボットAPIエンドポイント');
-                this.setElText('label-session-key', '🔑 セッションキー');
                 this.setElText('label-language', '🌐 言語');
                 this.setElText('save-settings', '設定を保存');
                 this.setElText('label-target-robot', '対象ロボット');
@@ -1129,8 +1109,6 @@ class HandTracker {
                 finalTitle = '領域展開 AR';
                 defaultMode = '結下手印以展開你的領域！';
                 currentLang = 'zh';
-                this.setElText('label-api-endpoint', '🔗 機器人API端點');
-                this.setElText('label-session-key', '🔑 會話密鑰');
                 this.setElText('label-language', '🌐 語言');
                 this.setElText('save-settings', '保存設置');
                 this.setElText('label-target-robot', '目標機器人');
@@ -1159,8 +1137,6 @@ class HandTracker {
                 finalTitle = 'Domain Expansion AR';
                 defaultMode = 'Strike a hand sign to expand your domain!';
                 currentLang = 'en';
-                this.setElText('label-api-endpoint', '🔗 Robot API Endpoint');
-                this.setElText('label-session-key', '🔑 Session Key');
                 this.setElText('label-language', '🌐 Language');
                 this.setElText('save-settings', '💾 Save Settings');
                 this.setElText('label-target-robot', '🤖 Target Robot');
@@ -1476,17 +1452,15 @@ class HandTracker {
                 }
 
                 // --- NEW: Trigger API Action on SCORE ---
-                if (this.apiEndpoint && this.sessionKey) {
-                    const actionMap = {
-                        "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
-                        "Self-Embodiment of Perfection": "domain_self_embodiment", "Authentic Mutual Love": "domain_authentic_love",
-                        "Idle Death Gamble": "domain_idle_death_gamble", "Yuji Itadori": "domain_yuji_itadori",
-                        "Chimera Shadow Garden": "domain_chimera_shadow_garden", "Time Cell Moon Palace": "domain_time_cell_moon_palace",
-                        "Lapse Blue": "lapse_blue", "Reversal Red": "reversal_red", "Hollow Purple": "hollow_purple"
-                    };
-                    console.log(`[API] Triggering score action: ${actionMap[stableDomain]}`);
-                    this.triggerRobotAction(this.savedRobotId, actionMap[stableDomain]);
-                }
+                const actionMap = {
+                    "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
+                    "Self-Embodiment of Perfection": "domain_self_embodiment", "Authentic Mutual Love": "domain_authentic_love",
+                    "Idle Death Gamble": "domain_idle_death_gamble", "Yuji Itadori": "domain_yuji_itadori",
+                    "Chimera Shadow Garden": "domain_chimera_shadow_garden", "Time Cell Moon Palace": "domain_time_cell_moon_palace",
+                    "Lapse Blue": "lapse_blue", "Reversal Red": "reversal_red", "Hollow Purple": "hollow_purple"
+                };
+                console.log(`[API] Triggering score action: ${actionMap[stableDomain]}`);
+                this.triggerRobotAction(this.savedRobotId, actionMap[stableDomain]);
             }
             this.domainDisplay.textContent = displayName;
             if (domainColor) this.domainDisplay.style.color = domainColor;
@@ -1507,7 +1481,7 @@ class HandTracker {
                 this.lastVFXDomain = stableDomain;
                 
                 // Trigger API Action if NOT in an active game and not preparing a match (Sandbox / Testing mode)
-                if (!this.isGameActive && !this.isPreparingMatch && this.apiEndpoint && this.sessionKey) {
+                if (!this.isGameActive && !this.isPreparingMatch) {
                     const actionMap = {
                         "Unlimited Void": "domain_unlimited_void", "Malevolent Shrine": "domain_malevolent_shrine",
                         "Self-Embodiment of Perfection": "domain_self_embodiment", "Authentic Mutual Love": "domain_authentic_love",
@@ -1952,48 +1926,8 @@ class HandTracker {
             if (this.lastResp) this.lastResp.textContent = `${response.status} ${result.success ? 'OK' : 'ERR'}`;
             return result;
         } catch (err) {
-            console.warn('⚠️ Serverless Backend route unavailable. Falling back to local offline direct simulator calling:', err);
-
-            // ==========================================
-            // Backwards-Compatible Fallback (Offline/Local)
-            // ==========================================
-            if (robotId === "all") {
-                if (this.battleRole === "player1") {
-                    console.log("[API] Fallback: Role is Player 1: Concurrently triggering Robots 1, 2, and 3");
-                    return Promise.all([
-                        this.triggerRobotAction("robot_1", action, { bypassCooldown: true, forceLocalFallback: true }),
-                        this.triggerRobotAction("robot_2", action, { bypassCooldown: true, forceLocalFallback: true }),
-                        this.triggerRobotAction("robot_3", action, { bypassCooldown: true, forceLocalFallback: true })
-                    ]);
-                } else if (this.battleRole === "player2") {
-                    console.log("[API] Fallback: Role is Player 2: Concurrently triggering Robots 4, 5, and 6");
-                    return Promise.all([
-                        this.triggerRobotAction("robot_4", action, { bypassCooldown: true, forceLocalFallback: true }),
-                        this.triggerRobotAction("robot_5", action, { bypassCooldown: true, forceLocalFallback: true }),
-                        this.triggerRobotAction("robot_6", action, { bypassCooldown: true, forceLocalFallback: true })
-                    ]);
-                }
-            }
-
-            let url = this.apiEndpoint.trim();
-            const parts = url.split('?');
-            let base = parts[0].replace(/\/+$/, "");
-            const query = parts[1] ? '?' + parts[1] : '';
-            if (!base.includes('/run_action')) base = base + '/run_action';
-            const idPattern = /\/(robot_\d+|all)$/;
-            if (base.match(idPattern)) base = base.replace(idPattern, '/' + robotId);
-            else base = base + '/' + robotId;
-
-            const cleanKey = this.sessionKey.trim().replace(/^"|"$/g, '');
-            const finalUrl = `${base}${query}${query ? '&' : '?'}session_key=${encodeURIComponent(cleanKey)}`;
-
-            console.log(`[API] Fallback Direct URL: ${finalUrl}`);
-            const response = await fetch(finalUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            });
-            if (this.lastResp) this.lastResp.textContent = `${response.status} ${response.status === 200 ? 'OK' : 'ERR'}`;
+            console.error('⚠️ Serverless Backend route failed:', err.message);
+            if (this.lastResp) this.lastResp.textContent = 'CONN ERR';
         }
     }
 
