@@ -42,16 +42,35 @@ class CognitoAuth {
     }
 
     checkSessionAndShowLogin() {
+        const checkToken = () => {
+            const token = localStorage.getItem("cognito_id_token");
+            const expiry = localStorage.getItem("cognito_token_expiry");
+            const now = Math.floor(Date.now() / 1000);
+
+            if (!token || !expiry || now > parseInt(expiry)) {
+                if (this.sessionGuardTimer) {
+                    clearInterval(this.sessionGuardTimer);
+                    this.sessionGuardTimer = null;
+                }
+                // Unauthenticated or token expired - display JJK Sorcerer Login Overlay
+                this.logout(); // Use logout to ensure WebSockets are closed
+            } else {
+                this.showUserStatus();
+            }
+        };
+
         const token = localStorage.getItem("cognito_id_token");
         const expiry = localStorage.getItem("cognito_token_expiry");
         const now = Math.floor(Date.now() / 1000);
 
         if (!token || !expiry || now > parseInt(expiry)) {
-            // Unauthenticated or token expired - display JJK Sorcerer Login Overlay
             this.showLoginModal();
         } else {
             console.log(`✅ Welcome back, Sorcerer ${localStorage.getItem("cognito_username") || "player"}!`);
             this.showUserStatus();
+            if (!this.sessionGuardTimer) {
+                this.sessionGuardTimer = setInterval(checkToken, 30000);
+            }
         }
     }
 
@@ -415,6 +434,11 @@ class CognitoAuth {
     }
 
     logout() {
+        if (this.sessionGuardTimer) {
+            clearInterval(this.sessionGuardTimer);
+            this.sessionGuardTimer = null;
+        }
+
         localStorage.removeItem("cognito_id_token");
         localStorage.removeItem("cognito_access_token");
         localStorage.removeItem("cognito_token_expiry");
@@ -422,6 +446,17 @@ class CognitoAuth {
 
         const badge = document.getElementById("jjk-sorcerer-badge");
         if (badge) badge.remove();
+
+        // Teardown WebSockets to save cost
+        if (typeof window.serverlessSocket !== 'undefined' && window.serverlessSocket.ws) {
+            try { window.serverlessSocket.ws.close(); } catch(e) {}
+        }
+        if (typeof window.socket !== 'undefined' && window.socket.ws) {
+            try { window.socket.ws.close(); } catch(e) {}
+        }
+        if (typeof ws !== 'undefined' && ws) {
+            try { ws.close(); } catch(e) {}
+        }
 
         console.log("🔓 Sorcerer logged out.");
         this.showLoginModal();
