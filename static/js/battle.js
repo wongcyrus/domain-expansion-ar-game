@@ -415,25 +415,99 @@ async function callBridge(endpoint, body, options = {}) {
     return null;
 }
 
-function getActionNameFromVideo(videoSrc) {
-    if (!videoSrc) return "Unknown Technique";
+const TECHNIQUE_TRANSLATIONS = {
+    'zh-HK': {
+        "Chimera Shadow Garden": "嵌合暗翳庭",
+        "Authentic Love": "真贋相愛",
+        "Authentic Mutual Love": "真贋相愛",
+        "Self-Embodiment of Perfection": "自閉圓頓裹",
+        "Yuji Itadori": "虎杖悠仁的領域",
+        "Yuji Itadori's Domain": "虎杖悠仁的領域",
+        "Malevolent Shrine": "伏魔御廚子",
+        "Idle Death Gamble": "坐殺博徒",
+        "Unlimited Void": "無量空處",
+        "Time Cell Moon Palace": "時胞月宮殿",
+        "Hollow Purple": "虛式「茈」",
+        "Reversal Red": "術式反轉「赫」",
+        "Lapse Blue": "術式順轉「蒼」",
+        "Unknown Technique": "未知術式"
+    },
+    'zh-TW': {
+        "Chimera Shadow Garden": "嵌合暗翳庭",
+        "Authentic Love": "真贋相愛",
+        "Authentic Mutual Love": "真贋相愛",
+        "Self-Embodiment of Perfection": "自閉圓頓裹",
+        "Yuji Itadori": "虎杖悠仁的領域",
+        "Yuji Itadori's Domain": "虎杖悠仁的領域",
+        "Malevolent Shrine": "伏魔御廚子",
+        "Idle Death Gamble": "坐殺博徒",
+        "Unlimited Void": "無量空處",
+        "Time Cell Moon Palace": "時胞月宮殿",
+        "Hollow Purple": "虛式「茈」",
+        "Reversal Red": "術式反轉「赫」",
+        "Lapse Blue": "術式順轉「蒼」",
+        "Unknown Technique": "未知術式"
+    },
+    'ja': {
+        "Chimera Shadow Garden": "嵌合暗翳庭",
+        "Authentic Love": "真贋相愛",
+        "Authentic Mutual Love": "真贋相愛",
+        "Self-Embodiment of Perfection": "自閉円頓裹",
+        "Yuji Itadori": "虎杖悠仁の領域",
+        "Yuji Itadori's Domain": "虎杖悠仁の領域",
+        "Malevolent Shrine": "伏魔御厨子",
+        "Idle Death Gamble": "坐殺博徒",
+        "Unlimited Void": "無量空処",
+        "Time Cell Moon Palace": "時胞月宮殿",
+        "Hollow Purple": "虚式「茈」",
+        "Reversal Red": "術式反転「赫」",
+        "Lapse Blue": "術式順転「蒼」",
+        "Unknown Technique": "未知術式"
+    },
+    'en': {
+        "Chimera Shadow Garden": "Chimera Shadow Garden",
+        "Authentic Love": "Authentic Love",
+        "Authentic Mutual Love": "Authentic Mutual Love",
+        "Self-Embodiment of Perfection": "Self-Embodiment of Perfection",
+        "Yuji Itadori": "Yuji Itadori's Domain",
+        "Yuji Itadori's Domain": "Yuji Itadori's Domain",
+        "Malevolent Shrine": "Malevolent Shrine",
+        "Idle Death Gamble": "Idle Death Gamble",
+        "Unlimited Void": "Unlimited Void",
+        "Time Cell Moon Palace": "Time Cell Moon Palace",
+        "Hollow Purple": "Hollow Purple",
+        "Reversal Red": "Reversal Red",
+        "Lapse Blue": "Lapse Blue",
+        "Unknown Technique": "Unknown Technique"
+    }
+};
+
+function getActionNameFromVideo(videoSrc, lang = 'en') {
+    if (!videoSrc) {
+        const defaultName = "Unknown Technique";
+        return TECHNIQUE_TRANSLATIONS[lang]?.[defaultName] || defaultName;
+    }
     const filename = videoSrc.split('/').pop().toLowerCase();
     
-    if (filename.includes("chimera_shadow_garden")) return "Chimera Shadow Garden";
-    if (filename.includes("authentic_love")) return "Authentic Love";
-    if (filename.includes("self_embodiment")) return "Self-Embodiment of Perfection";
-    if (filename.includes("yuji_itadori")) return "Yuji Itadori's Domain";
-    if (filename.includes("malevolent_shrine")) return "Malevolent Shrine";
-    if (filename.includes("idle_death_gamble")) return "Idle Death Gamble";
-    if (filename.includes("unlimited_void")) return "Unlimited Void";
-    if (filename.includes("time_cell_moon_palace")) return "Time Cell Moon Palace";
-    if (filename.includes("hollow_purple")) return "Hollow Purple";
-    if (filename.includes("reversal_red")) return "Reversal Red";
-    if (filename.includes("lapse_blue")) return "Lapse Blue";
+    let englishName = "";
+    if (filename.includes("chimera_shadow_garden")) englishName = "Chimera Shadow Garden";
+    else if (filename.includes("authentic_love")) englishName = "Authentic Love";
+    else if (filename.includes("self_embodiment")) englishName = "Self-Embodiment of Perfection";
+    else if (filename.includes("yuji_itadori")) englishName = "Yuji Itadori's Domain";
+    else if (filename.includes("malevolent_shrine")) englishName = "Malevolent Shrine";
+    else if (filename.includes("idle_death_gamble")) englishName = "Idle Death Gamble";
+    else if (filename.includes("unlimited_void")) englishName = "Unlimited Void";
+    else if (filename.includes("time_cell_moon_palace")) englishName = "Time Cell Moon Palace";
+    else if (filename.includes("hollow_purple")) englishName = "Hollow Purple";
+    else if (filename.includes("reversal_red")) englishName = "Reversal Red";
+    else if (filename.includes("lapse_blue")) englishName = "Lapse Blue";
+    else {
+        // Fallback parsing
+        let name = filename.replace(".mp4", "").replace("domain_", "").replace("technique_", "").replace(/_/g, " ");
+        englishName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
     
-    // Fallback parsing
-    let name = filename.replace(".mp4", "").replace("domain_", "").replace("technique_", "").replace(/_/g, " ");
-    return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    return TECHNIQUE_TRANSLATIONS[lang]?.[englishName] || englishName;
 }
 
 function estimateCommentaryDurationMs(text) {
@@ -1159,22 +1233,50 @@ async function flushPendingCastCommentary() {
     const currentCasts = [...pendingCasts];
     pendingCasts = [];
 
+    const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
     let detail = "";
-    if (currentCasts.length === 1) {
-        const cast = currentCasts[0];
-        detail = `${cast.playerID === 'player1' ? 'Player 1' : 'Player 2'} successfully activated ${cast.actionName}`;
-    } else {
-        const p1Cast = currentCasts.find(c => c.playerID === 'player1');
-        const p2Cast = currentCasts.find(c => c.playerID === 'player2');
-        if (p1Cast && p2Cast) {
-            detail = `Incredible! Both Player 1 (who cast ${p1Cast.actionName}) and Player 2 (who cast ${p2Cast.actionName}) successfully activated their techniques at the exact same time!`;
+    if (commentaryLang === 'zh-HK' || commentaryLang === 'zh-TW') {
+        if (currentCasts.length === 1) {
+            const cast = currentCasts[0];
+            detail = `${cast.playerID === 'player1' ? 'P1' : 'P2'} 成功發動【${cast.actionName}】`;
         } else {
-            detail = `Multiple techniques activated simultaneously: ` + currentCasts.map(c => `${c.playerID === 'player1' ? 'Player 1' : 'Player 2'} (${c.actionName})`).join(', ');
+            const p1Cast = currentCasts.find(c => c.playerID === 'player1');
+            const p2Cast = currentCasts.find(c => c.playerID === 'player2');
+            if (p1Cast && p2Cast) {
+                detail = `太震撼了！P1（發動【${p1Cast.actionName}】）同 P2（發動【${p2Cast.actionName}】）同時成功展開領域，正面交鋒！`;
+            } else {
+                detail = `多個術式同時發動：` + currentCasts.map(c => `${c.playerID === 'player1' ? 'P1' : 'P2'}（【${c.actionName}】）`).join('、');
+            }
+        }
+    } else if (commentaryLang === 'ja') {
+        if (currentCasts.length === 1) {
+            const cast = currentCasts[0];
+            detail = `${cast.playerID === 'player1' ? 'P1' : 'P2'} が【${cast.actionName}】を発動しました`;
+        } else {
+            const p1Cast = currentCasts.find(c => c.playerID === 'player1');
+            const p2Cast = currentCasts.find(c => c.playerID === 'player2');
+            if (p1Cast && p2Cast) {
+                detail = `信じられない！P1（【${p1Cast.actionName}】発動）と P2（【${p2Cast.actionName}】発動）が同時に領域展開しました！`;
+            } else {
+                detail = `複数の術式が同時に発動：` + currentCasts.map(c => `${c.playerID === 'player1' ? 'P1' : 'P2'}（【${c.actionName}】）`).join('、');
+            }
+        }
+    } else {
+        if (currentCasts.length === 1) {
+            const cast = currentCasts[0];
+            detail = `${cast.playerID === 'player1' ? 'Player 1' : 'Player 2'} successfully activated ${cast.actionName}`;
+        } else {
+            const p1Cast = currentCasts.find(c => c.playerID === 'player1');
+            const p2Cast = currentCasts.find(c => c.playerID === 'player2');
+            if (p1Cast && p2Cast) {
+                detail = `Incredible! Both Player 1 (who cast ${p1Cast.actionName}) and Player 2 (who cast ${p2Cast.actionName}) successfully activated their techniques at the exact same time!`;
+            } else {
+                detail = `Multiple techniques activated simultaneously: ` + currentCasts.map(c => `${c.playerID === 'player1' ? 'Player 1' : 'Player 2'} (${cast.actionName})`).join(', ');
+            }
         }
     }
 
     const openclawSessionId = getOpenclawActiveSessionId();
-    const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
     const isFoulEnabled = document.getElementById('cfg-foul-language')?.checked || false;
 
     await requestCommentary('/api/live-status', {
@@ -1596,7 +1698,7 @@ async function handlePreparingEntrance(state) {
                 try {
                     // Trigger single-shot start frame webcam capture from Player View
                     sync.broadcast('CAPTURE_WEBCAM_FRAME', { phase: 'START', sessionId: state.sessionId });
-                    await waitForSnapshots(state.sessionId, 3000);
+                    await waitForSnapshots(state.sessionId, 6000);
                 } catch (snapErr) {
                     console.warn('[Battle] Optional snapshot polling failed, proceeding:', snapErr);
                 }
@@ -1700,8 +1802,9 @@ function renderMatchState(state) {
     p1Time = p1Active ? state.p1.timeLeft : 0;
     p2Time = p2Active ? state.p2.timeLeft : 0;
 
+    const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
     if (state.p1.currentDomain) {
-        p1Domain.textContent = state.p1.currentDomain;
+        p1Domain.textContent = TECHNIQUE_TRANSLATIONS[commentaryLang]?.[state.p1.currentDomain] || state.p1.currentDomain;
         p1Domain.classList.add('active');
     } else {
         p1Domain.textContent = 'WAITING';
@@ -1709,7 +1812,7 @@ function renderMatchState(state) {
     }
 
     if (state.p2.currentDomain) {
-        p2Domain.textContent = state.p2.currentDomain;
+        p2Domain.textContent = TECHNIQUE_TRANSLATIONS[commentaryLang]?.[state.p2.currentDomain] || state.p2.currentDomain;
         p2Domain.classList.add('active');
     } else {
         p2Domain.textContent = 'WAITING';
@@ -1830,8 +1933,15 @@ function setupSyncCallbacks() {
         }
         activeCinematicsCount++;
         
-        const actionName = getActionNameFromVideo(videoSrc);
-        addTickerMsg(`${playerID === 'player1' ? 'PLAYER 1' : 'PLAYER 2'} ACTIVATED ${actionName.toUpperCase()}`, playerID === 'player1' ? 'ticker-p1' : 'ticker-p2');
+        const commentaryLang = document.getElementById('cfg-commentary-lang')?.value || 'en';
+        const actionName = getActionNameFromVideo(videoSrc, commentaryLang);
+        if (commentaryLang === 'zh-HK' || commentaryLang === 'zh-TW') {
+            addTickerMsg(`${playerID === 'player1' ? 'P1' : 'P2'} 成功發動【${actionName}】`, playerID === 'player1' ? 'ticker-p1' : 'ticker-p2');
+        } else if (commentaryLang === 'ja') {
+            addTickerMsg(`${playerID === 'player1' ? 'P1' : 'P2'} が【${actionName}】を発動しました`, playerID === 'player1' ? 'ticker-p1' : 'ticker-p2');
+        } else {
+            addTickerMsg(`${playerID === 'player1' ? 'PLAYER 1' : 'PLAYER 2'} ACTIVATED ${actionName.toUpperCase()}`, playerID === 'player1' ? 'ticker-p1' : 'ticker-p2');
+        }
 
         const cinema = (playerID === 'player1') ? p1Cinema : p2Cinema;
         cinema.src = videoSrc; cinema.style.display = 'block'; cinema.load();
