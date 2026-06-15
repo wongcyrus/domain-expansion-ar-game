@@ -701,13 +701,45 @@ app.get('/api/check-enhancement', (req, res) => {
     });
 });
 
-app.post('/api/webcam-upload', (req, res) => {
+app.post('/api/webcam-upload', async (req, res) => {
     const { sessionId, role, image } = req.body;
     const resolvedSessionId = sessionId || "main";
     console.log(`[Bridge] Received webcam upload for sessionId=${resolvedSessionId}, role=${role}, image length=${image ? image.length : 0}`);
     if (image) {
         saveWebcamFrame(resolvedSessionId, role, image);
     }
+
+    // --- AWS API Proxy Override ---
+    if (awsApiEndpoint) {
+        try {
+            console.log(`[AWS Bridge Proxy] Forwarding webcam upload for sessionId=${resolvedSessionId} to AWS REST API...`);
+            const payload = {
+                sessionId: resolvedSessionId,
+                role: role || "player1",
+                image: image || ""
+            };
+            const authHeader = req.headers['authorization'];
+            const forwardHeaders = { 'Content-Type': 'application/json' };
+            if (authHeader) {
+                forwardHeaders['Authorization'] = authHeader;
+            }
+
+            const response = await awsSignedFetch(`${awsApiEndpoint.replace(/\/$/, '')}/api/webcam-upload`, {
+                method: 'POST',
+                headers: forwardHeaders,
+                body: JSON.stringify(payload)
+            });
+            if (response.ok) {
+                console.log(`[AWS Bridge Proxy] Successfully forwarded webcam upload for sessionId=${resolvedSessionId} to AWS REST API.`);
+            } else {
+                const errText = await response.text();
+                console.error(`[AWS Bridge Proxy Error] webcam-upload status: ${response.status}, details: ${errText}`);
+            }
+        } catch (err) {
+            console.error(`[AWS Bridge Proxy Exception] Failed to forward webcam upload:`, err.message);
+        }
+    }
+
     res.json({ ok: true });
 });
 
