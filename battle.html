@@ -8,6 +8,13 @@
     <script src="static/js/auth.js"></script>
     <script src="static/js/webrtc_broadcaster.js?v=1.2"></script>
     <link rel="stylesheet" href="static/css/battle.css">
+    <!-- Live2D Core Dependencies -->
+    <!-- 1. High-Performance 2D WebGL Renderer (PixiJS v6) -->
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js"></script>
+    <!-- 2. Official Live2D Cubism 2 Core SDK -->
+    <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
+    <!-- 3. Pixi-Live2D-Display Adapter -->
+    <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/cubism2.min.js"></script>
     <style>
         #battle-settings-panel::-webkit-scrollbar {
             width: 6px;
@@ -156,6 +163,13 @@
                 <input type="checkbox" id="cfg-enable-ai-portrait" style="width: 16px; height: 16px; cursor: pointer;" checked>
                 <label id="label-enable-ai-portrait" for="cfg-enable-ai-portrait" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">✨ <b>AI DOMAIN PORTRAIT FUSION</b></label>
             </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label id="label-avatar-size" for="cfg-avatar-size" style="font-size: 11px; color: #EEE; cursor: pointer; display: flex; align-items: center; gap: 4px;">👤 <b>AVATAR SIZE</b></label>
+                    <span id="val-avatar-size" style="font-size: 11px; font-weight: bold; color: #FFFF00;">350px</span>
+                </div>
+                <input type="range" id="cfg-avatar-size" value="350" min="150" max="700" step="10" style="width: 100%; cursor: pointer;">
+            </div>
         </div>
 
         <h4 id="title-game-rules" style="margin: 10px 0 0; color: #4A90E2; font-size: 0.9rem;">GAME RULES</h4>
@@ -279,6 +293,12 @@
         <button id="close-result-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 15px 60px; border-radius: 40px; font-size: 1.2rem; cursor: pointer; transition: background 0.3s;">BACK TO LOBBY</button>
     </div>
     
+    <!-- Live2D Interactive Holographic Commentator -->
+    <div id="live2d-avatar-container">
+        <canvas id="live2d-commentator-canvas"></canvas>
+        <div class="hologram-badge">CO-HOST</div>
+    </div>
+
     <!-- Premium Live AI Commentator Overlay -->
     <div id="commentator-bubble">
         <!-- Inline Volume Controller directly on the Bubble for real-time adjustment -->
@@ -295,6 +315,7 @@
         <div id="commentator-text">Waiting for sorcery battle...</div>
     </div>
 
+    <script src="static/js/live2d_commentator.js"></script>
     <script src="static/js/battle.js?v=2.9"></script>
 </body>
 </html>

@@ -156,3 +156,78 @@ body.quad-mode .waiting-msg { top: 25%; }
     }
 }
 
+/* --- Live2D Holographic Co-Host --- */
+#live2d-avatar-container {
+    position: fixed;
+    bottom: 25px;
+    left: 25px;
+    width: 350px;
+    height: 350px;
+    z-index: 1200; /* Stacks above popup video (500), results (1000), commentator bubble (1100) */
+    pointer-events: auto; /* Allows mouse interactions for focus tracking */
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 82, 82, 0.15) 0%, rgba(0, 0, 0, 0.75) 75%);
+    border: 2.5px solid rgba(255, 82, 82, 0.4);
+    box-shadow: 0 0 25px rgba(255, 82, 82, 0.4), inset 0 0 15px rgba(255, 82, 82, 0.2);
+    overflow: visible;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: holographic-float 4s infinite ease-in-out;
+}
+
+#live2d-avatar-container.speaking {
+    border-color: rgba(255, 215, 0, 0.8);
+    box-shadow: 0 0 35px rgba(255, 215, 0, 0.6), inset 0 0 20px rgba(255, 215, 0, 0.45);
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.2) 0%, rgba(0, 0, 0, 0.85) 75%);
+}
+
+#live2d-commentator-canvas {
+    width: 100%;
+    height: 150%; /* Pops head and body beautifully out of the circular pod */
+    margin-bottom: -10px;
+    filter: drop-shadow(0 0 15px rgba(255, 82, 82, 0.15));
+    transition: filter 0.5s ease;
+}
+
+#live2d-avatar-container.speaking #live2d-commentator-canvas {
+    filter: drop-shadow(0 0 25px rgba(255, 215, 0, 0.3));
+}
+
+.hologram-badge {
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 82, 82, 0.9);
+    color: #000;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 10px rgba(255, 82, 82, 0.4);
+    font-family: 'Share Tech Mono', monospace;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+}
+
+#live2d-avatar-container.speaking .hologram-badge {
+    background: rgba(255, 215, 0, 0.95);
+    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.5);
+    color: #000;
+}
+
+@keyframes holographic-float {
+    0%, 100% {
+        transform: translateY(0) scale(1);
+    }
+    50% {
+        transform: translateY(-8px) scale(1.02);
+    }
+}
+
+

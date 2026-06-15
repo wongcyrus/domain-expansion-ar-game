@@ -291,11 +291,17 @@ function reserveCommentaryWindow(payload, extraBufferMs = COMMENTARY_END_BUFFER_
 function markCommentaryPlaybackStarted(payload) {
     isCommentaryPlaying = true;
     reserveCommentaryWindow(payload);
+    if (typeof startLive2DSpeaking === 'function') {
+        startLive2DSpeaking();
+    }
 }
 
 function markCommentaryPlaybackFinished() {
     isCommentaryPlaying = false;
     commentaryBusyUntil = Math.max(commentaryBusyUntil, Date.now() + COMMENTARY_END_BUFFER_MS);
+    if (typeof stopLive2DSpeaking === 'function') {
+        stopLive2DSpeaking();
+    }
 }
 
 function getCommentaryBusyDelayMs(now = Date.now()) {
