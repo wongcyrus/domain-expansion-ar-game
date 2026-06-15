@@ -8,12 +8,35 @@
 const originalFetch = window.fetch;
 window.fetch = async function(url, options = {}) {
     const token = localStorage.getItem("cognito_id_token");
-    if (token && (url.includes("/api/") || url.includes("/ws"))) {
+    const urlStr = typeof url === "string" ? url : (url instanceof URL ? url.href : String(url));
+    if (token && (urlStr.includes("/api/") || urlStr.includes("/ws"))) {
         options.headers = options.headers || {};
-        options.headers["Authorization"] = `Bearer ${token}`;
+        if (typeof options.headers.set === "function") {
+            options.headers.set("Authorization", `Bearer ${token}`);
+        } else {
+            options.headers["Authorization"] = `Bearer ${token}`;
+        }
     }
     return originalFetch(url, options);
 };
+
+function parseJwt(token) {
+    try {
+        const base64Url = token.split(".")[1];
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+                .split("")
+                .map(function(c) {
+                    return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+                })
+                .join("")
+        );
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        return null;
+    }
+}
 
 class CognitoAuth {
     constructor() {
@@ -366,7 +389,15 @@ class CognitoAuth {
             if (response.ok && result.AuthenticationResult) {
                 const authResult = result.AuthenticationResult;
                 const now = Math.floor(Date.now() / 1000);
-                const expiry = now + (authResult.ExpiresIn || 3600);
+                
+                // Decode JWT to get exact IdToken validity lifetime
+                const idTokenPayload = parseJwt(authResult.IdToken);
+                let tokenLifetime = authResult.ExpiresIn || 3600;
+                if (idTokenPayload && idTokenPayload.exp && idTokenPayload.iat) {
+                    tokenLifetime = idTokenPayload.exp - idTokenPayload.iat;
+                    console.log(`[Cognito] Decoded ID Token validity lifetime: ${tokenLifetime} seconds`);
+                }
+                const expiry = now + tokenLifetime;
 
                 // Save Cognito tokens in localStorage
                 localStorage.setItem("cognito_id_token", authResult.IdToken);
