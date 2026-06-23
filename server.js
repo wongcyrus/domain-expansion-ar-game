@@ -250,17 +250,26 @@ async function awsSignedFetch(urlStr, options = {}) {
 
 // Helper to call registered tools on the AWS MCP Server URL using SigV4 signed requests
 async function triggerMcpTool(mcpServerUrl, toolName, args) {
+    let finalToolName = toolName;
+    if (mcpServerUrl && mcpServerUrl.includes('bedrock-agentcore')) {
+        if (finalToolName === 'digital_human_speech' && !finalToolName.startsWith('digital-human-mcp-lambda___')) {
+            finalToolName = 'digital-human-mcp-lambda___' + finalToolName;
+        } else if (!finalToolName.startsWith('robot-only-mcp-lambda___') && !finalToolName.startsWith('digital-human-mcp-lambda___')) {
+            finalToolName = 'robot-only-mcp-lambda___' + finalToolName;
+        }
+    }
+
     const payload = {
         jsonrpc: "2.0",
         id: 1,
         method: "tools/call",
         params: {
-            name: toolName,
+            name: finalToolName,
             arguments: args
         }
     };
     try {
-        console.log(`[AWS Bridge Proxy] Invoking MCP tool "${toolName}" on MCP Server...`);
+        console.log(`[AWS Bridge Proxy] Invoking MCP tool "${finalToolName}" on MCP Server...`);
         const response = await awsSignedFetch(mcpServerUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -268,7 +277,7 @@ async function triggerMcpTool(mcpServerUrl, toolName, args) {
         });
         if (!response.ok) {
             const text = await response.text();
-            console.error(`[AWS Bridge Proxy Error] MCP tool "${toolName}" returned status ${response.status}. Body: ${text}`);
+            console.error(`[AWS Bridge Proxy Error] MCP tool "${finalToolName}" returned status ${response.status}. Body: ${text}`);
             return false;
         }
         const text = await response.text();
@@ -276,16 +285,16 @@ async function triggerMcpTool(mcpServerUrl, toolName, args) {
         if (text && text.trim()) {
             try {
                 result = JSON.parse(text);
-                console.log(`[AWS Bridge Proxy] MCP tool "${toolName}" success:`, JSON.stringify(result));
+                console.log(`[AWS Bridge Proxy] MCP tool "${finalToolName}" success:`, JSON.stringify(result));
             } catch (err) {
-                console.warn(`[AWS Bridge Proxy Warning] MCP tool "${toolName}" response body was not valid JSON: "${text}"`);
+                console.warn(`[AWS Bridge Proxy Warning] MCP tool "${finalToolName}" response body was not valid JSON: "${text}"`);
             }
         } else {
-            console.log(`[AWS Bridge Proxy] MCP tool "${toolName}" success (empty response with status ${response.status})`);
+            console.log(`[AWS Bridge Proxy] MCP tool "${finalToolName}" success (empty response with status ${response.status})`);
         }
         return true;
     } catch (err) {
-        console.error(`[AWS Bridge Proxy Exception] Failed to call MCP tool "${toolName}":`, err.message);
+        console.error(`[AWS Bridge Proxy Exception] Failed to call MCP tool "${finalToolName}":`, err.message);
         return false;
     }
 }
