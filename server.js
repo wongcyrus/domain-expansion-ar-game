@@ -918,11 +918,14 @@ app.post('/api/live-status', async (req, res) => {
             attachImages = true;
         }
         const welcomeMessage = await callOpenClawGateway(resolvedSessionId, agentId, openingInstruction, attachImages);
+        if (mcpServerUrl && welcomeMessage) {
+            await triggerMcpTool(mcpServerUrl, "digital_human_speech", { message: welcomeMessage });
+        }
         return res.json({
             ok: true,
             welcomeMessage,
             commentary: welcomeMessage,
-            ttsMode: 'browser',
+            ttsMode: mcpServerUrl ? 'aws' : 'browser',
             duration: 0,
             debugPrompt: openingInstruction,
             debugImageContext: {
@@ -961,10 +964,13 @@ app.post('/api/live-status', async (req, res) => {
         attachImages = true;
     }
     const commentary = await callOpenClawGateway(resolvedSessionId, agentId, promptText, attachImages);
+    if (mcpServerUrl && commentary) {
+        await triggerMcpTool(mcpServerUrl, "digital_human_speech", { message: commentary });
+    }
     res.json({
         ok: true,
         commentary,
-        ttsMode: 'browser',
+        ttsMode: mcpServerUrl ? 'aws' : 'browser',
         duration: 0,
         debugPrompt: promptText,
         debugImageContext: {
@@ -1058,10 +1064,13 @@ app.post('/api/battle-result', async (req, res) => {
         attachImages = true;
     }
     const commentary = await callOpenClawGateway(resolvedSessionId, agentId, promptText, attachImages);
+    if (mcpServerUrl && commentary) {
+        await triggerMcpTool(mcpServerUrl, "digital_human_speech", { message: commentary });
+    }
     res.json({
         ok: true,
         commentary,
-        ttsMode: 'browser',
+        ttsMode: mcpServerUrl ? 'aws' : 'browser',
         duration: 0,
         debugPrompt: promptText,
         debugImageContext: {
