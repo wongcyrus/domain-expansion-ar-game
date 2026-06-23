@@ -185,11 +185,10 @@ async function awsSignedFetch(urlStr, options = {}) {
             if (hostParts[idx + 1] && hostParts[idx + 1] !== 'amazonaws') {
                 region = hostParts[idx + 1];
             }
-        } else if (url.host.endsWith('.on.aws')) {
-            service = 'lambda';
-            // e.g., xxx.lambda-url.us-east-1.on.aws
-            const idx = hostParts.indexOf('lambda-url');
-            if (idx !== -1 && hostParts[idx + 1]) {
+        } else if (hostParts.includes('bedrock-agentcore')) {
+            service = 'bedrock-agentcore';
+            const idx = hostParts.indexOf('bedrock-agentcore');
+            if (hostParts[idx + 1] && hostParts[idx + 1] !== 'amazonaws') {
                 region = hostParts[idx + 1];
             }
         }
