@@ -867,6 +867,13 @@ app.post('/api/live-status', async (req, res) => {
                 }
                 const resolvedCommentary = data.welcomeMessage || data.commentary || "";
                 console.log(`[AWS Bridge Proxy] Received AWS Commentary: "${resolvedCommentary}" ttsMode=${data.ttsMode || 'browser'} hasAudioUrl=${!!data.audioUrl}`);
+
+                // Mirror commentary to MCP digital human speech when MCP server is configured.
+                // This keeps local real-time speech behavior consistent even when text is generated via AWS REST API.
+                if (mcpServerUrl && resolvedCommentary) {
+                    await triggerMcpTool(mcpServerUrl, "digital_human_speech", { message: resolvedCommentary });
+                }
+
                 if (eventType === "RESET") {
                     return res.json({
                         ok: true,
@@ -1023,6 +1030,11 @@ app.post('/api/battle-result', async (req, res) => {
                     throw new Error(`Unexpected end of JSON input from AWS Lambda. Raw response was: "${rawText}"`);
                 }
                 console.log(`[AWS Bridge Proxy] Received AWS Battle Result: "${data.commentary}" ttsMode=${data.ttsMode || 'browser'} hasAudioUrl=${!!data.audioUrl}`);
+
+                if (mcpServerUrl && data.commentary) {
+                    await triggerMcpTool(mcpServerUrl, "digital_human_speech", { message: data.commentary });
+                }
+
                 return res.json({
                     ok: true,
                     commentary: data.commentary,
