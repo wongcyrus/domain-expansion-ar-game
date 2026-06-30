@@ -807,7 +807,8 @@ function getSystemPrompt(isZh, foulLanguage) {
         if (foulLanguage) {
             systemPrompt += `\n【核心附加指令：粗口垃圾話模式已開啟！】請在解說中加入適量香港廣東話粗口/Swearing或垃圾話（例如「仆街」、「屌你」、「頂你個肺」、「好戇尻」、「廢柴」），令其聽起來極度生動挑釁！`;
         } else {
-            systemPrompt += `\n【核心附加指令：粗口關閉】請保持用語文明、健康，絕對不可包含任何粗口、髒話。`;
+            systemPrompt += `\n【核心附加指令：粗口關閉（極嚴格防禦模式已開啟）】請保持用語極度文明、健康，絕對不可包含任何粗口、髒話。
+【嚴禁使用粗俗字眼】：絕對禁止輸出任何廣東話粗口、罵人髒話或諧音/代稱字，例如：仆街 (puk gaai)、屌 (diu)、頂你個肺 (ding nei go fai)、戇尻/戇鳩/戇c (on gau)、柒/𨳍 (cat)、撚/𨶙 (lan)、閪/閪人/傻西 (hai/sai)、冚家鏟、廢柴、玩撚、含撚、傻嗨、小你、頂你等。亦嚴禁使用任何英文髒話（如 fuck, shit, bitch, damn, hell, crap, asshole）。請確保所有吐槽與調侃均不含粗俗侮辱性詞彙，並在輸出前進行嚴格自我審查，確保100%過濾髒話粗口。`;
         }
         return systemPrompt;
     } else {
@@ -815,7 +816,7 @@ function getSystemPrompt(isZh, foulLanguage) {
         if (foulLanguage) {
             systemPrompt += `\n[CRITICAL DIRECTIVE: Swearing / Trash-talk mode is active!] Add appropriate street-style roasts or light trash-talk (e.g., "pathetic", "idiot", "trash") to provoke and amuse the players!`;
         } else {
-            systemPrompt += `\n[CRITICAL DIRECTIVE: Swearing OFF] Keep your wording polite, wholesomely intense, and PG-rated. No foul language.`;
+            systemPrompt += `\n[CRITICAL DIRECTIVE: Swearing / foul language is STRICTLY FORBIDDEN and OFF (FOUL PROTECTION ACTIVE)] Keep your wording completely clean, family-friendly, and PG-rated. You must not use any Cantonese vulgarities, swear words, profanities, or offensive slang (e.g., 仆街, 屌, 頂你個肺, 戇尻/戇鳩, 柒, 撚, 閪, 冚家鏟, 廢柴, 玩撚, 含撚, 傻西, 傻嗨, 小你, 頂你). Do not use any English profanity or curse words (e.g., fuck, shit, bitch, damn, hell, crap, asshole). Perform a strict self-censorship check to ensure 100% compliance.`;
         }
         return systemPrompt;
     }
@@ -946,7 +947,7 @@ app.post('/api/live-status', async (req, res) => {
     if (isZh) {
         const toneDirective = foulLanguage
             ? "（粗口垃圾話模式已開啟！請使用廣東話粗口/挑釁詞調侃玩家）"
-            : "（請保持文明，不可使用粗口髒話）";
+            : "（粗口關閉！極嚴格防禦中，絕對禁止使用任何廣東話粗口髒話或諧音/英文髒話，如：仆街, 屌, 頂你個肺, 戇尻, 柒, 撚, 閪, 冚家鏟, 廢柴, 玩撚, 含撚, 傻西, 傻嗨, 小你, 頂你, fuck, shit, bitch, damn, hell, crap。請用健康幽默的用語進行吐槽，並嚴格自審）";
         if (eventType === "CAST" && detail) {
             promptText = `[對戰更新] ${translateDetail(detail)}。目前完成進度：P1 完成了 ${p1Score} 次，P2 完成了 ${p2Score} 次。${toneDirective} 請立刻提供下一句極簡短的廣東話解說旁白！`;
         } else {
@@ -955,7 +956,7 @@ app.post('/api/live-status', async (req, res) => {
     } else {
         const toneDirective = foulLanguage
             ? "(Trash-talk mode is active! Feel free to lightly roast the players)"
-            : "(Swearing is OFF. Keep commentary intense but clean)";
+            : "(Swearing / foul language is STRICTLY FORBIDDEN and OFF - FOUL PROTECTION ACTIVE. Do not use any vulgarities or Cantonese/English profanities, keeping it 100% clean and PG-rated. Perform a strict self-censorship check)";
         if (eventType === "CAST" && detail) {
             promptText = `[GAME UPDATE] ${detail}. Current Standing: P1 Score = ${p1Score}, P2 Score = ${p2Score}. ${toneDirective} Please provide your next short, high-energy commentary!`;
         } else {
@@ -1062,10 +1063,15 @@ app.post('/api/battle-result', async (req, res) => {
         if (foulLanguage) {
             promptText += `特別注意（核心要求）：由於玩家開啟了「粗口垃圾話」模式，請在旁白中加入適量香港廣東話粗口/Swearing或極度不禮貌的街頭垃圾話，令其聽起來極度搞笑、熱血，且具有街頭咒術師互相問候挑釁的風味！`;
         } else {
-            promptText += `特別注意：請保持旁白用詞文明、熱血、健康，絕對不可包含 any 粗口、髒話 or 人身攻擊字眼，適合全年齡觀眾。`;
+            promptText += `特別注意：請保持旁白用詞極度文明、熱血、健康，絕對不可包含任何粗口、髒話、人身攻擊字眼或諧音/英文髒話，如：仆街, 屌, 頂你個肺, 戇尻/戇鳩, 柒, 撚, 閪, 冚家鏟, 廢柴, 玩撚, 含撚, 傻西, 傻嗨, 小你, 頂你, fuck, shit, bitch, damn, hell, crap, asshole。適合全年齡觀眾，請嚴格自審。`;
         }
     } else {
         promptText = `[SYSTEM UPDATE] The battle is OVER! Winner: ${winner}. Final standing - Player 1 score: ${p1Score}, Player 2 score: ${p2Score}. Please deliver an epic, grand concluding commentary about the battle's climax (maximum 3 short sentences). Honor the winner in character!`;
+        if (foulLanguage) {
+            promptText += ` [Trash-talk mode is active!]`;
+        } else {
+            promptText += ` [Swearing/foul language is STRICTLY FORBIDDEN and OFF - FOUL PROTECTION ACTIVE. Keep the commentary completely clean and PG-rated. No Cantonese or English swear words. Perform strict self-censorship.]`;
+        }
     }
 
     console.log(`[Bridge] Battle result: Winner: ${winner}, scores: P1=${p1Score}, P2=${p2Score} lang=${lang} foul=${foulLanguage}`);
