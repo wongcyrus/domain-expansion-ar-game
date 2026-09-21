@@ -6,7 +6,16 @@ const { Server } = require('socket.io');
 const path = require('path');
 const cors = require('cors');
 const os = require('os');
-const crypto = require('crypto');
+const {
+    TECHNIQUE_TO_MCP_TOOL,
+    cleanCommentary,
+    getSignatureKey,
+    hmac,
+    parseAwsCredentials,
+    resolveTechniqueTargets,
+    sha256,
+    translateDetail,
+} = require('./server_helpers');
 
 // Detect if running inside AWS Lambda
 const isLambda = !!(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
@@ -18,44 +27,10 @@ function loadAwsCliCredentials() {
         const credentialsPath = path.join(homeDir, '.aws', 'credentials');
         if (fs.existsSync(credentialsPath)) {
             const content = fs.readFileSync(credentialsPath, 'utf8');
-            const lines = content.split(/\r?\n/);
             const profile = process.env.AWS_PROFILE || 'default';
-
-            let inTargetProfile = false;
-            let accessKeyId = null;
-            let secretAccessKey = null;
-            let sessionToken = null;
-
-            for (let line of lines) {
-                line = line.trim();
-                if (!line || line.startsWith('#') || line.startsWith(';')) {
-                    continue;
-                }
-
-                if (line.startsWith('[') && line.endsWith(']')) {
-                    const currentProfile = line.slice(1, -1).trim();
-                    inTargetProfile = (currentProfile === profile);
-                    continue;
-                }
-
-                if (inTargetProfile) {
-                    const parts = line.split('=');
-                    if (parts.length >= 2) {
-                        const key = parts[0].trim().toLowerCase();
-                        const val = parts.slice(1).join('=').trim();
-                        if (key === 'aws_access_key_id') {
-                            accessKeyId = val;
-                        } else if (key === 'aws_secret_access_key') {
-                            secretAccessKey = val;
-                        } else if (key === 'aws_session_token') {
-                            sessionToken = val;
-                        }
-                    }
-                }
-            }
-
-            if (accessKeyId && secretAccessKey) {
-                return { accessKeyId, secretAccessKey, sessionToken, source: `AWS CLI credentials file (~/.aws/credentials [profile: ${profile}])` };
+            const credentials = parseAwsCredentials(content, profile);
+            if (credentials) {
+                return { ...credentials, source: `AWS CLI credentials file (~/.aws/credentials [profile: ${profile}])` };
             }
         }
     } catch (err) {
@@ -126,25 +101,6 @@ if (mcpServerUrl) {
     console.log(`[Startup] AWS MCP Server URL is currently inactive.`);
 }
 console.log(`[Startup] AWS Signature Version 4 signing: ${resolvedCredentials ? `ENABLED (credentials loaded from ${resolvedCredentials.source})` : 'DISABLED (no credentials found in env or CLI credentials file)'}`);
-
-// Helper to calculate SHA256 hash of a string
-function sha256(string) {
-    return crypto.createHash('sha256').update(string, 'utf8').digest('hex');
-}
-
-// Helper to calculate HMAC-SHA256 of a string with a key
-function hmac(key, string, encoding) {
-    return crypto.createHmac('sha256', key).update(string, 'utf8').digest(encoding);
-}
-
-// Get Signature Version 4 Signing Key
-function getSignatureKey(key, dateStamp, regionName, serviceName) {
-    const kDate = hmac('AWS4' + key, dateStamp);
-    const kRegion = hmac(kDate, regionName);
-    const kService = hmac(kRegion, serviceName);
-    const kSigning = hmac(kService, 'aws4_request');
-    return kSigning;
-}
 
 // Custom AWS Signature V4 request signer & fetcher using environment or CLI credentials
 async function awsSignedFetch(urlStr, options = {}) {
@@ -358,37 +314,6 @@ function getWebcamFrame(sessionId) {
     return current.latestWebcamFrameP1 || current.latestWebcamFrameP2 || current.latestWebcamFrame || null;
 }
 
-function translateDetail(detail) {
-    if (!detail) return '';
-    let result = detail;
-
-    // Replace technique names with character ownership metadata
-    result = result.replace(/Chimera Shadow Garden/gi, '領域展開「嵌合暗翳庭」（伏黑惠）');
-    result = result.replace(/Authentic Love/gi, '領域展開「真贋相愛」（乙骨憂太）');
-    result = result.replace(/Self-Embodiment of Perfection/gi, '領域展開「自閉円頓裹」（真人）');
-    result = result.replace(/Yuji Itadori's Domain/gi, '領域展開「虎杖悠仁之領域」（虎杖悠仁）');
-    result = result.replace(/Malevolent Shrine/gi, '領域展開「伏魔御廚子」（兩面宿儺）');
-    result = result.replace(/Idle Death Gamble/gi, '領域展開「坐殺博徒」（秤金次）');
-    result = result.replace(/Unlimited Void/gi, '領域展開「無量空處」（五條悟）');
-    result = result.replace(/Time Cell Moon Palace/gi, '領域展開「時胞月宮殿」（禪院直哉）');
-    result = result.replace(/Hollow Purple/gi, '「虛式『茈』」（五條悟）');
-    result = result.replace(/Reversal Red/gi, '「術式反轉『赫』」（五條悟）');
-    result = result.replace(/Lapse Blue/gi, '「術式順轉『蒼』」（五條悟）');
-
-    // Replace game events
-    result = result.replace(/Only (\d+) seconds remaining in the match! The battle is near its end!/gi, '對戰只剩返 $1 秒！戰局即將結束！');
-    result = result.replace(/The scores are tied! Both players are neck and neck at (\d+)!/gi, '比分打成平手！雙方依家以 $1 比 $1 叮噹馬頭，勢均力敵！');
-    result = result.replace(/(Player 1|Player 2) successfully activated/gi, '$1 成功發動');
-    result = result.replace(/(Player 1|Player 2) has taken the lead!/gi, '$1 攞到領先優勢！');
-    result = result.replace(/(Player 1|Player 2) scored!/gi, '$1 成功得分！');
-
-    // Replace players
-    result = result.replace(/Player 1/gi, 'P1');
-    result = result.replace(/Player 2/gi, 'P2');
-
-    return result;
-}
-
 async function callOpenClawGateway(sessionId, agentId, promptText, attachImages = false) {
     const { port, token } = loadOpenClawConfig();
     const openclawHost = process.env.OPENCLAW_HOST || '127.0.0.1';
@@ -472,21 +397,7 @@ async function callOpenClawGateway(sessionId, agentId, promptText, attachImages 
         const data = await response.json();
         const rawCommentary = data.choices?.[0]?.message?.content || "";
 
-        let cleaned = rawCommentary;
-
-        // 1. Remove bracketed posture commands if any e.g. [huishou]
-        cleaned = cleaned.replace(/\[([a-zA-Z0-9_-]+)\]/g, "");
-
-        // 2. Remove markdown syntax formatting characters (stars, underscores, backticks, tildes)
-        cleaned = cleaned.replace(/[\*_`~]/g, "");
-
-        // 3. Remove all visual emojis and extended pictographics
-        cleaned = cleaned.replace(/\p{Extended_Pictographic}/gu, "");
-
-        // 4. Remove any double/excessive spaces or newlines
-        cleaned = cleaned.replace(/\s+/g, " ");
-
-        cleaned = cleaned.trim();
+        const cleaned = cleanCommentary(rawCommentary);
 
         return cleaned || "Incredible intensity! The Jujutsu sorcerers are giving it everything they have!";
     } catch (err) {
@@ -544,34 +455,9 @@ app.post('/api/trigger-technique', async (req, res) => {
             console.log(`[AWS Bridge Proxy] Handling trigger-technique directly via MCP Server: technique=${technique}, robotId=${robotId}, role=${role}`);
 
             // 1. Resolve target robots
-            let targets = [];
-            if (robotId === "all") {
-                if (role === "player1") {
-                    targets = ["robot_1", "robot_2", "robot_3"];
-                } else if (role === "player2") {
-                    targets = ["robot_4", "robot_5", "robot_6"];
-                } else {
-                    targets = ["robot_1"];
-                }
-            } else {
-                targets = [robotId || "robot_1"];
-            }
+            const targets = resolveTechniqueTargets(robotId, role);
 
             // Action configurations mapping
-            const techniqueToMcpTool = {
-                "domain_unlimited_void": "robot_kung_fu",
-                "domain_malevolent_shrine": "robot_right_uppercut",
-                "domain_self_embodiment": "robot_twist",
-                "domain_authentic_love": "robot_wave",
-                "domain_idle_death_gamble": "robot_dance_one",
-                "domain_yuji_itadori": "robot_left_shot_fast",
-                "domain_chimera_shadow_garden": "robot_squat",
-                "domain_time_cell_moon_palace": "robot_twist",
-                "lapse_blue": "robot_left_shot_fast",
-                "reversal_red": "robot_right_shot_fast",
-                "hollow_purple": "robot_left_kick"
-            };
-
             const jjkActionMap = {
                 "domain_unlimited_void": { stance: "kung_fu", speech: "領域展開、無量空処", language: "ja" },
                 "domain_malevolent_shrine": { stance: "right_uppercut", speech: "領域展開、伏魔御厨子", language: "ja" },
@@ -606,7 +492,7 @@ app.post('/api/trigger-technique', async (req, res) => {
 
             const actionPromises = [];
             for (const target of targets) {
-                const mcpToolName = techniqueToMcpTool[technique] || `robot_${technique}`;
+                const mcpToolName = TECHNIQUE_TO_MCP_TOOL[technique] || `robot_${technique}`;
                 actionPromises.push(triggerMcpTool(mcpServerUrl, mcpToolName, { robot_id: target }));
             }
 
