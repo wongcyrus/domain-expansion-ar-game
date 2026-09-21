@@ -90,13 +90,16 @@ if (!awsApiEndpoint) {
         const outputJsonPath = path.join(__dirname, '../cdk/output.json');
         if (fs.existsSync(outputJsonPath)) {
             const outputs = JSON.parse(fs.readFileSync(outputJsonPath, 'utf8'));
-            const cdkStack = outputs.CdkStack;
-            if (cdkStack) {
-                const apiKey = Object.keys(cdkStack).find(key => key.includes("DomainExpansionServerlessConstructDomainExpansionRestApiEndpoint"));
-                if (apiKey) {
-                    awsApiEndpoint = cdkStack[apiKey];
-                    console.log(`\x1b[32m[AWS Bridge Proxy] Detected AWS API Endpoint from cdk/output.json: ${awsApiEndpoint}\x1b[0m`);
-                }
+            const stackNames = Object.keys(outputs);
+            if (stackNames.length !== 1) {
+                throw new Error(`Expected exactly one stack in cdk/output.json, found ${stackNames.length}`);
+            }
+
+            const stackOutputs = outputs[stackNames[0]];
+            const apiKey = Object.keys(stackOutputs).find(key => key.includes("DomainExpansionServerlessConstructDomainExpansionRestApiEndpoint"));
+            if (apiKey) {
+                awsApiEndpoint = stackOutputs[apiKey];
+                console.log(`\x1b[32m[AWS Bridge Proxy] Detected AWS API Endpoint from cdk/output.json: ${awsApiEndpoint}\x1b[0m`);
             }
         }
     } catch (e) {

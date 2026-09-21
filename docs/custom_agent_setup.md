@@ -141,7 +141,7 @@ Open your global config file `~/.openclaw/openclaw.json` and append the new agen
 {
   "id": "domain-commentator",
   "name": "Domain Arena Commentator",
-  "workspace": "/home/developer/.openclaw/workspace/domain-commentator",
+  "workspace": "~/.openclaw/workspace/domain-commentator",
   "model": "litellm/gemini-3.5-flash",
   "tools": {
     "profile": "full",
