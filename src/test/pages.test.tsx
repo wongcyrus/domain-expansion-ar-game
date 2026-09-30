@@ -222,6 +222,7 @@ describe('PlayerApp', () => {
       'camera-2',
       expect.any(Function)
     ));
+    await waitFor(() => expect(localStorage.getItem('domain-expansion.settings')).toContain('"cameraId":"camera-2"'));
     expect(mediaListeners.has('devicechange')).toBe(true);
   });
 

@@ -87,6 +87,10 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
     [config]
   );
 
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
+
   const refreshCameras = async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return [];
     const devices = await navigator.mediaDevices.enumerateDevices() ?? [];

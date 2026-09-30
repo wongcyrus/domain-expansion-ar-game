@@ -31,6 +31,7 @@ const SettingsSchema = z.object({
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 const key = 'domain-expansion.settings';
+const legacyKey = 'domain-expansion-v2.settings';
 export const defaultSettings: Settings = {
   roomCode: 'BTL1',
   role: 'player1',
@@ -62,12 +63,22 @@ export const defaultSettings: Settings = {
 
 export function loadSettings(overrides: Partial<Settings> = {}): Settings {
   let stored: unknown = {};
-  try { stored = JSON.parse(localStorage.getItem(key) ?? '{}'); } catch { stored = {}; }
+  const storedValue = localStorage.getItem(key);
+  const legacyValue = storedValue == null ? localStorage.getItem(legacyKey) : null;
+  try { stored = JSON.parse(storedValue ?? legacyValue ?? '{}'); } catch { stored = {}; }
   const definedOverrides = Object.fromEntries(
     Object.entries(overrides).filter(([, value]) => value !== undefined)
   );
   const result = SettingsSchema.safeParse({ ...defaultSettings, ...(stored as object), ...definedOverrides });
-  return result.success ? result.data : defaultSettings;
+  if (!result.success) return defaultSettings;
+  if (legacyValue != null) saveSettings(result.data);
+  return result.data;
 }
-export function saveSettings(settings: Settings) { localStorage.setItem(key, JSON.stringify(SettingsSchema.parse(settings))); }
+export function saveSettings(settings: Settings) {
+  const result = SettingsSchema.safeParse(settings);
+  if (!result.success) return false;
+  localStorage.setItem(key, JSON.stringify(result.data));
+  localStorage.removeItem(legacyKey);
+  return true;
+}
 export const roleLabel = (role: PlayerRole) => role === 'player1' ? 'Player 1' : 'Player 2';

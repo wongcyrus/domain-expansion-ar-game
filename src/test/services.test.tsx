@@ -38,8 +38,23 @@ describe('settings and popup messaging', () => {
     });
     saveSettings({ ...defaultSettings, roomCode: 'ROOM9' });
     expect(loadSettings().roomCode).toBe('ROOM9');
+    expect(saveSettings({ ...defaultSettings, roomCode: 'x' })).toBe(false);
+    expect(loadSettings().roomCode).toBe('ROOM9');
     expect(roleLabel('player1')).toBe('Player 1');
     expect(roleLabel('player2')).toBe('Player 2');
+  });
+
+  it('migrates settings saved under the previous application key', () => {
+    localStorage.removeItem('domain-expansion.settings');
+    localStorage.setItem('domain-expansion-v2.settings', JSON.stringify({
+      ...defaultSettings,
+      cameraId: 'usb-camera',
+      language: 'ja'
+    }));
+
+    expect(loadSettings()).toMatchObject({ cameraId: 'usb-camera', language: 'ja' });
+    expect(localStorage.getItem('domain-expansion.settings')).toContain('"cameraId":"usb-camera"');
+    expect(localStorage.getItem('domain-expansion-v2.settings')).toBeNull();
   });
 
   it('posts and validates same-origin popup messages', () => {
