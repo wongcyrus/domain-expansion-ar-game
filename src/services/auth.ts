@@ -4,13 +4,36 @@ const TOKEN_KEY = 'cognito_id_token';
 const ACCESS_TOKEN_KEY = 'cognito_access_token';
 const EXPIRY_KEY = 'cognito_token_expiry';
 const USERNAME_KEY = 'cognito_username';
+export const AUTH_EXPIRED_EVENT = 'domain-expansion.auth-expired';
+
+const tokenExpiry = (token: string) => {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')));
+    return typeof decoded.exp === 'number' ? decoded.exp : null;
+  } catch {
+    return null;
+  }
+};
 
 export interface TokenProvider { getIdToken(): string | null; }
 export class LocalStorageTokenProvider implements TokenProvider {
   getIdToken() {
     const token = localStorage.getItem(TOKEN_KEY);
-    const expiry = Number(localStorage.getItem(EXPIRY_KEY) ?? 0);
-    if (!token || (expiry && expiry <= Math.floor(Date.now() / 1000))) return null;
+    if (!token) return null;
+    const storedExpiry = Number(localStorage.getItem(EXPIRY_KEY) ?? 0);
+    const jwtExpiry = tokenExpiry(token);
+    const expiry = jwtExpiry == null
+      ? storedExpiry
+      : storedExpiry
+        ? Math.min(storedExpiry, jwtExpiry)
+        : jwtExpiry;
+    if (!expiry || expiry <= Math.floor(Date.now() / 1000)) {
+      expireSession();
+      return null;
+    }
     return token;
   }
 }
@@ -74,6 +97,11 @@ export function signOut() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(EXPIRY_KEY);
   localStorage.removeItem(USERNAME_KEY);
+}
+
+export function expireSession() {
+  signOut();
+  window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 }
 
 export function currentUsername() {

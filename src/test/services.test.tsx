@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../services/apiClient';
 import {
+  AUTH_EXPIRED_EVENT,
   currentUsername,
   hasConfiguredAuthentication,
   LocalStorageTokenProvider,
@@ -88,6 +89,14 @@ describe('authentication and API client', () => {
     expect(new LocalStorageTokenProvider().getIdToken()).toBe('id-token');
     localStorage.setItem('cognito_token_expiry', '1');
     expect(new LocalStorageTokenProvider().getIdToken()).toBeNull();
+    localStorage.setItem('cognito_id_token', `x.${btoa(JSON.stringify({ exp: 1 }))}.x`);
+    localStorage.removeItem('cognito_token_expiry');
+    localStorage.setItem('cognito_username', 'expired@example.com');
+    const expired = vi.fn();
+    addEventListener(AUTH_EXPIRED_EVENT, expired, { once: true });
+    expect(new LocalStorageTokenProvider().getIdToken()).toBeNull();
+    expect(expired).toHaveBeenCalledOnce();
+    expect(currentUsername()).toBeNull();
   });
 
   it('signs in, reports failures, and signs out', async () => {
@@ -114,13 +123,20 @@ describe('authentication and API client', () => {
       .mockResolvedValueOnce(new Response('image', {
         status: 200, headers: { 'content-type': 'image/jpeg' }
       }))
-      .mockResolvedValueOnce(new Response('broken', { status: 503 }));
+      .mockResolvedValueOnce(new Response('broken', { status: 503 }))
+      .mockResolvedValueOnce(new Response('expired', { status: 401 }));
     await expect(client.triggerTechnique('robot_1', 'blue', 'key')).resolves.toEqual({ ok: true });
     const [, init] = vi.mocked(fetch).mock.calls[0];
     expect((init?.headers as Headers).get('Authorization')).toBe('Bearer token');
     expect((init?.headers as Headers).get('Content-Type')).toBe('application/json');
     await expect(client.getSnapshot('match one', 'player1')).resolves.toBeInstanceOf(Blob);
     await expect(client.commentary('/api/live-status', {})).rejects.toThrow('API 503: broken');
+    localStorage.setItem('cognito_id_token', 'stale');
+    const expired = vi.fn();
+    addEventListener(AUTH_EXPIRED_EVENT, expired, { once: true });
+    await expect(client.commentary('/api/live-status', {})).rejects.toThrow('API 401: expired');
+    expect(expired).toHaveBeenCalledOnce();
+    expect(localStorage.getItem('cognito_id_token')).toBeNull();
   });
 
   it('covers every public API route', async () => {
@@ -304,5 +320,8 @@ describe('configuration, commentary and auth gate', () => {
     fireEvent.click(screen.getByText('Release Domain'));
     await screen.findByText('Protected arena');
     expect(screen.getByText('user@example.com')).toBeTruthy();
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    await screen.findByText('Session expired. Sign in again.');
+    expect(screen.getByText('Release Domain')).toBeTruthy();
   });
 });

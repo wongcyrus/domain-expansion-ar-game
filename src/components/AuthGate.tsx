@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import {
+  AUTH_EXPIRED_EVENT,
   currentUsername,
   hasConfiguredAuthentication,
   LocalStorageTokenProvider,
@@ -15,6 +16,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    const handleExpired = () => {
+      setAuthenticated(false);
+      setError('Session expired. Sign in again.');
+    };
+    addEventListener(AUTH_EXPIRED_EVENT, handleExpired);
     void loadConfig().then((loaded) => {
       setConfig(loaded);
       setAuthenticated(
@@ -22,6 +28,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         Boolean(new LocalStorageTokenProvider().getIdToken())
       );
     });
+    return () => removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
   }, []);
 
   if (!config) {

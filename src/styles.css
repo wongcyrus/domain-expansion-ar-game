@@ -21,3 +21,5 @@
 
 .player-page .camera-toggle{right:4.5rem}.player-page .player-panel-toggle{right:1rem}
 @media(max-width:800px){.player-page .camera-toggle,.player-page .player-panel-toggle{top:6.5rem}.player-page .camera-toggle{right:4.5rem}.player-page .player-panel-toggle{right:1rem}}
+.battle-page .battle-start{right:4.5rem}.battle-page .battle-panel-toggle{right:1rem}
+@media(max-width:800px){.battle-page .battle-start,.battle-page .battle-panel-toggle{top:6.5rem}.battle-page .battle-start{right:4.5rem}.battle-page .battle-panel-toggle{right:1rem}}

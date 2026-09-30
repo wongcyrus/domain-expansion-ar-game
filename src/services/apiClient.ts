@@ -1,5 +1,5 @@
 import type { PlayerRole } from '../core/protocol';
-import type { TokenProvider } from './auth';
+import { expireSession, type TokenProvider } from './auth';
 import type { CommentaryResponse } from './commentary';
 
 export class ApiClient {
@@ -11,7 +11,11 @@ export class ApiClient {
     if (token) headers.set('Authorization', `Bearer ${token}`);
     if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
     const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}${path}`, { ...init, headers });
-    if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
+    if (!response.ok) {
+      const message = await response.text();
+      if (response.status === 401) expireSession();
+      throw new Error(`API ${response.status}: ${message}`);
+    }
     const contentType = response.headers.get('content-type') ?? '';
     return (contentType.includes('json') ? response.json() : response.blob()) as Promise<T>;
   }
