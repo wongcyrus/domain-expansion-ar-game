@@ -21,6 +21,7 @@ const viewerRequested = vi.fn();
 const handleSignal = vi.fn();
 const closePeers = vi.fn();
 let gameStatus = 'connected';
+let serverTimeOffset = 0;
 
 vi.mock('../services/useGameSession', () => ({
   useGameSession: () => ({
@@ -34,7 +35,7 @@ vi.mock('../services/useGameSession', () => ({
     command,
     signal,
     subscribe,
-    serverTime: (clientTime = Date.now()) => clientTime
+    serverTime: (clientTime = Date.now()) => clientTime + serverTimeOffset
   })
 }));
 vi.mock('../services/apiClient', () => ({
@@ -111,6 +112,7 @@ beforeEach(() => {
   cameraStop.mockReset();
   playerReady.mockReset();
   gameStatus = 'connected';
+  serverTimeOffset = 0;
   viewerRequested.mockReset();
   handleSignal.mockReset();
   history.replaceState({}, '', '/');
@@ -270,6 +272,34 @@ describe('PlayerApp', () => {
 });
 
 describe('BattleApp', () => {
+  it('uses server time and retries countdown completion until the phase advances', async () => {
+    vi.useFakeTimers();
+    const serverStart = 1_000_000;
+    vi.setSystemTime(serverStart + 5_000);
+    serverTimeOffset = -5_000;
+    gameState = makeState({
+      phase: 'countdown',
+      countdownEndsAt: serverStart + 1_000,
+      players: {
+        player1: { ...makeState().players.player1, challenge: null },
+        player2: { ...makeState().players.player2, challenge: null }
+      }
+    });
+    const { BattleApp } = await import('../pages/BattleApp');
+    render(<BattleApp initialSettings={{ language: 'en', commentatorEnabled: false }} />);
+
+    await act(async () => vi.advanceTimersByTimeAsync(800));
+    expect(command).not.toHaveBeenCalledWith('match.countdownCompleted');
+
+    await act(async () => vi.advanceTimersByTimeAsync(400));
+    expect(command).toHaveBeenCalledTimes(1);
+    expect(command).toHaveBeenLastCalledWith('match.countdownCompleted');
+
+    await act(async () => vi.advanceTimersByTimeAsync(600));
+    expect(command).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it('localizes active technique names in the battle view', async () => {
     gameState = makeState({ phase: 'playing' });
     const { BattleApp } = await import('../pages/BattleApp');

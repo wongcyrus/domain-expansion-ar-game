@@ -27,7 +27,7 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
     ...initialSettings
   }));
   const text = uiText(settings.language);
-  const { state, status, config, command, signal, subscribe } = useGameSession(settings.roomCode, 'viewer');
+  const { state, status, config, command, signal, subscribe, serverTime } = useGameSession(settings.roomCode, 'viewer');
   const connectionStatus = status in text
     ? text[status as 'loading' | 'connecting' | 'connected' | 'disconnected']
     : status;
@@ -45,7 +45,7 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
   const peers = useRef<WebRtcSessionService | undefined>(undefined);
   const commentaryPlayer = useRef(new CommentaryPlayer(setLive2dSpeaking, setLive2dAudio));
   const requestedPlayers = useRef(new Set<string>());
-  const completedCountdown = useRef<string | null>(null);
+  const countdownCompletionAttempt = useRef<{ matchId: string; at: number } | null>(null);
   const completedResolution = useRef<string | null>(null);
   const completedCinematic = useRef<string | null>(null);
   const expiredChallenges = useRef(new Set<string>());
@@ -58,6 +58,7 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
   const commentaryInFlight = useRef(false);
   const commentaryBusyUntil = useRef(0);
   currentState.current = state;
+  const serverNow = serverTime(now);
   const api = useMemo(
     () => config?.apiBaseUrl ? new ApiClient(config.apiBaseUrl, new LocalStorageTokenProvider()) : null,
     [config]
@@ -183,26 +184,27 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
   }, [api, command, config?.webSocketUrl, settings.commentatorEnabled, settings.roomCode, state?.matchId, state?.phase]);
 
   useEffect(() => {
-    if (state?.phase === 'countdown' && state.matchId && state.countdownEndsAt &&
-      now >= state.countdownEndsAt && completedCountdown.current !== state.matchId) {
-      completedCountdown.current = state.matchId;
-      command('match.countdownCompleted');
-    }
-  }, [command, now, state?.countdownEndsAt, state?.matchId, state?.phase]);
+    if (state?.phase !== 'countdown' || !state.matchId || !state.countdownEndsAt ||
+      serverNow < state.countdownEndsAt) return;
+    const previous = countdownCompletionAttempt.current;
+    if (previous?.matchId === state.matchId && now - previous.at < 500) return;
+    countdownCompletionAttempt.current = { matchId: state.matchId, at: now };
+    command('match.countdownCompleted');
+  }, [command, now, serverNow, state?.countdownEndsAt, state?.matchId, state?.phase]);
 
   useEffect(() => {
     if (state?.phase !== 'playing') return;
     (['player1', 'player2'] as const).forEach((role) => {
       const challenge = state.players[role].challenge;
-      if (!challenge?.deadlineAt || now < challenge.deadlineAt || expiredChallenges.current.has(challenge.challengeId)) return;
+      if (!challenge?.deadlineAt || serverNow < challenge.deadlineAt || expiredChallenges.current.has(challenge.challengeId)) return;
       expiredChallenges.current.add(challenge.challengeId);
       command('challenge.expire', { role, challengeId: challenge.challengeId });
     });
-  }, [command, now, state]);
+  }, [command, serverNow, state]);
 
   useEffect(() => {
     const resolution = state?.resolution;
-    if (state?.phase !== 'resolving' || !resolution || now < resolution.acceptUntil || completedResolution.current === resolution.resolutionId) return;
+    if (state?.phase !== 'resolving' || !resolution || serverNow < resolution.acceptUntil || completedResolution.current === resolution.resolutionId) return;
     completedResolution.current = resolution.resolutionId;
     if (!narratedResolutions.current.has(resolution.resolutionId)) {
       narratedResolutions.current.add(resolution.resolutionId);
@@ -213,7 +215,7 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
       void requestCommentary('/api/live-status', { eventType: 'CAST', detail });
     }
     command('resolution.complete', { expectedDurationMs: 15_000 });
-  }, [command, now, state?.phase, state?.resolution]);
+  }, [command, serverNow, state?.phase, state?.resolution]);
 
   useEffect(() => {
     if (state?.phase !== 'playing' || !state.matchId) return;
@@ -257,8 +259,8 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
     completedCastVideos.current.clear();
   }, [state?.cinematic?.cinematicId]);
   useEffect(() => {
-    if (state?.phase === 'cinematic' && state.cinematic && (cinematicCasts.length === 0 || now >= state.cinematic.fallbackEndsAt)) completeCinematic();
-  }, [cinematicCasts.length, now, state?.cinematic, state?.phase]);
+    if (state?.phase === 'cinematic' && state.cinematic && (cinematicCasts.length === 0 || serverNow >= state.cinematic.fallbackEndsAt)) completeCinematic();
+  }, [cinematicCasts.length, serverNow, state?.cinematic, state?.phase]);
   const completeCastVideo = (key: string) => {
     completedCastVideos.current.add(key);
     if (completedCastVideos.current.size >= cinematicCasts.length) completeCinematic();
@@ -280,14 +282,14 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
       <div className="fighter-info">
         <b>{text.playerLabel(role === 'player1' ? 1 : 2)}</b>
         <strong>{player?.score ?? 0}</strong>
-        <span>{player?.finished ? text.finished : `${remainingSeconds(player?.challenge?.deadlineAt, now)}s`}</span>
+        <span>{player?.finished ? text.finished : `${remainingSeconds(player?.challenge?.deadlineAt, serverNow)}s`}</span>
         <em style={{ color: getGesture(technique)?.color }}>{statusLabel}</em>
       </div>
     </article>;
   };
   const winnerSlug = state?.winner === 'PLAYER 1' ? 'player1' : state?.winner === 'PLAYER 2' ? 'player2' : 'draw';
   const matchActive = Boolean(state && !['idle', 'ended'].includes(state.phase));
-  const countdown = state?.phase === 'countdown' ? remainingSeconds(state.countdownEndsAt, now) : 0;
+  const countdown = state?.phase === 'countdown' ? remainingSeconds(state.countdownEndsAt, serverNow) : 0;
   const openingCommentaryLoading = state?.phase === 'preparing' &&
     settings.commentatorEnabled &&
     openingCommentaryReadyMatchId !== state.matchId;

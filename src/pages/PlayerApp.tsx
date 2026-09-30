@@ -68,6 +68,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
   const battleDeadline = state ? deadlineFor(state, settings.role) : null;
   const target = settings.playerMode === 'solo' ? solo.target : battleTarget;
   const deadline = settings.playerMode === 'solo' ? solo.deadlineAt : battleDeadline;
+  const effectiveNow = settings.playerMode === 'solo' ? now : serverTime(now);
   const score = settings.playerMode === 'solo' ? solo.score : player?.score ?? 0;
   const total = settings.playerMode === 'solo' ? settings.gestureCount : state?.config.challengeCount ?? settings.gestureCount;
   const targetLabel = (() => {
@@ -270,7 +271,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
     }
 
     const challenge = player?.challenge;
-    const acceptingScore = state?.phase === 'playing' || (state?.phase === 'resolving' && now <= (state.resolution?.acceptUntil ?? 0));
+    const acceptingScore = state?.phase === 'playing' || (state?.phase === 'resolving' && effectiveNow <= (state.resolution?.acceptUntil ?? 0));
     if (!state || !acceptingScore || !battleTarget || detected !== battleTarget || !challenge || submittedChallenge.current === challenge.challengeId) return;
     const recognizedAt = detectedAt.current == null ? null : serverTime(detectedAt.current);
     if (!recognizedAt || recognizedAt < challenge.startedAt || (challenge.deadlineAt && recognizedAt > challenge.deadlineAt)) return;
@@ -286,7 +287,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
       recognizedAt
     });
     triggerRobot(battleTarget);
-  }, [battleTarget, command, detected, now, player?.challenge, serverTime, settings.playerMode, solo, state]);
+  }, [battleTarget, command, detected, effectiveNow, player?.challenge, serverTime, settings.playerMode, solo, state]);
 
   useEffect(() => {
     if (settings.playerMode === 'solo') {
@@ -298,11 +299,11 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
       return;
     }
     const challenge = player?.challenge;
-    if (state?.phase === 'playing' && challenge?.deadlineAt && remainingSeconds(challenge.deadlineAt, now) === 0 && submittedChallenge.current !== challenge.challengeId) {
+    if (state?.phase === 'playing' && challenge?.deadlineAt && remainingSeconds(challenge.deadlineAt, effectiveNow) === 0 && submittedChallenge.current !== challenge.challengeId) {
       submittedChallenge.current = challenge.challengeId;
       command('challenge.timedOut', { challengeId: challenge.challengeId });
     }
-  }, [command, now, player?.challenge, settings.playerMode, solo, state?.phase]);
+  }, [command, effectiveNow, now, player?.challenge, settings.playerMode, solo, state?.phase]);
 
   useEffect(() => {
     if (!state?.matchId || !canvasRef.current || !cameraRef.current || !api || !state.config.captureSnapshots) return;
@@ -359,7 +360,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
     </header>
     <section className="hud">
       <small>{text.target}</small><strong style={{ color: getGesture(target)?.color }}>{targetLabel}</strong>
-      <div><span>{text.score} {score}/{total}</span><span>{remainingSeconds(deadline, now)}s</span></div>
+      <div><span>{text.score} {score}/{total}</span><span>{remainingSeconds(deadline, effectiveNow)}s</span></div>
       <em>{text.detected}: {gestureLabel(detected, settings.language) ?? '—'}</em>
     </section>
     {feedback && <div className="success-feedback">{feedback}</div>}
