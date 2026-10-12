@@ -144,7 +144,9 @@ describe('authentication and API client', () => {
     });
     expect((init?.headers as Headers).get('Authorization')).toBe('Bearer token');
     expect((init?.headers as Headers).get('Content-Type')).toBe('application/json');
-    await expect(client.getSnapshot('match one', 'player1')).resolves.toBeInstanceOf(Blob);
+    const snapshot = await client.getSnapshot('match one', 'player1');
+    expect(Object.prototype.toString.call(snapshot)).toBe('[object Blob]');
+    expect(snapshot).toMatchObject({ size: 5, type: 'image/jpeg' });
     await expect(client.commentary('/api/live-status', {})).rejects.toThrow('API 503: broken');
     localStorage.setItem('cognito_id_token', 'stale');
     const expired = vi.fn();
