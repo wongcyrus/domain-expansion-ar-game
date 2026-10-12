@@ -42,9 +42,16 @@ start underneath the introduction.
 
 ## GitHub Pages solo practice
 
+**Live site:** https://wongcyrus.github.io/domain-expansion-ar-game/
+
+Allow camera access and tap **Start round** to practise without signing in or
+running a game backend. Multiplayer battles, robot control, snapshots, and AI
+commentary are not available in this standalone mode.
+
 The standalone practice site uses a separate entry page and build:
 
 ```bash
+npm ci
 npm run build:practice
 ```
 
@@ -59,16 +66,37 @@ Its settings use `domain-expansion.practice.settings`, separate from AWS setting
 Internet is still needed for MediaPipe's CDN-hosted library/model files.
 
 `.github/workflows/practice-pages.yml` checks the existing game tests and AWS
-build, then publishes only the practice build to GitHub Pages. `npm run build`
-and the authenticated AWS entry pages remain unchanged.
+build, runs static practice browser checks, then publishes only the practice
+build to GitHub Pages. Pages must use **GitHub Actions** as its publishing
+source. Pushing to this repository's `main` branch triggers deployment; the
+workflow also supports manual dispatch. This does not deploy AWS infrastructure,
+upload to the AWS website bucket, or invalidate CloudFront. `npm run build` and
+the authenticated AWS entry pages retain their existing behavior.
 
 For a static-server smoke test, serve `dist-practice/` under the configured base
-path. The camera requires HTTPS, except on localhost. On mobile browsers, allow
+path:
+
+```bash
+npm run build:practice
+node scripts/serve-practice.mjs
+```
+
+Open `http://127.0.0.1:4174/domain-expansion-ar-game/`. If you override
+`PRACTICE_BASE_PATH`, use the same value for the build and static server.
+The camera requires HTTPS, except on localhost. On mobile browsers, allow
 camera access and tap Start round; popup playback may require its own tap.
 
 `npm run test:e2e:practice` builds the Pages site and exercises solo scoring,
 timeouts, restart, popup media, nested asset paths, and absence of backend traffic
 using only a static file server.
+
+To run the same browser checks against the published site without starting a
+local server:
+
+```bash
+PRACTICE_URL=https://wongcyrus.github.io/domain-expansion-ar-game/ \
+npx playwright test --config playwright.practice.config.ts
+```
 
 ## Local development
 
