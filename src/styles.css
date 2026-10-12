@@ -23,4 +23,5 @@
 @media(max-width:800px){.player-page .camera-toggle,.player-page .player-panel-toggle{top:6.5rem}.player-page .camera-toggle{right:4.5rem}.player-page .player-panel-toggle{right:1rem}}
 .battle-page .battle-start{right:4.5rem}.battle-page .battle-panel-toggle{right:1rem}
 .practice-start{position:fixed;z-index:21;left:50%;bottom:13rem;transform:translateX(-50%)}.practice-page .hud{left:50%;right:auto;transform:translateX(-50%);width:calc(100% - 2rem);max-width:420px}
+.player-media-overlay{z-index:60}.player-media-overlay .integrated-media{z-index:1}.player-media-overlay .player-media-close{z-index:3}.player-media-status{position:absolute;z-index:2;bottom:1rem;max-width:min(90%,600px);padding:.75rem 1rem;background:#080a12ee;border:1px solid #ffe900;border-radius:.65rem;text-align:center;pointer-events:auto}.player-media-status p{margin:0 0 .5rem}.player-media-overlay .player-media-status button{position:static}
 @media(max-width:800px){.battle-page .battle-start,.battle-page .battle-panel-toggle{top:6.5rem}.battle-page .battle-start{right:4.5rem}.battle-page .battle-panel-toggle{right:1rem}}

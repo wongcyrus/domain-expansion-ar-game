@@ -41,13 +41,14 @@ const defaultSettings = {
   avatarSize: 350
 };
 
-export const browserMocks = ({ role, room, settings, token, tokenExpiry, stableClientId }: {
+export const browserMocks = ({ role, room, settings, token, tokenExpiry, stableClientId, realMediaPlayback = false }: {
   role: Role;
   room: string;
   settings: Record<string, unknown>;
   token?: string;
   tokenExpiry: number;
   stableClientId?: string;
+  realMediaPlayback?: boolean;
 }) => {
   const makeHand = (
     wristX = .5,
@@ -284,8 +285,16 @@ export const browserMocks = ({ role, room, settings, token, tokenExpiry, stableC
       getUserMedia: async () => new MediaStream()
     }
   });
-  HTMLMediaElement.prototype.play = async () => undefined;
-  HTMLMediaElement.prototype.pause = () => undefined;
+  const nativePlay = HTMLMediaElement.prototype.play;
+  const nativePause = HTMLMediaElement.prototype.pause;
+  HTMLMediaElement.prototype.play = function () {
+    return !realMediaPlayback || this.classList.contains('source-video')
+      ? Promise.resolve()
+      : nativePlay.call(this);
+  };
+  HTMLMediaElement.prototype.pause = function () {
+    if (realMediaPlayback && !this.classList.contains('source-video')) nativePause.call(this);
+  };
   HTMLCanvasElement.prototype.captureStream = () => new MediaStream();
 
   localStorage.setItem('domain-expansion.settings', JSON.stringify({

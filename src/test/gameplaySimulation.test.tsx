@@ -215,6 +215,7 @@ describe('deterministic React gameplay simulation', () => {
     await advance(3200);
     expect(screen.getByText('ROUND COMPLETE')).toBeTruthy();
     expect(screen.getByText('Final score: 1/2')).toBeTruthy();
+    expect(container.querySelector('video.integrated-media')).toHaveProperty('muted', true);
     expect(triggerTechnique).not.toHaveBeenCalled();
     expect(coordinator.commands).toHaveLength(0);
     expect(localStorage.getItem('domain-expansion.settings')).toBe(cloud);
@@ -226,12 +227,13 @@ describe('deterministic React gameplay simulation', () => {
       .mockReturnValueOnce(['Lapse Blue'])
       .mockReturnValueOnce(['Reversal Red']);
     const { PlayerApp } = await import('../pages/PlayerApp');
-    render(<PlayerApp practice initialSettings={{ language: 'en', gestureCount: 1, videoMode: 'none' }} />);
+    const { container } = render(<PlayerApp practice initialSettings={{ language: 'en', gestureCount: 1, videoMode: 'none' }} />);
     await flush();
     fireEvent.click(screen.getByRole('button', { name: 'Start round' }));
     await emitStable(ScriptedCamera.instances[0], 'Lapse Blue');
     await advance(850);
     expect(screen.getByText('PERFECT!')).toBeTruthy();
+    expect(container.querySelector('.player-media-overlay')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
     expect(screen.getByText('Score 0/1')).toBeTruthy();
     expect(screen.getAllByText('Reversal Red').length).toBeGreaterThan(0);

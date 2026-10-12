@@ -64,6 +64,9 @@ videos entirely in the browser. It never loads backend configuration, signs in,
 opens game WebSockets/WebRTC peers, or calls robot/snapshot/commentary APIs.
 Its settings use `domain-expansion.practice.settings`, separate from AWS settings.
 Internet is still needed for MediaPipe's CDN-hosted library/model files.
+All practice images, technique/result videos, and legacy VFX are included in
+`dist-practice/` and load from the GitHub Pages origin and project path, not AWS.
+Changing AWS deployment URLs or removing AWS resources does not affect them.
 
 `.github/workflows/practice-pages.yml` checks the existing game tests and AWS
 build, runs static practice browser checks, then publishes only the practice
@@ -85,6 +88,13 @@ Open `http://127.0.0.1:4174/domain-expansion-ar-game/`. If you override
 `PRACTICE_BASE_PATH`, use the same value for the build and static server.
 The camera requires HTTPS, except on localhost. On mobile browsers, allow
 camera access and tap Start round; popup playback may require its own tap.
+
+Integrated videos remain above the result screen, close automatically when they
+finish, and always have a Close button. If a browser blocks sound autoplay, the
+video retries muted and offers **Enable sound**; if playback is still blocked,
+tap **Play video**. Loading/decoding errors show **Retry video** without trapping
+the page. Result clips honor the selected video mode, including silent and no
+video, and restarting or quitting clears the integrated clip.
 
 `npm run test:e2e:practice` builds the Pages site and exercises solo scoring,
 timeouts, restart, popup media, nested asset paths, and absence of backend traffic

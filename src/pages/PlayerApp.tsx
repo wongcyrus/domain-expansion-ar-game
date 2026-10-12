@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Branding } from '../components/Branding';
+import { PlayerMediaOverlay } from '../components/PlayerMediaOverlay';
 import { gestureLabel, getGesture, shuffledGestures, type GestureName } from '../core/catalog';
 import { assetUrl } from '../core/assets';
 import { deadlineFor, remainingSeconds, targetFor } from '../core/match';
@@ -258,15 +259,20 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
     const [next, ...remaining] = queue;
     if (!next) {
       setSolo({ active: false, score, attempted, queue: [], target: null, deadlineAt: null, result: score === settings.gestureCount ? text.perfect : text.roundComplete });
-      setMediaMuted(false);
-      setMediaSrc(assetUrl(score === settings.gestureCount ? '/static/video/win/onepunch.mp4' : '/static/video/lose/shiba1.mp4'));
+      playMedia(assetUrl(score === settings.gestureCount ? '/static/video/win/onepunch.mp4' : '/static/video/lose/shiba1.mp4'));
       return;
     }
     submittedSoloTarget.current = null;
     setSolo({ active: true, score, attempted, queue: remaining, target: next, deadlineAt: Date.now() + settings.difficulty * 1000, result: null });
   };
-  const startSolo = () => advanceSolo(shuffledGestures(settings.gestureCount), 0, 0);
-  const stopSolo = () => setSolo({ ...emptySoloRound, result: text.roundStopped });
+  const startSolo = () => {
+    setMediaSrc(null);
+    advanceSolo(shuffledGestures(settings.gestureCount), 0, 0);
+  };
+  const stopSolo = () => {
+    setMediaSrc(null);
+    setSolo({ ...emptySoloRound, result: text.roundStopped });
+  };
 
   useEffect(() => {
     if (settings.playerMode === 'solo') {
@@ -427,10 +433,9 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
       }}>{text.saveHide}</button>
       {!practice && <a href={`/battle.html?room=${settings.roomCode}`}>{text.openBattleViewer}</a>}
     </aside>}
-    {settings.playerMode === 'solo' && mediaSrc && <div className="player-media-overlay">
-      <video className="integrated-media" src={mediaSrc} autoPlay muted={mediaMuted} playsInline controls onEnded={() => setMediaSrc(null)} />
-      <button onClick={() => setMediaSrc(null)}>{text.close}</button>
-    </div>}
+    {settings.playerMode === 'solo' && mediaSrc && <PlayerMediaOverlay key={mediaSrc}
+      src={mediaSrc} muted={mediaMuted} language={settings.language} onClose={() => setMediaSrc(null)}
+    />}
     {solo.result && <section className="result"><h2>{solo.result}</h2><p>{text.finalScore}: {solo.score}/{settings.gestureCount}</p><button onClick={startSolo}>{text.playAgain}</button><button onClick={() => setSolo(emptySoloRound)}>{text.close}</button></section>}
   </main>;
 }
