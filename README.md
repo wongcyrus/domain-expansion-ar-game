@@ -2,6 +2,10 @@
 
 Independent React + TypeScript + Vite rewrite of the AR player, battle viewer, popup media player, and share gallery.
 
+## Demo
+
+[![Watch the Domain Expansion AR demo on YouTube](https://img.youtube.com/vi/Tck6WSV_YXQ/hqdefault.jpg)](https://www.youtube.com/watch?v=Tck6WSV_YXQ)
+
 ## Architecture
 
 - `index.html`: player camera, MediaPipe gesture recognition, VFX, authoritative battle scoring, standalone solo rounds, configurable playback, and throttled robot calls.
