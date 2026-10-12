@@ -22,6 +22,12 @@ the WebSocket coordinator exactly like separate devices. The standalone solo
 mini-game remains available on the player page and does not emulate a
 multiplayer coordinator.
 
+Selecting Player 1 automatically selects robots 1-3; Player 2 selects robots
+4-6. Player-role links select the matching group too. The robot selector still
+allows an individual robot override, and choosing a player role again restores
+its group. Technique requests include the player role so the backend routes
+group actions to the correct three robots.
+
 The WebSocket wire format is protocol `2.0`: the client joins with
 `{action:"join",roomId,role,clientId}`, wraps authoritative commands in
 `{action:"command",envelope}`, and sends WebRTC negotiation with
@@ -33,6 +39,36 @@ snapshots and opening commentary are produced. The viewer that issued
 `match.start` may send `match.beginCountdown` only after opening TTS playback
 finishes; the countdown deadline is created at that point, so gameplay cannot
 start underneath the introduction.
+
+## GitHub Pages solo practice
+
+The standalone practice site uses a separate entry page and build:
+
+```bash
+npm run build:practice
+```
+
+Publish `dist-practice/`, not the AWS `dist/` directory. The default base path is
+`/domain-expansion-ar-game/`; override `PRACTICE_BASE_PATH` for another Pages
+repository path or a root/custom-domain deployment.
+
+Practice runs camera recognition, VFX, scoring, timers, and technique/result
+videos entirely in the browser. It never loads backend configuration, signs in,
+opens game WebSockets/WebRTC peers, or calls robot/snapshot/commentary APIs.
+Its settings use `domain-expansion.practice.settings`, separate from AWS settings.
+Internet is still needed for MediaPipe's CDN-hosted library/model files.
+
+`.github/workflows/practice-pages.yml` checks the existing game tests and AWS
+build, then publishes only the practice build to GitHub Pages. `npm run build`
+and the authenticated AWS entry pages remain unchanged.
+
+For a static-server smoke test, serve `dist-practice/` under the configured base
+path. The camera requires HTTPS, except on localhost. On mobile browsers, allow
+camera access and tap Start round; popup playback may require its own tap.
+
+`npm run test:e2e:practice` builds the Pages site and exercises solo scoring,
+timeouts, restart, popup media, nested asset paths, and absence of backend traffic
+using only a static file server.
 
 ## Local development
 

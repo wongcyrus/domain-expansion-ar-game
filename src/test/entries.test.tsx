@@ -24,6 +24,7 @@ describe('application entry points', () => {
     ['battle', '../battle-entry'],
     ['media', '../media-entry'],
     ['player', '../player-entry'],
+    ['practice', '../practice-entry'],
     ['share', '../share-entry']
   ] as const) {
     it(`mounts the ${name} application`, async () => {

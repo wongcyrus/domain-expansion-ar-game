@@ -155,6 +155,34 @@ describe('MediaApp', () => {
 });
 
 describe('PlayerApp', () => {
+  it('locks standalone practice to solo and hides online and robot controls', async () => {
+    const cloud = localStorage.getItem('domain-expansion.settings');
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    render(<PlayerApp practice initialSettings={{ language: 'en', playerMode: 'battle', disableRobotApi: false }} />);
+    expect(screen.getByRole('button', { name: 'Start round' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Player settings' }));
+    expect(screen.queryByLabelText('Mode')).toBeNull();
+    expect(screen.queryByLabelText('Role')).toBeNull();
+    expect(screen.queryByLabelText('Robot')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Open battle viewer' })).toBeNull();
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(playerReady).not.toHaveBeenCalled();
+    expect(localStorage.getItem('domain-expansion.settings')).toBe(cloud);
+    expect(JSON.parse(localStorage.getItem('domain-expansion.practice.settings')!)).toMatchObject({
+      playerMode: 'solo', disableRobotApi: true
+    });
+  });
+
+  it('keeps practice offline even when stored settings fail validation', async () => {
+    localStorage.setItem('domain-expansion.practice.settings', JSON.stringify({ language: 'invalid' }));
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    render(<PlayerApp practice />);
+    expect(screen.getByText('單人')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('domain-expansion.practice.settings')!)).toMatchObject({
+      playerMode: 'solo', disableRobotApi: true
+    });
+  });
+
   it('renders online state, edits settings, auto-starts and stops the camera', async () => {
     gameState = makeState();
     const { PlayerApp } = await import('../pages/PlayerApp');
@@ -174,6 +202,51 @@ describe('PlayerApp', () => {
     expect(screen.getByDisplayValue('ABCD')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'player2' } });
     expect(screen.getByDisplayValue('PLAYER 2')).toBeTruthy();
+    expect(screen.getByDisplayValue('Robots 4-6')).toBeTruthy();
+  });
+
+  it('automatically selects each player group and still allows individual robot overrides', async () => {
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    render(<PlayerApp initialSettings={{ language: 'en' }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Player settings' }));
+    expect(screen.getByDisplayValue('Robots 1-3')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Robot'), { target: { value: 'robot_6' } });
+    expect(screen.getByDisplayValue('Robot 6')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'player2' } });
+    expect(screen.getByDisplayValue('Robots 4-6')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('domain-expansion.settings')!)).toMatchObject({
+      role: 'player2', robotId: 'all'
+    });
+    fireEvent.change(screen.getByLabelText('Robot'), { target: { value: 'robot_4' } });
+    expect(screen.getByDisplayValue('Robot 4')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'player1' } });
+    expect(screen.getByDisplayValue('Robots 1-3')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('domain-expansion.settings')!)).toMatchObject({
+      role: 'player1', robotId: 'all'
+    });
+  });
+
+  it.each([
+    ['player1', 'Robots 1-3'],
+    ['player2', 'Robots 4-6']
+  ])('selects the group from a %s URL instead of a stale saved robot', async (role, label) => {
+    localStorage.setItem('domain-expansion.settings', JSON.stringify({
+      ...defaultSettings, language: 'en', robotId: 'robot_5'
+    }));
+    history.replaceState({}, '', `/?role=${role}`);
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    render(<PlayerApp />);
+    fireEvent.click(screen.getByRole('button', { name: 'Player settings' }));
+    expect(screen.getByDisplayValue(label)).toBeTruthy();
+  });
+
+  it('preserves explicit robot settings until another player role is selected', async () => {
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    render(<PlayerApp initialSettings={{ language: 'en', role: 'player2', robotId: 'robot_5' }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Player settings' }));
+    expect(screen.getByDisplayValue('Robot 5')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'player1' } });
+    expect(screen.getByDisplayValue('Robots 1-3')).toBeTruthy();
   });
 
   it('keeps the camera active while connecting and announces it after reconnect', async () => {

@@ -135,6 +135,39 @@ describe('WebRTC session service', () => {
 });
 
 describe('game session hook', () => {
+  it('does not load config or create transport when practice disables the session', async () => {
+    vi.resetModules();
+    const loadConfig = vi.fn().mockResolvedValue({ webSocketUrl: 'wss://socket', apiBaseUrl: '' });
+    const connect = vi.fn(), close = vi.fn(), send = vi.fn();
+    vi.doMock('../services/config', () => ({ loadConfig }));
+    vi.doMock('../services/controlTransport', () => ({
+      WebSocketControlTransport: class {
+        subscribe() { return vi.fn(); }
+        subscribeStatus() { return vi.fn(); }
+        connect = connect; close = close; send = send;
+      }
+    }));
+    const { useGameSession } = await import('../services/useGameSession');
+    const { result, rerender, unmount } = renderHook(
+      ({ enabled }) => useGameSession('ROOM', 'player1', enabled),
+      { initialProps: { enabled: false } }
+    );
+    expect(loadConfig).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('offline');
+    act(() => result.current.command('match.reset'));
+    act(() => result.current.signal('viewerRequested'));
+    expect(send).not.toHaveBeenCalled();
+
+    rerender({ enabled: true });
+    await waitFor(() => expect(connect).toHaveBeenCalledOnce());
+    rerender({ enabled: false });
+    expect(close).toHaveBeenCalledOnce();
+    expect(result.current.config).toBeNull();
+    expect(result.current.state).toBeNull();
+    unmount();
+  });
+
   it('joins, accepts snapshots, sends commands and signals', async () => {
     vi.resetModules();
     const send = vi.fn(), connect = vi.fn(), close = vi.fn();

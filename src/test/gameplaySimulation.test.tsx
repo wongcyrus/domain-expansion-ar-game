@@ -197,6 +197,47 @@ beforeEach(() => {
 });
 
 describe('deterministic React gameplay simulation', () => {
+  it('runs standalone practice scoring and timeouts without commands or robot calls', async () => {
+    const catalog = await import('../core/catalog');
+    vi.spyOn(catalog, 'shuffledGestures').mockReturnValueOnce(['Lapse Blue', 'Reversal Red']);
+    const cloud = localStorage.getItem('domain-expansion.settings');
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    const { container } = render(<PlayerApp practice initialSettings={{
+      language: 'en', gestureCount: 2, difficulty: 3, videoMode: 'integrated_silent'
+    }} />);
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Start round' }));
+    await emitStable(ScriptedCamera.instances[0], 'Lapse Blue');
+    expect(screen.getByText('Score 1/2')).toBeTruthy();
+    expect(container.querySelector('video.integrated-media')?.getAttribute('src')).toBe('/static/video/technique_lapse_blue.mp4');
+    await advance(850);
+    expect(screen.getAllByText('Reversal Red').length).toBeGreaterThan(0);
+    await advance(3200);
+    expect(screen.getByText('ROUND COMPLETE')).toBeTruthy();
+    expect(screen.getByText('Final score: 1/2')).toBeTruthy();
+    expect(triggerTechnique).not.toHaveBeenCalled();
+    expect(coordinator.commands).toHaveLength(0);
+    expect(localStorage.getItem('domain-expansion.settings')).toBe(cloud);
+  });
+
+  it('completes a perfect practice round and restarts cleanly', async () => {
+    const catalog = await import('../core/catalog');
+    vi.spyOn(catalog, 'shuffledGestures')
+      .mockReturnValueOnce(['Lapse Blue'])
+      .mockReturnValueOnce(['Reversal Red']);
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    render(<PlayerApp practice initialSettings={{ language: 'en', gestureCount: 1, videoMode: 'none' }} />);
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Start round' }));
+    await emitStable(ScriptedCamera.instances[0], 'Lapse Blue');
+    await advance(850);
+    expect(screen.getByText('PERFECT!')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+    expect(screen.getByText('Score 0/1')).toBeTruthy();
+    expect(screen.getAllByText('Reversal Red').length).toBeGreaterThan(0);
+    expect(triggerTechnique).not.toHaveBeenCalled();
+  });
+
   it('scores Time Cell Moon Palace after its effect stabilizes', async () => {
     coordinator = new InMemoryGameCoordinator({
       player1: [['Time Cell Moon Palace']],
@@ -218,6 +259,8 @@ describe('deterministic React gameplay simulation', () => {
     expect(coordinator.state?.players.player2.challenge?.technique).toBe('Reversal Red');
 
     await emitStableTogether(p1Camera, 'Lapse Blue', p2Camera, 'Reversal Red');
+    expect(triggerTechnique).toHaveBeenCalledWith('all', 'lapse_blue', 'simulation', 'player1');
+    expect(triggerTechnique).toHaveBeenCalledWith('all', 'reversal_red', 'simulation', 'player2');
     expect(coordinator.state?.phase).toBe('resolving');
     expect(coordinator.state?.resolution?.casts.map(({ role }) => role).sort())
       .toEqual(['player1', 'player2']);

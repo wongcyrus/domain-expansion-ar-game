@@ -18,7 +18,7 @@ const clientIdFor = (roomId: string, role: Role) => {
   return id;
 };
 
-export function useGameSession(roomId: string, role: Role) {
+export function useGameSession(roomId: string, role: Role, enabled = true) {
   const [state, setState] = useState<MatchState | null>(null);
   const [status, setStatus] = useState('loading');
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -29,6 +29,13 @@ export function useGameSession(roomId: string, role: Role) {
   stateRef.current = state;
 
   useEffect(() => {
+    if (!enabled) {
+      setState(null);
+      setConfig(null);
+      setStatus('offline');
+      serverClockOffset.current = null;
+      return;
+    }
     let active = true;
     loadConfig().then((loaded) => {
       if (!active) return;
@@ -55,7 +62,7 @@ export function useGameSession(roomId: string, role: Role) {
       control.connect();
     });
     return () => { active = false; transport.current?.close(); transport.current = null; };
-  }, [roomId, role]);
+  }, [roomId, role, enabled]);
 
   const command = useCallback((messageType: CommandType, payload: Record<string, unknown> = {}, correlationId?: string) => {
     const current = stateRef.current;

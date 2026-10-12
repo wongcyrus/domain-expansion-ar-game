@@ -1,8 +1,12 @@
 node_modules/
 dist/
+dist-practice/
 coverage/
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+vite.practice.config.js
+vite.practice.config.d.ts
 playwright-report/
 test-results/
+practice-test-results/

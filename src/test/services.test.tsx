@@ -12,7 +12,7 @@ import {
 import { CommentaryPlayer } from '../services/commentary';
 import { loadConfig, resolveApiBaseUrl } from '../services/config';
 import { popupOrigin, postToPopup, readPopupMessage } from '../services/popupMessaging';
-import { defaultSettings, loadSettings, roleLabel, saveSettings } from '../services/settings';
+import { defaultSettings, loadSettings, practiceSettingsKey, roleLabel, saveSettings } from '../services/settings';
 import { AuthGate } from '../components/AuthGate';
 
 const configured = {
@@ -56,6 +56,18 @@ describe('settings and popup messaging', () => {
     expect(loadSettings()).toMatchObject({ cameraId: 'usb-camera', language: 'ja' });
     expect(localStorage.getItem('domain-expansion.settings')).toContain('"cameraId":"usb-camera"');
     expect(localStorage.getItem('domain-expansion-v2.settings')).toBeNull();
+  });
+
+  it('keeps practice settings separate from AWS and legacy settings', () => {
+    const cloud = JSON.stringify({ ...defaultSettings, role: 'player2', robotId: 'robot_6' });
+    localStorage.setItem('domain-expansion.settings', cloud);
+    localStorage.setItem('domain-expansion-v2.settings', 'legacy');
+    const practice = loadSettings({ playerMode: 'solo', disableRobotApi: true }, practiceSettingsKey);
+    expect(practice.role).toBe('player1');
+    expect(saveSettings({ ...practice, language: 'ja' }, practiceSettingsKey)).toBe(true);
+    expect(loadSettings({}, practiceSettingsKey).language).toBe('ja');
+    expect(localStorage.getItem('domain-expansion.settings')).toBe(cloud);
+    expect(localStorage.getItem('domain-expansion-v2.settings')).toBe('legacy');
   });
 
   it('posts and validates same-origin popup messages', () => {
@@ -125,8 +137,11 @@ describe('authentication and API client', () => {
       }))
       .mockResolvedValueOnce(new Response('broken', { status: 503 }))
       .mockResolvedValueOnce(new Response('expired', { status: 401 }));
-    await expect(client.triggerTechnique('robot_1', 'blue', 'key')).resolves.toEqual({ ok: true });
+    await expect(client.triggerTechnique('robot_1', 'blue', 'key', 'player1')).resolves.toEqual({ ok: true });
     const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(JSON.parse(init?.body as string)).toEqual({
+      robotId: 'robot_1', technique: 'blue', sessionKey: 'key', role: 'player1'
+    });
     expect((init?.headers as Headers).get('Authorization')).toBe('Bearer token');
     expect((init?.headers as Headers).get('Content-Type')).toBe('application/json');
     await expect(client.getSnapshot('match one', 'player1')).resolves.toBeInstanceOf(Blob);
@@ -137,6 +152,17 @@ describe('authentication and API client', () => {
     await expect(client.commentary('/api/live-status', {})).rejects.toThrow('API 401: expired');
     expect(expired).toHaveBeenCalledOnce();
     expect(localStorage.getItem('cognito_id_token')).toBeNull();
+  });
+
+  it.each(['player1', 'player2'] as const)('sends %s when triggering its robot group', async (role) => {
+    vi.mocked(fetch).mockResolvedValue(new Response('{}', {
+      status: 200, headers: { 'content-type': 'application/json' }
+    }));
+    const client = new ApiClient('https://api.test', { getIdToken: () => null });
+    await client.triggerTechnique('all', 'lapse_blue', 'key', role);
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string)).toEqual({
+      robotId: 'all', technique: 'lapse_blue', sessionKey: 'key', role
+    });
   });
 
   it('covers every public API route', async () => {

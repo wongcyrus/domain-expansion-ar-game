@@ -41,7 +41,7 @@ const defaultSettings = {
   avatarSize: 350
 };
 
-const browserMocks = ({ role, room, settings, token, tokenExpiry, stableClientId }: {
+export const browserMocks = ({ role, room, settings, token, tokenExpiry, stableClientId }: {
   role: Role;
   room: string;
   settings: Record<string, unknown>;

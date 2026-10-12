@@ -17,6 +17,7 @@ if (awsMode && !process.env.PLAYWRIGHT_COGNITO_ID_TOKEN) {
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: '**/practice.spec.ts',
   timeout: 90_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

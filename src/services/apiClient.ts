@@ -20,8 +20,8 @@ export class ApiClient {
     return (contentType.includes('json') ? response.json() : response.blob()) as Promise<T>;
   }
 
-  triggerTechnique(robotId: string, technique: string, sessionKey: string) {
-    return this.request('/api/trigger-technique', { method: 'POST', body: JSON.stringify({ robotId, technique, sessionKey }) });
+  triggerTechnique(robotId: string, technique: string, sessionKey: string, role: PlayerRole) {
+    return this.request('/api/trigger-technique', { method: 'POST', body: JSON.stringify({ robotId, technique, sessionKey, role }) });
   }
   registerRoom(sessionId: string, roomCode: string, signalingUrl: string) {
     return this.request('/api/register-room', {

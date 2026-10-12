@@ -1,4 +1,5 @@
 import { getGesture, type GestureName } from '../core/catalog';
+import { assetUrl } from '../core/assets';
 import type { Landmark } from './gestureRecognizer';
 
 type LegacyVfxEngine = {
@@ -24,7 +25,7 @@ function loadLegacyVfx() {
       return;
     }
     const script = document.createElement('script');
-    script.src = '/legacy/domain_expansion.js';
+    script.src = assetUrl('/legacy/domain_expansion.js');
     script.onload = () => resolve();
     script.onerror = () => reject(new Error('Unable to load the V1 VFX engine'));
     document.head.appendChild(script);

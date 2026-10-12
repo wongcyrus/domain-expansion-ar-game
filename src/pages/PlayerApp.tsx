@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Branding } from '../components/Branding';
 import { gestureLabel, getGesture, shuffledGestures, type GestureName } from '../core/catalog';
+import { assetUrl } from '../core/assets';
 import { deadlineFor, remainingSeconds, targetFor } from '../core/match';
 import { WebRtcSignalTypeSchema, type PlayerRole } from '../core/protocol';
 import { uiText } from '../core/uiText';
@@ -9,7 +10,7 @@ import { StableGestureRecognizer } from '../adapters/gestureRecognizer';
 import { CanvasVfxAdapter } from '../adapters/vfx';
 import { ApiClient } from '../services/apiClient';
 import { LocalStorageTokenProvider } from '../services/auth';
-import { loadSettings, saveSettings, type Settings } from '../services/settings';
+import { loadSettings, practiceSettingsKey, saveSettings, type Settings } from '../services/settings';
 import { useGameSession } from '../services/useGameSession';
 import { WebRtcSessionService } from '../services/webrtcSession';
 import { postToPopup, readPopupMessage } from '../services/popupMessaging';
@@ -28,15 +29,24 @@ const emptySoloRound: SoloRound = {
   active: false, score: 0, attempted: 0, queue: [], target: null, deadlineAt: null, result: null
 };
 
-export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<Settings> } = {}) {
+export function PlayerApp({ initialSettings = {}, practice = false }: { initialSettings?: Partial<Settings>; practice?: boolean } = {}) {
   const query = new URLSearchParams(location.search);
-  const [settings, setSettings] = useState(() => loadSettings({
-    roomCode: (query.get('room') ?? undefined)?.toUpperCase(),
-    role: (query.get('role') as PlayerRole | null) ?? undefined,
-    ...initialSettings
-  }));
+  const storageKey = practice ? practiceSettingsKey : undefined;
+  const [settings, setSettings] = useState(() => {
+    const overrides = {
+      roomCode: (query.get('room') ?? undefined)?.toUpperCase(),
+      role: (query.get('role') as PlayerRole | null) ?? undefined,
+      ...initialSettings
+    };
+    const loaded = loadSettings({
+      ...overrides,
+      robotId: overrides.robotId ?? (overrides.role ? 'all' : undefined),
+      ...(practice ? { playerMode: 'solo', disableRobotApi: true } : {})
+    }, storageKey);
+    return practice ? { ...loaded, playerMode: 'solo' as const, disableRobotApi: true } : loaded;
+  });
   const text = uiText(settings.language);
-  const { state, status, config, command, signal, subscribe, serverTime } = useGameSession(settings.roomCode, settings.role);
+  const { state, status, config, command, signal, subscribe, serverTime } = useGameSession(settings.roomCode, settings.role, !practice);
   const connectionStatus = status in text
     ? text[status as 'loading' | 'connecting' | 'connected' | 'disconnected']
     : status;
@@ -88,8 +98,8 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
   );
 
   useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
+    saveSettings(settings, storageKey);
+  }, [settings, storageKey]);
 
   const refreshCameras = async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return [];
@@ -104,6 +114,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
+    if (practice) return;
     webrtcRef.current = new WebRtcSessionService(settings.role, signal, () => undefined);
     const unsubscribe = subscribe((message) => {
       if (!message.messageType.startsWith('webrtc.')) return;
@@ -120,7 +131,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
       unsubscribe();
       webrtcRef.current?.close();
     };
-  }, [settings.role, signal, subscribe]);
+  }, [settings.role, signal, subscribe, practice]);
 
   const startCamera = async (requestedCameraId = settings.cameraId) => {
     const video = videoRef.current, canvas = canvasRef.current;
@@ -152,7 +163,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
         setSettings((current) => ({ ...current, cameraId: 'default' }));
       }
       cameraRef.current = camera;
-      streamRef.current = canvas.captureStream(30);
+      streamRef.current = practice ? undefined : canvas.captureStream(30);
       setCameraActive(true);
       setCameraStatus(text.cameraActive);
       await refreshCameras();
@@ -205,7 +216,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
   useEffect(() => stopCamera, []);
 
   const triggerRobot = (gesture: GestureName) => {
-    if (settings.disableRobotApi || !api || !config) return;
+    if (practice || settings.disableRobotApi || !api || !config) return;
     const elapsed = Date.now() - lastRobotActionAt.current;
     if (elapsed < settings.robotCooldownSeconds * 1000) {
       setCameraStatus(text.robotCooldownRemaining(Math.ceil((settings.robotCooldownSeconds * 1000 - elapsed) / 1000)));
@@ -214,14 +225,14 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
     const catalogEntry = getGesture(gesture);
     if (!catalogEntry) return;
     lastRobotActionAt.current = Date.now();
-    void api.triggerTechnique(settings.robotId, catalogEntry.robotTechnique, config.defaultSessionKey).catch((error) => {
+    void api.triggerTechnique(settings.robotId, catalogEntry.robotTechnique, config.defaultSessionKey, settings.role).catch((error) => {
       console.error('Robot technique failed', error);
       setCameraStatus(error instanceof Error ? error.message : text.robotFailed);
     });
   };
 
   const openPopup = () => {
-    popupRef.current ??= window.open(`/player.html?openerOrigin=${encodeURIComponent(location.origin)}`, 'domain-v2-media');
+    popupRef.current ??= window.open(`${assetUrl('/player.html')}?openerOrigin=${encodeURIComponent(location.origin)}`, practice ? 'domain-practice-media' : 'domain-v2-media');
     popupRef.current?.focus();
   };
   const playMedia = (src: string) => {
@@ -248,7 +259,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
     if (!next) {
       setSolo({ active: false, score, attempted, queue: [], target: null, deadlineAt: null, result: score === settings.gestureCount ? text.perfect : text.roundComplete });
       setMediaMuted(false);
-      setMediaSrc(score === settings.gestureCount ? '/static/video/win/onepunch.mp4' : '/static/video/lose/shiba1.mp4');
+      setMediaSrc(assetUrl(score === settings.gestureCount ? '/static/video/win/onepunch.mp4' : '/static/video/lose/shiba1.mp4'));
       return;
     }
     submittedSoloTarget.current = null;
@@ -267,7 +278,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
       const nextAttempted = solo.attempted + 1;
       setFeedback(text.success);
       setTimeout(() => setFeedback(''), 900);
-      playMedia(gesture.video);
+      playMedia(assetUrl(gesture.video));
       triggerRobot(solo.target);
       setSolo((current) => ({ ...current, target: null, deadlineAt: null, score: nextScore, attempted: nextAttempted }));
       setTimeout(() => advanceSolo(solo.queue, nextScore, nextAttempted), 850);
@@ -310,7 +321,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
   }, [command, effectiveNow, now, player?.challenge, settings.playerMode, solo, state?.phase]);
 
   useEffect(() => {
-    if (!state?.matchId || !canvasRef.current || !cameraRef.current || !api || !state.config.captureSnapshots) return;
+    if (practice || !state?.matchId || !canvasRef.current || !cameraRef.current || !api || !state.config.captureSnapshots) return;
     const phase = state.phase === 'preparing' ? 'START' : state.phase === 'ended' ? 'END' : null;
     const captureKey = phase ? `${state.matchId}:${phase}` : null;
     if (!phase || capturedPhase.current === captureKey || capturingPhase.current === captureKey) return;
@@ -334,7 +345,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
       console.warn('Snapshot upload failed', lastError);
       setCameraStatus(lastError instanceof Error ? lastError.message : text.snapshotFailed);
     })();
-  }, [api, settings.role, state?.config.captureSnapshots, state?.matchId, state?.phase, text.snapshotFailed]);
+  }, [api, practice, settings.role, state?.config.captureSnapshots, state?.matchId, state?.phase, text.snapshotFailed]);
 
   useEffect(() => {
     if (settings.playerMode === 'battle') setMediaSrc(null);
@@ -353,12 +364,12 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
     return () => removeEventListener('message', listener);
   }, []);
 
-  return <main className="player-page">
+  return <main className={practice ? 'player-page practice-page' : 'player-page'}>
     <Branding />
     <video ref={videoRef} className="source-video" playsInline muted />
     <canvas ref={canvasRef} className="camera-canvas" />
     <header className="player-header">
-      <img src="/static/img/jujutsu-kaisen-logo.png" alt="Jujutsu Kaisen" />
+      <img src={assetUrl('/static/img/jujutsu-kaisen-logo.png')} alt="Jujutsu Kaisen" />
       <span className="role-pill">{settings.playerMode === 'solo' ? text.solo : `${text.playerLabel(settings.role === 'player1' ? 1 : 2)} · ${settings.roomCode}`}</span>
       <h1>領域展開 AR</h1>
     </header>
@@ -368,6 +379,7 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
       <em>{text.detected}: {gestureLabel(detected, settings.language) ?? '—'}</em>
     </section>
     {feedback && <div className="success-feedback">{feedback}</div>}
+    {practice && !solo.active && !solo.result && <div className="practice-start"><button className="primary" onClick={startSolo}>{text.startRound}</button></div>}
     <button
       className={`camera-toggle ${cameraActive ? 'active' : ''}`}
       aria-label={cameraActive ? text.stopCamera : text.startCamera}
@@ -388,12 +400,12 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
         setSettings({ ...settings, cameraId });
         if (cameraActive) void startCamera(cameraId);
       }}><option value="default">{text.defaultCamera}</option>{cameras.map((camera, index) => <option key={camera.deviceId} value={camera.deviceId}>{camera.label || `${text.camera} ${index + 1}`}</option>)}</select></label>
-      <label>{text.mode}<select value={settings.playerMode} onChange={(event) => setSettings({ ...settings, playerMode: event.target.value as typeof settings.playerMode })}><option value="battle">{text.onlineBattle}</option><option value="solo">{text.soloGame}</option></select></label>
+      {!practice && <label>{text.mode}<select value={settings.playerMode} onChange={(event) => setSettings({ ...settings, playerMode: event.target.value as typeof settings.playerMode })}><option value="battle">{text.onlineBattle}</option><option value="solo">{text.soloGame}</option></select></label>}
       {settings.playerMode === 'solo'
         ? <div className="button-row"><button className="primary" onClick={startSolo}>{text.startRound}</button><button onClick={stopSolo}>{text.quit}</button></div>
         : <>
           <label>{text.room}<input value={settings.roomCode} onChange={(event) => setSettings({ ...settings, roomCode: event.target.value.toUpperCase() })} /></label>
-          <label>{text.role}<select value={settings.role} onChange={(event) => setSettings({ ...settings, role: event.target.value as PlayerRole })}><option value="player1">{text.playerLabel(1)}</option><option value="player2">{text.playerLabel(2)}</option></select></label>
+          <label>{text.role}<select value={settings.role} onChange={(event) => setSettings({ ...settings, role: event.target.value as PlayerRole, robotId: 'all' })}><option value="player1">{text.playerLabel(1)}</option><option value="player2">{text.playerLabel(2)}</option></select></label>
         </>}
       <section className="player-settings-section">
         <h3>{text.playerSettings}</h3>
@@ -403,15 +415,17 @@ export function PlayerApp({ initialSettings = {} }: { initialSettings?: Partial<
         <button onClick={openPopup}>{text.openMediaPopup}</button>
         <label>{text.roundSeconds} <input type="range" min="3" max="15" value={settings.difficulty} onChange={(event) => setSettings({ ...settings, difficulty: Number(event.target.value) })} />{settings.difficulty}s</label>
         <label>{text.techniques} <input type="range" min="1" max="11" value={settings.gestureCount} onChange={(event) => setSettings({ ...settings, gestureCount: Number(event.target.value) })} />{settings.gestureCount}</label>
-        <label>{text.robot}<select value={settings.robotId} onChange={(event) => setSettings({ ...settings, robotId: event.target.value })}><option value="all">{text.allRobots}</option>{[1,2,3,4,5,6].map((number) => <option key={number} value={`robot_${number}`}>{text.robot} {number}</option>)}</select></label>
+        {!practice && <>
+        <label>{text.robot}<select value={settings.robotId} onChange={(event) => setSettings({ ...settings, robotId: event.target.value })}><option value="all">{text.robotGroup(settings.role === 'player1' ? 1 : 4, settings.role === 'player1' ? 3 : 6)}</option>{[1,2,3,4,5,6].map((number) => <option key={number} value={`robot_${number}`}>{text.robot} {number}</option>)}</select></label>
         <label>{text.robotCooldown} <input type="range" min="1" max="30" value={settings.robotCooldownSeconds} onChange={(event) => setSettings({ ...settings, robotCooldownSeconds: Number(event.target.value) })} />{settings.robotCooldownSeconds}s</label>
         <label><input type="checkbox" checked={settings.disableRobotApi} onChange={(event) => setSettings({ ...settings, disableRobotApi: event.target.checked })} /> {text.disableRobotApi}</label>
+        </>}
       </section>
       <button onClick={() => {
-        saveSettings(settings);
+        saveSettings(settings, storageKey);
         setShowSettings(false);
       }}>{text.saveHide}</button>
-      <a href={`/battle.html?room=${settings.roomCode}`}>{text.openBattleViewer}</a>
+      {!practice && <a href={`/battle.html?room=${settings.roomCode}`}>{text.openBattleViewer}</a>}
     </aside>}
     {settings.playerMode === 'solo' && mediaSrc && <div className="player-media-overlay">
       <video className="integrated-media" src={mediaSrc} autoPlay muted={mediaMuted} playsInline controls onEnded={() => setMediaSrc(null)} />
