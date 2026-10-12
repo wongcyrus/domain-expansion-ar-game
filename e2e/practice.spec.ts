@@ -59,7 +59,7 @@ test('static practice scores, plays video, restarts, and times out with no backe
   )).toBeGreaterThan(.15);
   expect(await page.locator('.player-media-overlay video').evaluate((video: HTMLVideoElement) => video.muted)).toBe(true);
   await page.locator('.player-media-overlay').getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.locator('.player-media-overlay')).toHaveCount(0);
+  await expect(page.locator('.player-media-overlay')).toBeHidden();
   await page.getByRole('button', { name: 'Play again' }).click();
   await expect(page.locator('.hud')).toContainText('Score 0/1');
   await expect(page.getByRole('heading', { name: 'ROUND COMPLETE' })).toBeVisible();
@@ -70,7 +70,7 @@ test('static practice scores, plays video, restarts, and times out with no backe
   await page.locator('.player-media-overlay video').evaluate((video: HTMLVideoElement) => {
     video.playbackRate = 16;
   });
-  await expect(page.locator('.player-media-overlay')).toHaveCount(0);
+  await expect(page.locator('.player-media-overlay')).toBeHidden();
   await expect.poll(() => page.locator('.brand-left').evaluate(image =>
     image instanceof HTMLImageElement ? image.naturalWidth : 0
   )).toBeGreaterThan(0);
@@ -100,7 +100,7 @@ test('blocked sound autoplay starts muted and result playback dismisses on a mob
     video.currentTime
   )).toBeGreaterThan(.15);
   await page.locator('.player-media-overlay').getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.locator('.player-media-overlay')).toHaveCount(0);
+  await expect(page.locator('.player-media-overlay')).toBeHidden();
   await page.locator('.result').getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.locator('.result')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Start round' })).toBeVisible();
@@ -118,7 +118,70 @@ test('a failed video exposes retry and still allows dismissal', async ({ context
   await expect(page.getByRole('alert')).toContainText('Video playback failed');
   await expect(page.getByRole('button', { name: 'Retry video' })).toBeVisible();
   await page.locator('.player-media-overlay').getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.locator('.player-media-overlay')).toHaveCount(0);
+  await expect(page.locator('.player-media-overlay')).toBeHidden();
+  expect(observed.backend).toEqual([]);
+  expect(observed.sockets).toEqual([]);
+  expect(observed.errors).toEqual([]);
+  expectLocalAssets(page, observed.assets);
+});
+
+test('Start round authorizes sound once for multiple clips, dismissal, and replay', async ({ context, page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await context.addInitScript(() => {
+    const play = HTMLMediaElement.prototype.play;
+    const authorized = new WeakSet<HTMLMediaElement>();
+    let inGesture = false;
+    addEventListener('click', event => {
+      if (!event.isTrusted) return;
+      inGesture = true;
+      setTimeout(() => { inGesture = false; }, 0);
+    }, true);
+    HTMLMediaElement.prototype.play = function () {
+      const audible = this.matches('.integrated-media') && !this.muted;
+      if (audible && !inGesture && !authorized.has(this)) {
+        return Promise.reject(new DOMException('This element needs its own gesture', 'NotAllowedError'));
+      }
+      const grant = audible && inGesture && !authorized.has(this);
+      return play.call(this).then(() => {
+        if (grant) {
+          authorized.add(this);
+          this.dataset.soundAuthorizations = String(Number(this.dataset.soundAuthorizations ?? 0) + 1);
+        }
+      });
+    };
+  });
+  const observed = await preparePractice(context, page, { videoMode: 'integrated', gestureCount: 2 });
+  const originalVideo = await page.locator('.integrated-media').elementHandle();
+  await page.getByRole('button', { name: 'Start round' }).click();
+  await expect(page.locator('.hud strong')).not.toHaveText(/Start a solo round|GET READY/);
+  await expect(page.locator('.integrated-media')).toHaveAttribute('data-sound-authorizations', '1');
+  await queueGesture(page, (await page.locator('.hud strong').textContent())!.trim(), 20);
+  await expect(page.locator('.hud')).toContainText('Score 1/2');
+  await expect.poll(() => page.locator('.integrated-media').evaluate((video: HTMLVideoElement) =>
+    video.currentTime
+  )).toBeGreaterThan(.15);
+  expect(await page.locator('.integrated-media').evaluate((video: HTMLVideoElement) => video.muted)).toBe(false);
+  await expect(page.getByRole('button', { name: 'Enable sound' })).toHaveCount(0);
+  await expect(page.locator('.hud strong')).not.toHaveText('PREPARE NEXT TECHNIQUE');
+  await queueGesture(page, (await page.locator('.hud strong').textContent())!.trim(), 20);
+  await expect(page.getByRole('heading', { name: 'PERFECT!' })).toBeVisible();
+  await expect(page.locator('.integrated-media')).toHaveAttribute('src', /win\/onepunch\.mp4$/);
+  await expect.poll(() => page.locator('.integrated-media').evaluate((video: HTMLVideoElement) =>
+    video.currentTime
+  )).toBeGreaterThan(.15);
+  expect(await page.locator('.integrated-media').evaluate((video: HTMLVideoElement) => video.muted)).toBe(false);
+  expect(await originalVideo!.evaluate(video => video === document.querySelector('.integrated-media'))).toBe(true);
+  await expect(page.getByRole('button', { name: 'Enable sound' })).toHaveCount(0);
+  await page.locator('.player-media-overlay').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.locator('.player-media-overlay')).toBeHidden();
+  await page.getByRole('button', { name: 'Play again' }).click();
+  await expect(page.getByRole('heading', { name: 'ROUND COMPLETE' })).toBeVisible();
+  await expect.poll(() => page.locator('.integrated-media').evaluate((video: HTMLVideoElement) =>
+    video.currentTime
+  )).toBeGreaterThan(.15);
+  expect(await page.locator('.integrated-media').evaluate((video: HTMLVideoElement) => video.muted)).toBe(false);
+  await expect(page.locator('.integrated-media')).toHaveAttribute('data-sound-authorizations', '1');
+  await expect(page.getByRole('button', { name: 'Enable sound' })).toHaveCount(0);
   expect(observed.backend).toEqual([]);
   expect(observed.sockets).toEqual([]);
   expect(observed.errors).toEqual([]);

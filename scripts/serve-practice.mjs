@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 const root = resolve('dist-practice');
 const base = process.env.PRACTICE_BASE_PATH || '/domain-expansion-ar-game/';
-const types = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.png': 'image/png', '.mp4': 'video/mp4' };
+const types = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.png': 'image/png', '.mp4': 'video/mp4', '.wav': 'audio/wav' };
 
 createServer((request, response) => {
   const pathname = new URL(request.url, 'http://localhost').pathname;

@@ -233,7 +233,7 @@ describe('deterministic React gameplay simulation', () => {
     await emitStable(ScriptedCamera.instances[0], 'Lapse Blue');
     await advance(850);
     expect(screen.getByText('PERFECT!')).toBeTruthy();
-    expect(container.querySelector('.player-media-overlay')).toBeNull();
+    expect(container.querySelector('.player-media-overlay')).toHaveProperty('hidden', true);
     fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
     expect(screen.getByText('Score 0/1')).toBeTruthy();
     expect(screen.getAllByText('Reversal Red').length).toBeGreaterThan(0);

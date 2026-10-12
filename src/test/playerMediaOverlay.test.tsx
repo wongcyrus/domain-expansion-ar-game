@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { createRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PlayerMediaOverlay } from '../components/PlayerMediaOverlay';
+import { PlayerMediaOverlay, type PlayerMediaControls } from '../components/PlayerMediaOverlay';
 
 const blocked = () => new DOMException('A user gesture is required', 'NotAllowedError');
 
@@ -17,6 +18,58 @@ function mount(muted = false) {
 }
 
 describe('PlayerMediaOverlay', () => {
+  it('authorizes one persistent player and reuses it across clips and hiding', async () => {
+    const controls = createRef<PlayerMediaControls>();
+    const onClose = vi.fn();
+    const props = { muted: false, language: 'en' as const, onClose, controlsRef: controls };
+    const { container, rerender } = render(<PlayerMediaOverlay {...props} src={null} />);
+    const video = container.querySelector('video')!;
+    expect(video.play).not.toHaveBeenCalled();
+    let request!: Promise<boolean>;
+    act(() => { request = controls.current!.unlockSound(); });
+    expect(video.play).toHaveBeenCalledTimes(1);
+    expect(video.muted).toBe(false);
+    expect(video.getAttribute('src')).toBe('/static/audio/audio-unlock.wav');
+    await act(async () => expect(await request).toBe(true));
+    fireEvent.ended(video);
+    expect(onClose).not.toHaveBeenCalled();
+    rerender(<PlayerMediaOverlay {...props} src="/first.mp4" />);
+    expect(container.querySelector('video')).toBe(video);
+    expect(video.play).toHaveBeenCalledTimes(2);
+    rerender(<PlayerMediaOverlay {...props} src={null} />);
+    expect(container.querySelector('.player-media-overlay')).toHaveProperty('hidden', true);
+    rerender(<PlayerMediaOverlay {...props} src="/second.mp4" />);
+    expect(container.querySelector('video')).toBe(video);
+    expect(video.play).toHaveBeenCalledTimes(3);
+    await act(async () => expect(await controls.current!.unlockSound()).toBe(true));
+    expect(video.play).toHaveBeenCalledTimes(3);
+  });
+
+  it('shares an in-flight authorization and reports its failure explicitly', async () => {
+    let reject!: (reason: unknown) => void;
+    vi.mocked(HTMLMediaElement.prototype.play).mockReturnValueOnce(new Promise((_, fail) => { reject = fail; }));
+    const controls = createRef<PlayerMediaControls>();
+    render(<PlayerMediaOverlay src={null} muted={false} language="en" controlsRef={controls} onClose={vi.fn()} />);
+    const first = controls.current!.unlockSound();
+    expect(controls.current!.unlockSound()).toBe(first);
+    await act(async () => reject(blocked()));
+    expect(await first).toBe(false);
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it('ignores an old manual retry after switching clips on the same element', async () => {
+    let reject!: (reason: unknown) => void;
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(blocked())
+      .mockReturnValueOnce(new Promise((_, fail) => { reject = fail; }));
+    const { video, rerender } = mount(true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Play video' }));
+    rerender(<PlayerMediaOverlay src="/next.mp4" muted language="en" onClose={vi.fn()} />);
+    expect(document.querySelector('video')).toBe(video);
+    await act(async () => reject(new Error('Previous source stopped')));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
   it('starts inline playback, preserves silence, and supports ending and dismissal', () => {
     const { video, onClose } = mount(true);
     expect(video.play).toHaveBeenCalled();

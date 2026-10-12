@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Branding } from '../components/Branding';
-import { PlayerMediaOverlay } from '../components/PlayerMediaOverlay';
+import { PlayerMediaOverlay, type PlayerMediaControls } from '../components/PlayerMediaOverlay';
 import { gestureLabel, getGesture, shuffledGestures, type GestureName } from '../core/catalog';
 import { assetUrl } from '../core/assets';
 import { deadlineFor, remainingSeconds, targetFor } from '../core/match';
@@ -66,6 +66,9 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
   const [detected, setDetected] = useState<GestureName | null>(null);
   const [mediaSrc, setMediaSrc] = useState<string | null>(null);
   const [mediaMuted, setMediaMuted] = useState(false);
+  const mediaControlsRef = useRef<PlayerMediaControls>(null);
+  const soloStartGeneration = useRef(0);
+  const [soloStarting, setSoloStarting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [now, setNow] = useState(Date.now());
   const [solo, setSolo] = useState<SoloRound>(emptySoloRound);
@@ -85,7 +88,7 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
   const targetLabel = (() => {
     const gesture = gestureLabel(target, settings.language);
     if (gesture) return gesture;
-    if (settings.playerMode === 'solo') return solo.active ? text.prepareNext : text.startSoloRound;
+    if (settings.playerMode === 'solo') return soloStarting ? text.getReady : solo.active ? text.prepareNext : text.startSoloRound;
     if (!state || state.phase === 'idle') return text.waitingBattle;
     if (state.phase === 'preparing' || state.phase === 'countdown') return text.getReady;
     if (state.phase === 'resolving') return text.scoreLocked;
@@ -112,7 +115,10 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 200);
     void refreshCameras().catch((error) => console.warn('Unable to enumerate cameras', error));
-    return () => clearInterval(timer);
+    return () => {
+      soloStartGeneration.current += 1;
+      clearInterval(timer);
+    };
   }, []);
   useEffect(() => {
     if (practice) return;
@@ -265,11 +271,27 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
     submittedSoloTarget.current = null;
     setSolo({ active: true, score, attempted, queue: remaining, target: next, deadlineAt: Date.now() + settings.difficulty * 1000, result: null });
   };
-  const startSolo = () => {
-    setMediaSrc(null);
-    advanceSolo(shuffledGestures(settings.gestureCount), 0, 0);
+  const startSolo = async () => {
+    if (soloStarting) return;
+    const generation = ++soloStartGeneration.current;
+    setSoloStarting(true);
+    try {
+      if (settings.videoMode === 'integrated') {
+        const authorized = await mediaControlsRef.current?.unlockSound();
+        if (generation !== soloStartGeneration.current) return;
+        if (!authorized) setCameraStatus(text.tapPlayVideo);
+      }
+      if (generation === soloStartGeneration.current) {
+        setMediaSrc(null);
+        advanceSolo(shuffledGestures(settings.gestureCount), 0, 0);
+      }
+    } finally {
+      if (generation === soloStartGeneration.current) setSoloStarting(false);
+    }
   };
   const stopSolo = () => {
+    soloStartGeneration.current += 1;
+    setSoloStarting(false);
     setMediaSrc(null);
     setSolo({ ...emptySoloRound, result: text.roundStopped });
   };
@@ -385,7 +407,7 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
       <em>{text.detected}: {gestureLabel(detected, settings.language) ?? '—'}</em>
     </section>
     {feedback && <div className="success-feedback">{feedback}</div>}
-    {practice && !solo.active && !solo.result && <div className="practice-start"><button className="primary" onClick={startSolo}>{text.startRound}</button></div>}
+    {practice && !solo.active && !solo.result && <div className="practice-start"><button className="primary" disabled={soloStarting} onClick={() => void startSolo()}>{text.startRound}</button></div>}
     <button
       className={`camera-toggle ${cameraActive ? 'active' : ''}`}
       aria-label={cameraActive ? text.stopCamera : text.startCamera}
@@ -408,7 +430,7 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
       }}><option value="default">{text.defaultCamera}</option>{cameras.map((camera, index) => <option key={camera.deviceId} value={camera.deviceId}>{camera.label || `${text.camera} ${index + 1}`}</option>)}</select></label>
       {!practice && <label>{text.mode}<select value={settings.playerMode} onChange={(event) => setSettings({ ...settings, playerMode: event.target.value as typeof settings.playerMode })}><option value="battle">{text.onlineBattle}</option><option value="solo">{text.soloGame}</option></select></label>}
       {settings.playerMode === 'solo'
-        ? <div className="button-row"><button className="primary" onClick={startSolo}>{text.startRound}</button><button onClick={stopSolo}>{text.quit}</button></div>
+        ? <div className="button-row"><button className="primary" disabled={soloStarting} onClick={() => void startSolo()}>{text.startRound}</button><button onClick={stopSolo}>{text.quit}</button></div>
         : <>
           <label>{text.room}<input value={settings.roomCode} onChange={(event) => setSettings({ ...settings, roomCode: event.target.value.toUpperCase() })} /></label>
           <label>{text.role}<select value={settings.role} onChange={(event) => setSettings({ ...settings, role: event.target.value as PlayerRole, robotId: 'all' })}><option value="player1">{text.playerLabel(1)}</option><option value="player2">{text.playerLabel(2)}</option></select></label>
@@ -433,9 +455,9 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
       }}>{text.saveHide}</button>
       {!practice && <a href={`/battle.html?room=${settings.roomCode}`}>{text.openBattleViewer}</a>}
     </aside>}
-    {settings.playerMode === 'solo' && mediaSrc && <PlayerMediaOverlay key={mediaSrc}
-      src={mediaSrc} muted={mediaMuted} language={settings.language} onClose={() => setMediaSrc(null)}
+    {settings.playerMode === 'solo' && <PlayerMediaOverlay
+      src={mediaSrc} muted={mediaMuted} language={settings.language} controlsRef={mediaControlsRef} onClose={() => setMediaSrc(null)}
     />}
-    {solo.result && <section className="result"><h2>{solo.result}</h2><p>{text.finalScore}: {solo.score}/{settings.gestureCount}</p><button onClick={startSolo}>{text.playAgain}</button><button onClick={() => setSolo(emptySoloRound)}>{text.close}</button></section>}
+    {solo.result && <section className="result"><h2>{solo.result}</h2><p>{text.finalScore}: {solo.score}/{settings.gestureCount}</p><button disabled={soloStarting} onClick={() => void startSolo()}>{text.playAgain}</button><button onClick={() => setSolo(emptySoloRound)}>{text.close}</button></section>}
   </main>;
 }

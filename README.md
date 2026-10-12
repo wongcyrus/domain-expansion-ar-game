@@ -90,11 +90,14 @@ The camera requires HTTPS, except on localhost. On mobile browsers, allow
 camera access and tap Start round; popup playback may require its own tap.
 
 Integrated videos remain above the result screen, close automatically when they
-finish, and always have a Close button. If a browser blocks sound autoplay, the
-video retries muted and offers **Enable sound**; if playback is still blocked,
-tap **Play video**. Loading/decoding errors show **Retry video** without trapping
-the page. Result clips honor the selected video mode, including silent and no
-video, and restarting or quitting clears the integrated clip.
+finish, and always have a Close button. In sound mode, **Start round** authorizes
+the persistent video element using a tiny silent audio file from the same static
+site. That same element is reused for all technique/result clips, after closing
+an overlay, and when playing another round; sound does not need a separate tap
+for every clip. Only if the browser still refuses playback does the player offer
+the explicit muted/play fallback. Loading/decoding errors show **Retry video**
+without trapping the page. Result clips honor silent and no-video modes, and
+restarting or quitting hides and stops the integrated clip.
 
 `npm run test:e2e:practice` builds the Pages site and exercises solo scoring,
 timeouts, restart, popup media, nested asset paths, and absence of backend traffic
