@@ -11,7 +11,14 @@ import { WebSocketServer } from 'ws';
 const port = Number(process.env.PORT || 5173);
 const e2eTestMode = process.env.E2E_TEST_MODE === '1';
 const bedrockRegion = process.env.BEDROCK_REGION || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-const bedrockModelId = process.env.BEDROCK_MODEL_ID || 'global.moonshotai.kimi-k3';
+const commentaryModels = JSON.parse(readFileSync(new URL('./commentary-models.json', import.meta.url), 'utf8'));
+const bedrockModelId = process.env.BEDROCK_MODEL_ID || commentaryModels[0].id;
+const resolveCommentaryModel = (body) => {
+  const selectedId = Object.hasOwn(body, 'modelId') ? body.modelId : bedrockModelId;
+  const selected = commentaryModels.find(({ id }) => id === selectedId);
+  if (!selected) throw new Error('Unsupported commentary modelId');
+  return selected;
+};
 const commentaryMaxTokens = Number(process.env.COMMENTARY_MAX_TOKENS || (bedrockModelId.includes('kimi') ? 1600 : 400));
 const pollyRegion = process.env.POLLY_REGION || bedrockRegion;
 const bedrock = new BedrockRuntimeClient({
@@ -103,6 +110,7 @@ const parseImageDataUrl = (image) => {
   };
 };
 const commentarySnapshots = async (body, path) => {
+  if (!resolveCommentaryModel(body).supportsImages) return [];
   if (!shouldAttachCommentaryImages(body, path) || !body.sessionId) return [];
   const preferredPhase = snapshotPhaseForCommentary(body, path);
   const findSnapshots = () => ['player1', 'player2'].flatMap((role) => {
@@ -223,6 +231,7 @@ const invokeDeployedCommentary = async (body, path) => {
   const responseBody = await invokeLambdaHttp(functionName, path, {
     ...body,
     agent_type: 'local_direct',
+    modelId: resolveCommentaryModel(body).id,
     agentImagePolicy: attachedSnapshots.length ? 'always' : 'never',
     ttsMode: 'aws'
   });
@@ -281,7 +290,7 @@ const generateCommentary = async (body, path) => {
   ]);
   content.push({ text: buildCommentaryPrompt(body, path) });
   const result = await bedrock.send(new ConverseCommand({
-    modelId: bedrockModelId,
+    modelId: resolveCommentaryModel(body).id,
     system: [{
       text: 'You are Kugisaki Nobara acting as a confident, fashionable Jujutsu Kaisen battle commentator. Be punchy, dramatic, and specific to the supplied event. Never include analysis, labels, or preamble.'
     }],
@@ -298,7 +307,7 @@ const generateCommentary = async (body, path) => {
     ttsMode: 'browser',
     requestedTtsMode: body.ttsMode === 'aws' ? 'aws' : 'browser',
     debugImageContext: {
-      shouldAttachImage: shouldAttachCommentaryImages(body, path),
+      shouldAttachImage: resolveCommentaryModel(body).supportsImages && shouldAttachCommentaryImages(body, path),
       hasImageP1: attachedSnapshots.some(({ role }) => role === 'player1'),
       hasImageP2: attachedSnapshots.some(({ role }) => role === 'player2'),
       phase: snapshotPhaseForCommentary(body, path)
@@ -357,6 +366,7 @@ const handleApi = async (request, response) => {
     }
     if (request.method === 'POST' && ['/api/live-status', '/api/battle-result'].includes(url.pathname)) {
       const body = await readJson(request);
+      resolveCommentaryModel(body);
       if (e2eTestMode) {
         json(response, 200, { commentary: 'Commentary is ready.', ttsMode: 'browser' });
         return true;

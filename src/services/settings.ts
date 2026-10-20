@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { PlayerRole } from '../core/protocol';
+import commentaryModels from '../../commentary-models.json';
 
 const SettingsSchema = z.object({
   roomCode: z.string().regex(/^[A-Z0-9]{4,12}$/),
@@ -22,6 +23,7 @@ const SettingsSchema = z.object({
   dynamicView: z.boolean(),
   commentatorEnabled: z.boolean(),
   commentaryEngine: z.enum(['strands_local', 'agentcore_runtime', 'openclaw']),
+  commentaryModelId: z.enum(commentaryModels.map(({ id }) => id)).default(commentaryModels[0].id),
   commentaryTtsMode: z.enum(['browser', 'aws']),
   commentaryVoice: z.string(),
   commentaryVolume: z.number().int().min(0).max(100),
@@ -53,7 +55,8 @@ export const defaultSettings: Settings = {
   layout: 'side-by-side',
   dynamicView: true,
   commentatorEnabled: true,
-  commentaryEngine: 'openclaw',
+  commentaryEngine: 'strands_local',
+  commentaryModelId: commentaryModels[0].id,
   commentaryTtsMode: 'aws',
   commentaryVoice: 'auto',
   commentaryVolume: 100,

@@ -12,6 +12,7 @@ import { defaultSettings, loadSettings, saveSettings, type Settings } from '../s
 import { useGameSession } from '../services/useGameSession';
 import { WebRtcSessionService } from '../services/webrtcSession';
 import { ShareApp } from './ShareApp';
+import commentaryModels from '../../commentary-models.json';
 
 const winVideos = import.meta.env.DEV
   ? ['onepunch.mp4']
@@ -27,13 +28,14 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
     ...initialSettings
   }));
   const text = uiText(settings.language);
+  const selectedModel = commentaryModels.find(({ id }) => id === settings.commentaryModelId)!;
+  const externalModel = settings.commentaryEngine === 'openclaw';
   const { state, status, config, command, signal, subscribe, serverTime } = useGameSession(settings.roomCode, 'viewer');
   const connectionStatus = status in text
     ? text[status as 'loading' | 'connecting' | 'connected' | 'disconnected']
     : status;
   const [streams, setStreams] = useState<Partial<Record<PlayerRole, MediaStream>>>({});
   const [commentary, setCommentary] = useState(text.commentaryReady);
-  const [commentaryError, setCommentaryError] = useState('');
   const [now, setNow] = useState(Date.now());
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [ticker, setTicker] = useState<string[]>([]);
@@ -105,7 +107,8 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
     p2Total: state?.config.challengeCount ?? settings.gestureCount,
     lang: settings.language,
     foulLanguage: settings.foulLanguage,
-    agentImagePolicy: settings.commentatorImagePolicy,
+    agentImagePolicy: !externalModel && !selectedModel.supportsImages ? 'never' : settings.commentatorImagePolicy,
+    ...(!externalModel ? { modelId: selectedModel.id } : {}),
     agent_type: settings.commentaryEngine,
     ttsMode: settings.commentaryTtsMode,
     ...extra
@@ -127,12 +130,11 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
         setCommentary(text);
         commentaryBusyUntil.current = Date.now() + Math.max(4500, text.length * 65);
       }
-      setCommentaryError(response.ttsError ?? '');
+      if (response.ttsError) console.warn('Commentary TTS failed', response.ttsError);
       await beforePlayback?.();
       await commentaryPlayer.current.play(response, settings);
     } catch (error) {
       console.warn('Commentary request failed', error);
-      setCommentaryError(error instanceof Error ? error.message : 'Commentary request failed');
     } finally {
       commentaryInFlight.current = false;
     }
@@ -173,7 +175,6 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
         await commentaryPlayer.current.waitForPlayback();
       } catch (error) {
         console.warn('Match introduction setup failed', error);
-        setCommentaryError(error instanceof Error ? error.message : 'Match introduction failed');
       } finally {
         setOpeningCommentaryReadyMatchId(matchId);
         if (currentState.current?.matchId === matchId && currentState.current.phase === 'preparing') {
@@ -325,7 +326,7 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
       <img src="/static/img/commentator_avatar.png" alt={text.aiCommentator} />
       <div><p>{settings.commentatorEnabled
         ? openingCommentaryLoading ? text.preparingCommentary : commentary
-        : text.commentatorDisabled}</p>{commentaryError && <small>{commentaryError}</small>}</div>
+        : text.commentatorDisabled}</p></div>
     </section>
     <button
       className={`panel-toggle settings-toggle battle-panel-toggle ${showSettings ? 'active' : ''}`}
@@ -353,11 +354,14 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
         <label><input type="checkbox" checked={settings.commentatorEnabled} onChange={(event) => setSettings({ ...settings, commentatorEnabled: event.target.checked })} /> {text.enabled}</label>
         <label>{text.language}<select value={settings.language} onChange={(event) => setSettings({ ...settings, language: event.target.value as typeof settings.language })}><option value="zh-HK">廣東話</option><option value="zh-TW">繁體中文</option><option value="en">English</option><option value="ja">日本語</option></select></label>
         <label>{text.engine}<select value={settings.commentaryEngine} onChange={(event) => setSettings({ ...settings, commentaryEngine: event.target.value as typeof settings.commentaryEngine })}><option value="strands_local">Strands Local</option><option value="agentcore_runtime">AgentCore Runtime</option><option value="openclaw">OpenClaw</option></select></label>
+        <label>{text.model}<select disabled={externalModel} value={settings.commentaryModelId} onChange={(event) => setSettings({ ...settings, commentaryModelId: event.target.value })}>{commentaryModels.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}</select></label>
+        {externalModel && <small>{text.externalModel}</small>}
+        {!externalModel && !selectedModel.supportsImages && <small>{text.textOnlyModel}</small>}
         <label>{text.tts}<select value={settings.commentaryTtsMode} onChange={(event) => setSettings({ ...settings, commentaryTtsMode: event.target.value as typeof settings.commentaryTtsMode })}><option value="browser">Browser</option><option value="aws">AWS Polly</option></select></label>
         <label>{text.voice}<select value={settings.commentaryVoice} onChange={(event) => setSettings({ ...settings, commentaryVoice: event.target.value })}><option value="auto">{text.auto}</option>{voices.map(({ name }) => <option key={name} value={name}>{name}</option>)}</select></label>
         <label>{text.volume} <input type="range" min="0" max="100" value={settings.commentaryVolume} onChange={(event) => setSettings({ ...settings, commentaryVolume: Number(event.target.value) })} />{settings.commentaryVolume}%</label>
         <label><input type="checkbox" checked={settings.commentatorWebcam} onChange={(event) => setSettings({ ...settings, commentatorWebcam: event.target.checked })} /> {text.captureSnapshots}</label>
-        <label>{text.imagePolicy}<select value={settings.commentatorImagePolicy} onChange={(event) => setSettings({ ...settings, commentatorImagePolicy: event.target.value as typeof settings.commentatorImagePolicy })}><option value="always">{text.always}</option><option value="start_end">{text.startEnd}</option><option value="never">{text.never}</option></select></label>
+        <label>{text.imagePolicy}<select disabled={!externalModel && !selectedModel.supportsImages} value={!externalModel && !selectedModel.supportsImages ? 'never' : settings.commentatorImagePolicy} onChange={(event) => setSettings({ ...settings, commentatorImagePolicy: event.target.value as typeof settings.commentatorImagePolicy })}><option value="always">{text.always}</option><option value="start_end">{text.startEnd}</option><option value="never">{text.never}</option></select></label>
         <label><input type="checkbox" checked={settings.foulLanguage} onChange={(event) => setSettings({ ...settings, foulLanguage: event.target.checked })} /> {text.trashTalk}</label>
         <label>{text.avatarSize} <input type="range" min="150" max="700" step="10" value={settings.avatarSize} onChange={(event) => setSettings({ ...settings, avatarSize: Number(event.target.value) })} />{settings.avatarSize}px</label>
       </section>

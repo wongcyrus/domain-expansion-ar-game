@@ -1,0 +1,7 @@
+[
+  { "id": "moonshotai.kimi-k2.5", "label": "Kimi K2.5", "supportsImages": true },
+  { "id": "global.moonshotai.kimi-k3", "label": "Kimi K3", "supportsImages": true },
+  { "id": "zai.glm-4.7-flash", "label": "GLM 4.7 Flash", "supportsImages": false },
+  { "id": "zai.glm-5", "label": "GLM 5", "supportsImages": false },
+  { "id": "deepseek.v3.2", "label": "DeepSeek V3.2", "supportsImages": false }
+]

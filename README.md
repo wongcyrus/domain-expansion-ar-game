@@ -137,15 +137,23 @@ protocol, so HTTPS uses `wss://localhost:5173/control`. It also provides
 same-origin local snapshot upload/download endpoints so the embedded Scroll of
 Honor can display both player captures without a separate REST server.
 
+The battle settings save a commentary model choice: **Kimi K2.5 (default)**,
+Kimi K3, GLM 4.7 Flash, GLM 5, or DeepSeek V3.2. New settings use Strands Local;
+existing saved engines are preserved. Strands Local and AgentCore Runtime honor
+the selected Bedrock model. OpenClaw manages its own model, so its model selector
+is disabled. GLM and DeepSeek are text-only: image policy is effectively `never`,
+and the servers skip snapshot retrieval and omit images even if a caller requests
+them. Switching back to Kimi restores the saved image policy.
+
 Local AI commentary uses Amazon Bedrock through the AWS SDK credential chain.
-Sign in with the AWS CLI before starting the server. The defaults match the
-deployed commentator, and can be overridden when needed:
+Sign in with the AWS CLI before starting the server. The model selector overrides
+the server's default model; that default can also be configured:
 
 ```bash
 aws sso login --profile your-profile
 AWS_PROFILE=your-profile \
 BEDROCK_REGION=us-east-1 \
-BEDROCK_MODEL_ID=global.moonshotai.kimi-k3 \
+BEDROCK_MODEL_ID=moonshotai.kimi-k2.5 \
 COMMENTARY_MAX_TOKENS=1600 \
 POLLY_REGION=us-east-1 \
 LOCAL_COMMENTARY_LAMBDA=optional-deployed-function-name \
@@ -161,7 +169,14 @@ its presigned Polly audio. `LOCAL_COMMENTARY_LAMBDA` avoids automatic Lambda
 discovery when supplied. The AWS identity therefore needs
 `bedrock:InvokeModel`, `polly:SynthesizeSpeech`, and, for the fallback,
 `lambda:ListFunctions` plus `lambda:InvokeFunction`. If both Polly paths fail,
-the UI displays the error and falls back to browser speech.
+the error is logged to the browser console and playback falls back to browser
+speech. Commentary request, introduction, and TTS errors are never shown in the
+battle view; failed requests leave the last successful commentary visible.
+
+`commentary-models.json` is the shared Bedrock allowlist and image-capability
+catalog. CDK supplies it to both the Lambda and the owned AgentCore runtime and
+grants access only to those models. Model-selection changes require deploying
+the backend/runtime and IAM configuration as well as the frontend.
 
 To use different certificates:
 

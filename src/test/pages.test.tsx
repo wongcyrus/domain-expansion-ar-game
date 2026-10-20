@@ -375,6 +375,47 @@ describe('PlayerApp', () => {
 });
 
 describe('BattleApp', () => {
+  it.each(['zai.glm-4.7-flash', 'zai.glm-5', 'deepseek.v3.2'])(
+    'saves %s and disables model images before sending commentary',
+    async (modelId) => {
+      api.commentary.mockResolvedValue({ commentary: 'Fight!' });
+      const { BattleApp } = await import('../pages/BattleApp');
+      const view = render(<BattleApp initialSettings={{ language: 'en' }} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Match settings' }));
+      expect(screen.getByLabelText('Model')).toHaveProperty('value', 'moonshotai.kimi-k2.5');
+      fireEvent.change(screen.getByLabelText('Image policy'), { target: { value: 'always' } });
+      fireEvent.change(screen.getByLabelText('Model'), { target: { value: modelId } });
+      expect(screen.getByText('Text-only model: images are not sent.')).toBeTruthy();
+      expect(screen.getByLabelText('Image policy')).toHaveProperty('disabled', true);
+      expect(screen.getByLabelText('Image policy')).toHaveProperty('value', 'never');
+      fireEvent.click(screen.getByRole('button', { name: 'Save & hide' }));
+      await waitFor(() => expect(JSON.parse(localStorage.getItem('domain-expansion.settings')!).commentaryModelId).toBe(modelId));
+      gameState = makeState({ phase: 'playing' });
+      view.rerender(<BattleApp initialSettings={{ language: 'en' }} />);
+      await waitFor(() => expect(api.commentary).toHaveBeenCalledWith(
+        '/api/live-status', expect.objectContaining({ modelId, agentImagePolicy: 'never' })
+      ));
+    }
+  );
+
+  it('restores image policy for Kimi and makes OpenClaw model ownership explicit', async () => {
+    api.commentary.mockResolvedValue({ commentary: 'Fight!' });
+    const { BattleApp } = await import('../pages/BattleApp');
+    const view = render(<BattleApp initialSettings={{ language: 'en', commentatorImagePolicy: 'always' }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Match settings' }));
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'deepseek.v3.2' } });
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'moonshotai.kimi-k2.5' } });
+    expect(screen.getByLabelText('Image policy')).toHaveProperty('disabled', false);
+    expect(screen.getByLabelText('Image policy')).toHaveProperty('value', 'always');
+    fireEvent.change(screen.getByLabelText('Engine'), { target: { value: 'openclaw' } });
+    expect(screen.getByLabelText('Model')).toHaveProperty('disabled', true);
+    expect(screen.getByText(/OpenClaw manages its own model/)).toBeTruthy();
+    gameState = makeState({ phase: 'playing' });
+    view.rerender(<BattleApp initialSettings={{ language: 'en' }} />);
+    await waitFor(() => expect(api.commentary).toHaveBeenCalled());
+    expect(api.commentary.mock.calls[0][1]).not.toHaveProperty('modelId');
+  });
+
   it('uses server time and retries countdown completion until the phase advances', async () => {
     vi.useFakeTimers();
     const serverStart = 1_000_000;
@@ -462,6 +503,58 @@ describe('BattleApp', () => {
     expect(command).toHaveBeenCalledWith('match.reset');
     fireEvent.ended(container.querySelector('.cinematic video')!);
     expect(command).toHaveBeenCalledWith('cinematic.completed', { cinematicId: 'cin-1' });
+  });
+
+  it('logs commentary request failures without replacing the last commentary or showing errors', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.mocked(speechSynthesis.speak).mockImplementation((utterance) => {
+      utterance.onend?.call(utterance, new Event('end') as SpeechSynthesisEvent);
+    });
+    api.commentary.mockResolvedValueOnce({ commentary: 'The battle remains evenly matched.' });
+    gameState = makeState({ phase: 'playing' });
+    const { BattleApp } = await import('../pages/BattleApp');
+    const view = render(<BattleApp initialSettings={{ language: 'en' }} />);
+    await screen.findByText('The battle remains evenly matched.');
+
+    const error = new Error('API 504: Endpoint request timed out');
+    api.registerRoom.mockResolvedValue(undefined);
+    api.commentary.mockRejectedValueOnce(error);
+    gameState = makeState({ phase: 'preparing', matchId: 'next-match' });
+    view.rerender(<BattleApp initialSettings={{ language: 'en' }} />);
+    await waitFor(() => expect(warn).toHaveBeenCalledWith('Commentary request failed', error));
+    await waitFor(() => expect(command).toHaveBeenCalledWith('match.beginCountdown'));
+    expect(screen.queryByText(/API 504|Endpoint request timed out/)).toBeNull();
+    expect(screen.getByText('The battle remains evenly matched.')).toBeTruthy();
+    warn.mockRestore();
+  });
+
+  it('logs introduction setup failures without showing them or blocking the countdown', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = new Error('API 504: Room registration timed out');
+    api.registerRoom.mockRejectedValueOnce(error);
+    gameState = makeState({ phase: 'preparing' });
+    const { BattleApp } = await import('../pages/BattleApp');
+    render(<BattleApp initialSettings={{ language: 'en' }} />);
+    await waitFor(() => expect(warn).toHaveBeenCalledWith('Match introduction setup failed', error));
+    expect(screen.queryByText(/API 504|Room registration timed out/)).toBeNull();
+    expect(screen.getByText('Commentary is ready.')).toBeTruthy();
+    expect(command).toHaveBeenCalledWith('match.beginCountdown');
+    warn.mockRestore();
+  });
+
+  it('logs TTS errors while displaying and speaking valid commentary', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    api.commentary.mockResolvedValueOnce({
+      commentary: 'Player one takes the lead.', ttsMode: 'browser', ttsError: 'Polly timed out'
+    });
+    gameState = makeState({ phase: 'playing' });
+    const { BattleApp } = await import('../pages/BattleApp');
+    render(<BattleApp initialSettings={{ language: 'en' }} />);
+    await screen.findByText('Player one takes the lead.');
+    expect(warn).toHaveBeenCalledWith('Commentary TTS failed', 'Polly timed out');
+    expect(screen.queryByText('Polly timed out')).toBeNull();
+    expect(speechSynthesis.speak).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('waits for opening commentary playback before starting the countdown', async () => {

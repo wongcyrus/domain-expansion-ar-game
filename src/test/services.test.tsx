@@ -28,6 +28,19 @@ const configured = {
 };
 
 describe('settings and popup messaging', () => {
+  it('defaults legacy commentary settings to Kimi K2.5 and persists valid model choices', () => {
+    localStorage.setItem('domain-expansion.settings', JSON.stringify({
+      language: 'en', commentaryEngine: 'agentcore_runtime'
+    }));
+    expect(loadSettings()).toMatchObject({
+      commentaryEngine: 'agentcore_runtime', commentaryModelId: 'moonshotai.kimi-k2.5'
+    });
+    expect(saveSettings({ ...defaultSettings, commentaryModelId: 'deepseek.v3.2' })).toBe(true);
+    expect(loadSettings().commentaryModelId).toBe('deepseek.v3.2');
+    expect(saveSettings({ ...defaultSettings, commentaryModelId: 'unsupported' })).toBe(false);
+    expect(loadSettings().commentaryModelId).toBe('deepseek.v3.2');
+  });
+
   it('resolves legacy and multi-robot settings within the assigned team', () => {
     expect(selectedRobots(defaultSettings)).toEqual(['robot_1', 'robot_2', 'robot_3']);
     expect(selectedRobots({ ...defaultSettings, role: 'player2' })).toEqual(['robot_4', 'robot_5', 'robot_6']);

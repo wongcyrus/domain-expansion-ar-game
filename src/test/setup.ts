@@ -1,38 +1,40 @@
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 
-beforeEach(() => {
-  vi.spyOn(HTMLMediaElement.prototype, 'play').mockReset().mockResolvedValue(undefined);
-});
-
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-  localStorage.clear();
-  sessionStorage.clear();
+  if (typeof localStorage !== 'undefined') localStorage.clear();
+  if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
 });
 
-Object.defineProperty(HTMLMediaElement.prototype, 'play', {
-  configurable: true,
-  value: vi.fn().mockResolvedValue(undefined)
-});
-Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
-  configurable: true,
-  value: vi.fn()
-});
-Object.defineProperty(HTMLMediaElement.prototype, 'load', {
-  configurable: true,
-  value: vi.fn()
-});
-Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-  configurable: true,
-  value: vi.fn()
-});
-Object.defineProperty(HTMLCanvasElement.prototype, 'captureStream', {
-  configurable: true,
-  value: vi.fn(() => ({ getTracks: () => [] }))
-});
-Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
-  configurable: true,
-  value: vi.fn(() => 'data:image/jpeg;base64,test')
-});
+if (typeof HTMLMediaElement !== 'undefined') {
+  beforeEach(() => {
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockReset().mockResolvedValue(undefined);
+  });
+
+  Object.defineProperty(HTMLMediaElement.prototype, 'play', {
+    configurable: true,
+    value: vi.fn().mockResolvedValue(undefined)
+  });
+  Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
+    configurable: true,
+    value: vi.fn()
+  });
+  Object.defineProperty(HTMLMediaElement.prototype, 'load', {
+    configurable: true,
+    value: vi.fn()
+  });
+  Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+    configurable: true,
+    value: vi.fn()
+  });
+  Object.defineProperty(HTMLCanvasElement.prototype, 'captureStream', {
+    configurable: true,
+    value: vi.fn(() => ({ getTracks: () => [] }))
+  });
+  Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
+    configurable: true,
+    value: vi.fn(() => 'data:image/jpeg;base64,test')
+  });
+}
