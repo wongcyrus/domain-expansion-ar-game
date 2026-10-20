@@ -11,7 +11,7 @@ import { StableGestureRecognizer } from '../adapters/gestureRecognizer';
 import { CanvasVfxAdapter } from '../adapters/vfx';
 import { ApiClient } from '../services/apiClient';
 import { LocalStorageTokenProvider } from '../services/auth';
-import { loadSettings, practiceSettingsKey, saveSettings, type Settings } from '../services/settings';
+import { loadSettings, practiceSettingsKey, robotsForRole, saveSettings, selectedRobots, type Settings } from '../services/settings';
 import { useGameSession } from '../services/useGameSession';
 import { WebRtcSessionService } from '../services/webrtcSession';
 import { postToPopup, readPopupMessage } from '../services/popupMessaging';
@@ -44,9 +44,18 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
       robotId: overrides.robotId ?? (overrides.role ? 'all' : undefined),
       ...(practice ? { playerMode: 'solo', disableRobotApi: true } : {})
     }, storageKey);
-    return practice ? { ...loaded, playerMode: 'solo' as const, disableRobotApi: true } : loaded;
+    const robotIds = overrides.robotIds ?? (
+      overrides.role || overrides.robotId ? undefined : loaded.robotIds
+    );
+    return {
+      ...loaded,
+      robotIds,
+      ...(practice ? { playerMode: 'solo' as const, disableRobotApi: true } : {})
+    };
   });
   const text = uiText(settings.language);
+  const teamRobots = robotsForRole(settings.role);
+  const checkedRobots = selectedRobots(settings);
   const { state, status, config, command, signal, subscribe, serverTime } = useGameSession(settings.roomCode, settings.role, !practice);
   const connectionStatus = status in text
     ? text[status as 'loading' | 'connecting' | 'connected' | 'disconnected']
@@ -224,6 +233,7 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
 
   const triggerRobot = (gesture: GestureName) => {
     if (practice || settings.disableRobotApi || !api || !config) return;
+    if (checkedRobots.length === 0) return;
     const elapsed = Date.now() - lastRobotActionAt.current;
     if (elapsed < settings.robotCooldownSeconds * 1000) {
       setCameraStatus(text.robotCooldownRemaining(Math.ceil((settings.robotCooldownSeconds * 1000 - elapsed) / 1000)));
@@ -232,9 +242,12 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
     const catalogEntry = getGesture(gesture);
     if (!catalogEntry) return;
     lastRobotActionAt.current = Date.now();
-    void api.triggerTechnique(settings.robotId, catalogEntry.robotTechnique, config.defaultSessionKey, settings.role).catch((error) => {
-      console.error('Robot technique failed', error);
-      setCameraStatus(error instanceof Error ? error.message : text.robotFailed);
+    const targets = checkedRobots.length === teamRobots.length ? ['all'] : checkedRobots;
+    targets.forEach((robotId) => {
+      void api.triggerTechnique(robotId, catalogEntry.robotTechnique, config.defaultSessionKey, settings.role).catch((error) => {
+        console.error('Robot technique failed', error);
+        setCameraStatus(error instanceof Error ? error.message : text.robotFailed);
+      });
     });
   };
 
@@ -433,7 +446,7 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
         ? <div className="button-row"><button className="primary" disabled={soloStarting} onClick={() => void startSolo()}>{text.startRound}</button><button onClick={stopSolo}>{text.quit}</button></div>
         : <>
           <label>{text.room}<input value={settings.roomCode} onChange={(event) => setSettings({ ...settings, roomCode: event.target.value.toUpperCase() })} /></label>
-          <label>{text.role}<select value={settings.role} onChange={(event) => setSettings({ ...settings, role: event.target.value as PlayerRole, robotId: 'all' })}><option value="player1">{text.playerLabel(1)}</option><option value="player2">{text.playerLabel(2)}</option></select></label>
+          <label>{text.role}<select value={settings.role} onChange={(event) => setSettings({ ...settings, role: event.target.value as PlayerRole, robotId: 'all', robotIds: undefined })}><option value="player1">{text.playerLabel(1)}</option><option value="player2">{text.playerLabel(2)}</option></select></label>
         </>}
       <section className="player-settings-section">
         <h3>{text.playerSettings}</h3>
@@ -444,7 +457,14 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
         <label>{text.roundSeconds} <input type="range" min="3" max="15" value={settings.difficulty} onChange={(event) => setSettings({ ...settings, difficulty: Number(event.target.value) })} />{settings.difficulty}s</label>
         <label>{text.techniques} <input type="range" min="1" max="11" value={settings.gestureCount} onChange={(event) => setSettings({ ...settings, gestureCount: Number(event.target.value) })} />{settings.gestureCount}</label>
         {!practice && <>
-        <label>{text.robot}<select value={settings.robotId} onChange={(event) => setSettings({ ...settings, robotId: event.target.value })}><option value="all">{text.robotGroup(settings.role === 'player1' ? 1 : 4, settings.role === 'player1' ? 3 : 6)}</option>{[1,2,3,4,5,6].map((number) => <option key={number} value={`robot_${number}`}>{text.robot} {number}</option>)}</select></label>
+        <fieldset className="robot-selection">
+          <legend>{text.robotGroup(settings.role === 'player1' ? 1 : 4, settings.role === 'player1' ? 3 : 6)}</legend>
+          <label><input type="checkbox" checked={checkedRobots.length === teamRobots.length} onChange={(event) => setSettings({ ...settings, robotIds: event.target.checked ? teamRobots : [] })} />{text.allRobots}</label>
+          {teamRobots.map((robotId) => <label key={robotId}><input type="checkbox" checked={checkedRobots.includes(robotId)} onChange={(event) => setSettings({
+            ...settings,
+            robotIds: event.target.checked ? [...checkedRobots, robotId] : checkedRobots.filter((id) => id !== robotId)
+          })} />{text.robot} {robotId.slice(-1)}</label>)}
+        </fieldset>
         <label>{text.robotCooldown} <input type="range" min="1" max="30" value={settings.robotCooldownSeconds} onChange={(event) => setSettings({ ...settings, robotCooldownSeconds: Number(event.target.value) })} />{settings.robotCooldownSeconds}s</label>
         <label><input type="checkbox" checked={settings.disableRobotApi} onChange={(event) => setSettings({ ...settings, disableRobotApi: event.target.checked })} /> {text.disableRobotApi}</label>
         </>}

@@ -442,6 +442,25 @@ describe('deterministic React gameplay simulation', () => {
     )).toHaveLength(0);
   });
 
+  it.each([
+    { role: 'player1' as const, robots: ['robot_1', 'robot_3'], technique: 'Lapse Blue' as const, action: 'lapse_blue' },
+    { role: 'player2' as const, robots: ['robot_4', 'robot_6'], technique: 'Reversal Red' as const, action: 'reversal_red' },
+    { role: 'player1' as const, robots: [], technique: 'Lapse Blue' as const, action: 'lapse_blue' }
+  ])('targets only selected robots during $role gameplay: $robots', async ({ role, robots, technique, action }) => {
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    act(() => coordinator.command('viewer', 'match.start', { config: { ...config, countdownSeconds: 0 } }));
+    act(() => coordinator.command('viewer', 'match.beginCountdown'));
+    act(() => coordinator.command('viewer', 'match.countdownCompleted'));
+    render(<PlayerApp initialSettings={playerSettings(role)} />);
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Player settings' }));
+    fireEvent.click(screen.getByLabelText('All robots'));
+    robots.forEach((id) => fireEvent.click(screen.getByLabelText(`Robot ${id.slice(-1)}`)));
+    await emitStable(ScriptedCamera.instances[0], technique);
+    expect(coordinator.state?.players[role].score).toBe(1);
+    expect(triggerTechnique.mock.calls).toEqual(robots.map((id) => [id, action, 'simulation', role]));
+  });
+
   it('does not duplicate callbacks after camera restart and robot cooldown never blocks scoring', async () => {
     await mountFullGame({ challengeCount: 2 });
     const firstCamera = ScriptedCamera.instances[0];

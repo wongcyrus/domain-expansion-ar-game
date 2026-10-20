@@ -202,25 +202,39 @@ describe('PlayerApp', () => {
     expect(screen.getByDisplayValue('ABCD')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'player2' } });
     expect(screen.getByDisplayValue('PLAYER 2')).toBeTruthy();
-    expect(screen.getByDisplayValue('Robots 4-6')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Robots 4-6' })).toBeTruthy();
   });
 
-  it('automatically selects each player group and still allows individual robot overrides', async () => {
+  it('selects multiple team robots, saves choices, and resets when switching roles', async () => {
     const { PlayerApp } = await import('../pages/PlayerApp');
     render(<PlayerApp initialSettings={{ language: 'en' }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Player settings' }));
-    expect(screen.getByDisplayValue('Robots 1-3')).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Robot'), { target: { value: 'robot_6' } });
-    expect(screen.getByDisplayValue('Robot 6')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Robots 1-3' })).toBeTruthy();
+    expect(screen.queryByLabelText('Robot 4')).toBeNull();
+    expect((screen.getByLabelText('All robots') as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByLabelText('Robot 2'));
+    expect((screen.getByLabelText('Robot 1') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Robot 2') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Robot 3') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('All robots') as HTMLInputElement).checked).toBe(false);
+    expect(JSON.parse(localStorage.getItem('domain-expansion.settings')!).robotIds).toEqual(['robot_1', 'robot_3']);
+    fireEvent.click(screen.getByLabelText('Robot 2'));
+    expect((screen.getByLabelText('All robots') as HTMLInputElement).checked).toBe(true);
     fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'player2' } });
-    expect(screen.getByDisplayValue('Robots 4-6')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Robots 4-6' })).toBeTruthy();
+    expect(screen.queryByLabelText('Robot 1')).toBeNull();
+    expect((screen.getByLabelText('All robots') as HTMLInputElement).checked).toBe(true);
     expect(JSON.parse(localStorage.getItem('domain-expansion.settings')!)).toMatchObject({
       role: 'player2', robotId: 'all'
     });
-    fireEvent.change(screen.getByLabelText('Robot'), { target: { value: 'robot_4' } });
-    expect(screen.getByDisplayValue('Robot 4')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('All robots'));
+    expect(JSON.parse(localStorage.getItem('domain-expansion.settings')!).robotIds).toEqual([]);
+    fireEvent.click(screen.getByLabelText('Robot 4'));
+    fireEvent.click(screen.getByLabelText('Robot 6'));
+    expect(JSON.parse(localStorage.getItem('domain-expansion.settings')!).robotIds).toEqual(['robot_4', 'robot_6']);
     fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'player1' } });
-    expect(screen.getByDisplayValue('Robots 1-3')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Robots 1-3' })).toBeTruthy();
+    expect((screen.getByLabelText('All robots') as HTMLInputElement).checked).toBe(true);
     expect(JSON.parse(localStorage.getItem('domain-expansion.settings')!)).toMatchObject({
       role: 'player1', robotId: 'all'
     });
@@ -231,22 +245,37 @@ describe('PlayerApp', () => {
     ['player2', 'Robots 4-6']
   ])('selects the group from a %s URL instead of a stale saved robot', async (role, label) => {
     localStorage.setItem('domain-expansion.settings', JSON.stringify({
-      ...defaultSettings, language: 'en', robotId: 'robot_5'
+      ...defaultSettings, language: 'en', robotId: 'robot_5', robotIds: ['robot_5']
     }));
     history.replaceState({}, '', `/?role=${role}`);
     const { PlayerApp } = await import('../pages/PlayerApp');
     render(<PlayerApp />);
     fireEvent.click(screen.getByRole('button', { name: 'Player settings' }));
-    expect(screen.getByDisplayValue(label)).toBeTruthy();
+    expect(screen.getByRole('group', { name: label })).toBeTruthy();
+    expect((screen.getByLabelText('All robots') as HTMLInputElement).checked).toBe(true);
   });
 
   it('preserves explicit robot settings until another player role is selected', async () => {
     const { PlayerApp } = await import('../pages/PlayerApp');
     render(<PlayerApp initialSettings={{ language: 'en', role: 'player2', robotId: 'robot_5' }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Player settings' }));
-    expect(screen.getByDisplayValue('Robot 5')).toBeTruthy();
+    expect((screen.getByLabelText('Robot 5') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Robot 4') as HTMLInputElement).checked).toBe(false);
     fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'player1' } });
-    expect(screen.getByDisplayValue('Robots 1-3')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Robots 1-3' })).toBeTruthy();
+    expect((screen.getByLabelText('All robots') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('restores a saved multi-robot selection', async () => {
+    localStorage.setItem('domain-expansion.settings', JSON.stringify({
+      ...defaultSettings, language: 'en', role: 'player2', robotIds: ['robot_4', 'robot_6']
+    }));
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    render(<PlayerApp />);
+    fireEvent.click(screen.getByRole('button', { name: 'Player settings' }));
+    expect((screen.getByLabelText('Robot 4') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Robot 5') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Robot 6') as HTMLInputElement).checked).toBe(true);
   });
 
   it('keeps the camera active while connecting and announces it after reconnect', async () => {

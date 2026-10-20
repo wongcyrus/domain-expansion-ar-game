@@ -27,10 +27,13 @@ mini-game remains available on the player page and does not emulate a
 multiplayer coordinator.
 
 Selecting Player 1 automatically selects robots 1-3; Player 2 selects robots
-4-6. Player-role links select the matching group too. The robot selector still
-allows an individual robot override, and choosing a player role again restores
-its group. Technique requests include the player role so the backend routes
-group actions to the correct three robots.
+4-6. Player-role links select the matching group too. Open Player settings to
+select any combination of your team's robots using checkboxes; All robots
+selects or clears the entire team. Selections are saved, and choosing another
+player role restores that team's full selection. Only checked robots receive
+technique actions; clearing all robots disables actions without affecting scoring.
+Technique requests include the player role so the backend routes full-team
+actions to the correct three robots.
 
 The WebSocket wire format is protocol `2.0`: the client joins with
 `{action:"join",roomId,role,clientId}`, wraps authoritative commands in

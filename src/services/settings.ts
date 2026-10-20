@@ -8,6 +8,7 @@ const SettingsSchema = z.object({
   cameraId: z.string(),
   language: z.enum(['zh-HK', 'zh-TW', 'en', 'ja']),
   robotId: z.string(),
+  robotIds: z.array(z.string().regex(/^robot_[1-6]$/)).optional(),
   disableRobotApi: z.boolean(),
   robotCooldownSeconds: z.number().int().min(1).max(30),
   videoMode: z.enum(['integrated', 'integrated_silent', 'popup', 'none']),
@@ -83,3 +84,13 @@ export function saveSettings(settings: Settings, storageKey = key) {
   return true;
 }
 export const roleLabel = (role: PlayerRole) => role === 'player1' ? 'Player 1' : 'Player 2';
+
+export function robotsForRole(role: PlayerRole): string[] {
+  return (role === 'player1' ? [1, 2, 3] : [4, 5, 6]).map((number) => `robot_${number}`);
+}
+
+export function selectedRobots(settings: Settings): string[] {
+  const team = robotsForRole(settings.role);
+  const selected = settings.robotIds ?? (settings.robotId === 'all' ? team : [settings.robotId]);
+  return team.filter((id) => selected.includes(id));
+}

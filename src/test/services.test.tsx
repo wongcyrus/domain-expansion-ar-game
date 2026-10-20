@@ -12,7 +12,7 @@ import {
 import { CommentaryPlayer } from '../services/commentary';
 import { loadConfig, resolveApiBaseUrl } from '../services/config';
 import { popupOrigin, postToPopup, readPopupMessage } from '../services/popupMessaging';
-import { defaultSettings, loadSettings, practiceSettingsKey, roleLabel, saveSettings } from '../services/settings';
+import { defaultSettings, loadSettings, practiceSettingsKey, roleLabel, saveSettings, selectedRobots } from '../services/settings';
 import { AuthGate } from '../components/AuthGate';
 
 const configured = {
@@ -28,6 +28,15 @@ const configured = {
 };
 
 describe('settings and popup messaging', () => {
+  it('resolves legacy and multi-robot settings within the assigned team', () => {
+    expect(selectedRobots(defaultSettings)).toEqual(['robot_1', 'robot_2', 'robot_3']);
+    expect(selectedRobots({ ...defaultSettings, role: 'player2' })).toEqual(['robot_4', 'robot_5', 'robot_6']);
+    expect(selectedRobots({ ...defaultSettings, robotId: 'robot_2' })).toEqual(['robot_2']);
+    expect(selectedRobots({ ...defaultSettings, robotId: 'robot_6' })).toEqual([]);
+    expect(selectedRobots({ ...defaultSettings, robotIds: ['robot_1', 'robot_3', 'robot_6', 'robot_1'] })).toEqual(['robot_1', 'robot_3']);
+    expect(selectedRobots({ ...defaultSettings, robotIds: [] })).toEqual([]);
+  });
+
   it('loads, validates, saves and labels settings', () => {
     localStorage.setItem('domain-expansion.settings', JSON.stringify({ language: 'en', difficulty: 5 }));
     expect(loadSettings({ role: 'player2' })).toMatchObject({ language: 'en', difficulty: 5, role: 'player2' });
