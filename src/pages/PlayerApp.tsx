@@ -4,6 +4,7 @@ import { PlayerMediaOverlay, type PlayerMediaControls } from '../components/Play
 import { gestureLabel, getGesture, shuffledGestures, type GestureName } from '../core/catalog';
 import { assetUrl } from '../core/assets';
 import { deadlineFor, remainingSeconds, targetFor } from '../core/match';
+import { selectResultVideo } from '../core/resultVideos';
 import { WebRtcSignalTypeSchema, type PlayerRole } from '../core/protocol';
 import { uiText } from '../core/uiText';
 import { MediaPipeCameraAdapter } from '../adapters/mediaPipeCamera';
@@ -67,6 +68,7 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
   const autoStartedCamera = useRef(false);
   const lastRobotActionAt = useRef(0);
   const pendingPopupMedia = useRef<string | null>(null);
+  const lastResultVideos = useRef<Partial<Record<'win' | 'lose', string>>>({});
   const detectedRef = useRef<GestureName | null>(null);
   const detectedAt = useRef<number | null>(null);
   const [cameraStatus, setCameraStatus] = useState(text.cameraStopped);
@@ -278,7 +280,11 @@ export function PlayerApp({ initialSettings = {}, practice = false }: { initialS
     const [next, ...remaining] = queue;
     if (!next) {
       setSolo({ active: false, score, attempted, queue: [], target: null, deadlineAt: null, result: score === settings.gestureCount ? text.perfect : text.roundComplete });
-      playMedia(assetUrl(score === settings.gestureCount ? '/static/video/win/onepunch.mp4' : '/static/video/lose/shiba1.mp4'));
+      const won = score === settings.gestureCount;
+      const category = won ? 'win' : 'lose';
+      const src = selectResultVideo(won, lastResultVideos.current[category]);
+      lastResultVideos.current[category] = src;
+      playMedia(assetUrl(src));
       return;
     }
     submittedSoloTarget.current = null;

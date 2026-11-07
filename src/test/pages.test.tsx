@@ -183,6 +183,24 @@ describe('PlayerApp', () => {
     });
   });
 
+  it('chooses a different result clip after consecutive timed-out solo rounds', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const { PlayerApp } = await import('../pages/PlayerApp');
+    const view = render(<PlayerApp practice initialSettings={{
+      language: 'en', difficulty: 3, gestureCount: 1, videoMode: 'integrated_silent'
+    }} />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Start round' })); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3200); });
+    const first = view.container.querySelector('.integrated-media')!.getAttribute('src');
+    expect(first).toMatch(/\/static\/video\/lose\/.+\.mp4$/);
+    fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(3200); });
+    const next = view.container.querySelector('.integrated-media')!.getAttribute('src');
+    expect(next).toMatch(/\/static\/video\/lose\/.+\.mp4$/);
+    expect(next).not.toBe(first);
+  });
+
   it('renders online state, edits settings, auto-starts and stops the camera', async () => {
     gameState = makeState();
     const { PlayerApp } = await import('../pages/PlayerApp');
@@ -375,6 +393,21 @@ describe('PlayerApp', () => {
 });
 
 describe('BattleApp', () => {
+  it.each([0, 27])('restores volume %s after reload without Save & hide', async (volume) => {
+    const { BattleApp } = await import('../pages/BattleApp');
+    const view = render(<BattleApp initialSettings={{ language: 'en' }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Match settings' }));
+    fireEvent.change(screen.getByLabelText(/^Countdown/), { target: { value: '6' } });
+    fireEvent.change(screen.getByLabelText(/volume/i), { target: { value: String(volume) } });
+    expect(JSON.parse(localStorage.getItem('domain-expansion.settings')!)).toMatchObject({
+      commentaryVolume: volume, countdownSeconds: defaultSettings.countdownSeconds
+    });
+    view.unmount();
+    render(<BattleApp initialSettings={{ language: 'en' }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Match settings' }));
+    expect(screen.getByLabelText(/volume/i)).toHaveProperty('value', String(volume));
+  });
+
   it.each(['zai.glm-4.7-flash', 'zai.glm-5', 'deepseek.v3.2'])(
     'saves %s and disables model images before sending commentary',
     async (modelId) => {
@@ -645,6 +678,26 @@ describe('BattleApp', () => {
     openingUtterance?.onend?.();
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(command).not.toHaveBeenCalledWith('match.beginCountdown');
+  });
+
+  it.each([
+    { score: 2, category: 'win' },
+    { score: 0, category: 'lose' }
+  ])('varies $category videos for equal-length match IDs and keeps the selected clip on rerender', async ({ score, category }) => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const players = makeState().players;
+    players.player1.score = score;
+    players.player2.score = 0;
+    gameState = makeState({ phase: 'ended', winner: 'PLAYER 1', matchId: 'match-001', players });
+    const { BattleApp } = await import('../pages/BattleApp');
+    const view = render(<BattleApp initialSettings={{ language: 'en', commentatorEnabled: false }} />);
+    const first = view.container.querySelector('.result-video video')!.getAttribute('src');
+    expect(first).toMatch(new RegExp(`^/static/video/${category}/.+\\.mp4$`));
+    view.rerender(<BattleApp initialSettings={{ language: 'en', commentatorEnabled: false }} />);
+    expect(view.container.querySelector('.result-video video')!.getAttribute('src')).toBe(first);
+    gameState = makeState({ phase: 'ended', winner: 'PLAYER 1', matchId: 'match-002', players });
+    view.rerender(<BattleApp initialSettings={{ language: 'en', commentatorEnabled: false }} />);
+    expect(view.container.querySelector('.result-video video')!.getAttribute('src')).not.toBe(first);
   });
 
   it('shows results, skips video, and requests battle commentary', async () => {

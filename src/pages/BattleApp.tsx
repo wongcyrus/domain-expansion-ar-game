@@ -3,6 +3,7 @@ import { Branding } from '../components/Branding';
 import { Live2DCommentator } from '../components/Live2DCommentator';
 import { gestureLabel, getGesture } from '../core/catalog';
 import { remainingSeconds } from '../core/match';
+import { selectResultVideo } from '../core/resultVideos';
 import { WebRtcSignalTypeSchema, type PlayerRole } from '../core/protocol';
 import { uiText } from '../core/uiText';
 import { ApiClient } from '../services/apiClient';
@@ -13,13 +14,6 @@ import { useGameSession } from '../services/useGameSession';
 import { WebRtcSessionService } from '../services/webrtcSession';
 import { ShareApp } from './ShareApp';
 import commentaryModels from '../../commentary-models.json';
-
-const winVideos = import.meta.env.DEV
-  ? ['onepunch.mp4']
-  : ['heroacademy.mp4', 'solo-leveling.mp4', 'onepunchman.mp4', '8-gate.mp4', 'escanor.mp4', 'onepunch.mp4', 'onepunch2.mp4', 'demon-slayer-s2.mp4', 'demon-slayer-s1.mp4'];
-const loseVideos = import.meta.env.DEV
-  ? ['shiba1.mp4']
-  : Array.from({ length: 9 }, (_, index) => `shiba${index + 1}.mp4`);
 
 export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<Settings> } = {}) {
   const query = new URLSearchParams(location.search);
@@ -40,6 +34,8 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [ticker, setTicker] = useState<string[]>([]);
   const [showResultVideo, setShowResultVideo] = useState(false);
+  const [resultVideo, setResultVideo] = useState<string | null>(null);
+  const lastResultVideos = useRef<Partial<Record<'win' | 'lose', string>>>({});
   const [showSettings, setShowSettings] = useState(false);
   const [live2dSpeaking, setLive2dSpeaking] = useState(false);
   const [live2dAudio, setLive2dAudio] = useState<HTMLAudioElement>();
@@ -65,6 +61,10 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
     () => config?.apiBaseUrl ? new ApiClient(config.apiBaseUrl, new LocalStorageTokenProvider()) : null,
     [config]
   );
+  const setCommentaryVolume = (commentaryVolume: number) => {
+    setSettings({ ...settings, commentaryVolume });
+    saveSettings({ ...loadSettings(), commentaryVolume });
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 200);
@@ -238,6 +238,12 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
       return;
     }
     sessionStorage.setItem(playbackKey, '1');
+    const won = Math.max(state.players.player1.score, state.players.player2.score) >=
+      Math.ceil((state.config.challengeCount || 1) / 2);
+    const category = won ? 'win' : 'lose';
+    const src = selectResultVideo(won, lastResultVideos.current[category]);
+    lastResultVideos.current[category] = src;
+    setResultVideo(src);
     setShowResultVideo(true);
   }, [state?.matchId, state?.phase, state?.winner]);
 
@@ -297,14 +303,6 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
   const p1Score = state?.players.player1.score ?? 0;
   const p2Score = state?.players.player2.score ?? 0;
   const scoreTotal = Math.max(1, p1Score + p2Score);
-  const resultVideo = state?.winner
-    ? (() => {
-      const won = Math.max(p1Score, p2Score) >= Math.ceil((state.config.challengeCount || 1) / 2);
-      const choices = won ? winVideos : loseVideos;
-      return `/static/video/${won ? 'win' : 'lose'}/${choices[(state.matchId?.length ?? 0) % choices.length]}`;
-    })()
-    : null;
-
   return <main className={`battle-page layout-${settings.layout} ${settings.dynamicView ? 'dynamic-view' : ''}`}>
     <Branding />
     <header className="battle-header">
@@ -359,7 +357,7 @@ export function BattleApp({ initialSettings = {} }: { initialSettings?: Partial<
         {!externalModel && !selectedModel.supportsImages && <small>{text.textOnlyModel}</small>}
         <label>{text.tts}<select value={settings.commentaryTtsMode} onChange={(event) => setSettings({ ...settings, commentaryTtsMode: event.target.value as typeof settings.commentaryTtsMode })}><option value="browser">Browser</option><option value="aws">AWS Polly</option></select></label>
         <label>{text.voice}<select value={settings.commentaryVoice} onChange={(event) => setSettings({ ...settings, commentaryVoice: event.target.value })}><option value="auto">{text.auto}</option>{voices.map(({ name }) => <option key={name} value={name}>{name}</option>)}</select></label>
-        <label>{text.volume} <input type="range" min="0" max="100" value={settings.commentaryVolume} onChange={(event) => setSettings({ ...settings, commentaryVolume: Number(event.target.value) })} />{settings.commentaryVolume}%</label>
+        <label>{text.volume} <input type="range" min="0" max="100" value={settings.commentaryVolume} onChange={(event) => setCommentaryVolume(Number(event.target.value))} />{settings.commentaryVolume}%</label>
         <label><input type="checkbox" checked={settings.commentatorWebcam} onChange={(event) => setSettings({ ...settings, commentatorWebcam: event.target.checked })} /> {text.captureSnapshots}</label>
         <label>{text.imagePolicy}<select disabled={!externalModel && !selectedModel.supportsImages} value={!externalModel && !selectedModel.supportsImages ? 'never' : settings.commentatorImagePolicy} onChange={(event) => setSettings({ ...settings, commentatorImagePolicy: event.target.value as typeof settings.commentatorImagePolicy })}><option value="always">{text.always}</option><option value="start_end">{text.startEnd}</option><option value="never">{text.never}</option></select></label>
         <label><input type="checkbox" checked={settings.foulLanguage} onChange={(event) => setSettings({ ...settings, foulLanguage: event.target.checked })} /> {text.trashTalk}</label>

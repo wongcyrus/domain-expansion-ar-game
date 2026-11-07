@@ -165,7 +165,7 @@ test('Start round authorizes sound once for multiple clips, dismissal, and repla
   await expect(page.locator('.hud strong')).not.toHaveText('PREPARE NEXT TECHNIQUE');
   await queueGesture(page, (await page.locator('.hud strong').textContent())!.trim(), 20);
   await expect(page.getByRole('heading', { name: 'PERFECT!' })).toBeVisible();
-  await expect(page.locator('.integrated-media')).toHaveAttribute('src', /win\/onepunch\.mp4$/);
+  await expect(page.locator('.integrated-media')).toHaveAttribute('src', /win\/[^/]+\.mp4$/);
   await expect.poll(() => page.locator('.integrated-media').evaluate((video: HTMLVideoElement) =>
     video.currentTime
   )).toBeGreaterThan(.15);
